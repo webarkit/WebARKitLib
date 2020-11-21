@@ -9,6 +9,7 @@
 #define OKIT_H
 
 #include <iostream>
+#include <stdio.h>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core.hpp>
@@ -17,7 +18,6 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/features2d.hpp>
 
-using namespace std;
 using namespace cv;
 
 #ifdef __cplusplus
@@ -34,14 +34,14 @@ Ptr<ORB> orb = NULL;
 Ptr<BFMatcher> matcher = NULL;
 
 Mat refGray, refDescr;
-vector<KeyPoint> refKeyPts;
+std::vector<KeyPoint> refKeyPts;
 
 Mat H;
-vector<Point2f> corners(4);
+std::vector<Point2f> corners(4);
 
 Mat framePrev;
 int numMatches = 0;
-vector<Point2f> framePts;
+std::vector<Point2f> framePts;
 
 double *output = new double[17]; // 9 from homography matrix, 8 from warped corners
 
