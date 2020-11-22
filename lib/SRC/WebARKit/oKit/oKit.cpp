@@ -7,6 +7,7 @@
  */
 
 #include <WebARKit/oKit/oKit.h>
+#include <stdio.h>
 
 static Mat im_gray(uchar data[], size_t cols, size_t rows) {
     uint32_t idx;
@@ -75,14 +76,14 @@ int initAR(uchar refData[], size_t refCols, size_t refRows) {
     corners[3] = cvPoint( 0, refRows );
 
     initialized = true;
-    cout << "Ready!" << endl;
+    std::cout << "Ready!" << std::endl;
 
     return 0;
 }
 
 double *resetTracking(uchar frameData[], size_t frameCols, size_t frameRows) {
     if (!initialized) {
-        cout << "Reference image not found. AR is unintialized!" << endl;
+        std::cout << "Reference image not found. AR is unintialized!" << std::endl;
         return NULL;
     }
 
@@ -123,12 +124,12 @@ double *resetTracking(uchar frameData[], size_t frameCols, size_t frameRows) {
 
 double *track(uchar frameData[], size_t frameCols, size_t frameRows) {
     if (!initialized) {
-        cout << "Reference image not found. AR is unintialized!" << endl;
+        std::cout << "Reference image not found. AR is unintialized!" << std::endl;
         return NULL;
     }
 
     if (framePrev.empty()) {
-        cout << "Tracking is uninitialized!" << endl;
+        std::cout << "Tracking is uninitialized!" << std::endl;
         return NULL;
     }
 
