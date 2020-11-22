@@ -9,6 +9,25 @@
 #include <WebARKit/oKit/oKit.h>
 #include <stdio.h>
 
+#define GOOD_MATCH_RATIO    0.7f
+#define MAX_FEATURES        2000
+#define N                   10
+
+bool initialized = false;
+
+Ptr<ORB> orb = NULL;
+Ptr<BFMatcher> matcher = NULL;
+
+cv::Mat refGray, refDescr;
+std::vector<KeyPoint> refKeyPts;
+
+cv::Mat H;
+std::vector<Point2f> corners(4);
+
+cv::Mat framePrev;
+int numMatches = 0;
+std::vector<Point2f> framePts;
+
 static Mat im_gray(uchar data[], size_t cols, size_t rows) {
     uint32_t idx;
     uchar gray[rows][cols];
@@ -27,7 +46,7 @@ static Mat im_gray(uchar data[], size_t cols, size_t rows) {
         }
     }
 
-    return Mat(rows, cols, CV_8UC1, gray);
+    return cv::Mat(rows, cols, cv::CV_8UC1, gray);
 }
 
 static inline bool homographyValid(Mat H) {
@@ -35,7 +54,7 @@ static inline bool homographyValid(Mat H) {
     return 1/N < fabs(det) && fabs(det) < N;
 }
 
-static inline void fill_output(Mat H) {
+static inline void fill_output(cv::Mat H) {
     vector<Point2f> warped(4);
     perspectiveTransform(corners, warped, H);
 
@@ -63,11 +82,12 @@ static inline void clear_output() {
     for (int i = 0; i < 17; i++) output[i] = 0;
 }
 
+EMSCRIPTEN_KEEPALIVE
 int initAR(uchar refData[], size_t refCols, size_t refRows) {
-    orb = ORB::create(MAX_FEATURES);
-    matcher = BFMatcher::create();
+    orb = cv::ORB::create(MAX_FEATURES);
+    matcher = cv::BFMatcher::create();
 
-    Mat refGray = im_gray(refData, refCols, refRows);
+    cv::Mat refGray = im_gray(refData, refCols, refRows);
     orb->detectAndCompute(refGray, noArray(), refKeyPts, refDescr);
 
     corners[0] = cvPoint( 0, 0 );
@@ -81,6 +101,7 @@ int initAR(uchar refData[], size_t refCols, size_t refRows) {
     return 0;
 }
 
+EMSCRIPTEN_KEEPALIVE
 double *resetTracking(uchar frameData[], size_t frameCols, size_t frameRows) {
     if (!initialized) {
         std::cout << "Reference image not found. AR is unintialized!" << std::endl;
@@ -89,9 +110,9 @@ double *resetTracking(uchar frameData[], size_t frameCols, size_t frameRows) {
 
     clear_output();
 
-    Mat frameCurr = im_gray(frameData, frameCols, frameRows);
+    cv::Mat frameCurr = im_gray(frameData, frameCols, frameRows);
 
-    Mat frameDescr;
+    cv::Mat frameDescr;
     vector<KeyPoint> frameKeyPts;
     orb->detectAndCompute(frameCurr, noArray(), frameKeyPts, frameDescr);
 
@@ -110,7 +131,7 @@ double *resetTracking(uchar frameData[], size_t frameCols, size_t frameRows) {
 
     // need at least 4 pts to define homography
     if (framePts.size() > 10) {
-        H = findHomography(refPts, framePts, RANSAC);
+        H = findHomography(refPts, framePts, cv::RANSAC);
         if (homographyValid(H)) {
             numMatches = framePts.size();
             fill_output(H);
@@ -122,6 +143,7 @@ double *resetTracking(uchar frameData[], size_t frameCols, size_t frameRows) {
     return output;
 }
 
+EMSCRIPTEN_KEEPALIVE
 double *track(uchar frameData[], size_t frameCols, size_t frameRows) {
     if (!initialized) {
         std::cout << "Reference image not found. AR is unintialized!" << std::endl;
@@ -135,7 +157,7 @@ double *track(uchar frameData[], size_t frameCols, size_t frameRows) {
 
     clear_output();
 
-    Mat frameCurr = im_gray(frameData, frameCols, frameRows);
+    cv::Mat frameCurr = im_gray(frameData, frameCols, frameRows);
     // GaussianBlur(frameCurr, frameCurr, Size(5,5), 2);
 
     vector<float> err;
@@ -150,10 +172,10 @@ double *track(uchar frameData[], size_t frameCols, size_t frameRows) {
     }
 
     if (!goodPtsNew.empty() && goodPtsNew.size() > 2*numMatches/3) {
-        Mat transform = estimateAffine2D(goodPtsOld, goodPtsNew);
+        cv::Mat transform = estimateAffine2D(goodPtsOld, goodPtsNew);
 
         // add row of [0,0,1] to transform to make it 3x3
-        Mat row = Mat::zeros(1, 3, CV_64F);
+        cv::Mat row = Mat::zeros(1, 3, CV_64F);
         row.at<double>(0,2) = 1.0;
         transform.push_back(row);
 
