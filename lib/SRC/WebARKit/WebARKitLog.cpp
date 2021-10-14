@@ -58,6 +58,21 @@ void webarkitLOGi(char* message, char * format) {
     );
 }
 
+void webarkitLOGi(char* message, const char * format) {
+    EM_ASM ({
+        var message = UTF8ToString($0);
+        var info =  UTF8ToString($1);
+        var style = UTF8ToString($2);
+        var format = UTF8ToString($3);
+        console.log(info + message, style, format);
+    },
+    message,
+    WARKTinfo,
+    WARKTstyle,
+    format
+    );
+}
+
 void webarkitLOGi(char* message, int  format) {
     EM_ASM ({
         var message = UTF8ToString($0);

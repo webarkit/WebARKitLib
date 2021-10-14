@@ -11,6 +11,8 @@ void webarkitLOGi(char* message, float * format);
 
 void webarkitLOGi(char* message, char * format);
 
+void webarkitLOGi(char* message, const char * format);
+
 void webarkitLOGi(char* message, int  format);
 
 
