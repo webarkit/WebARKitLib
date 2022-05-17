@@ -75,6 +75,7 @@
  *
  */
 
+#include <array>
 #include <iostream>
 #include <cmath>
 #include <AR/ar.h>
@@ -196,9 +197,10 @@ namespace OEF
       return x->filterWithAlpha(value, alpha(cutoff)) ;
     }
 
-    int filterMat(ARdouble m[3][4], TimeStamp timestamp=UndefinedTime) {
+    std::array<std::array<int, 3>, 4>  filterMat(ARdouble m[3][4], TimeStamp timestamp=UndefinedTime) {
+      std::array<std::array<int, 3>, 4> out_mat;
       ARdouble q[4], p[3];
-      if (arUtilMat2QuatPos((const ARdouble (*)[4])m, q, p) < 0) return (-2);
+      if (arUtilMat2QuatPos((const ARdouble (*)[4])m, q, p) < 0) return {};
       arUtilQuatNorm(q);
       q[0] = filter(q[0], timestamp);
       q[1] = filter(q[1], timestamp);
@@ -207,8 +209,13 @@ namespace OEF
       p[0] = filter(p[0], timestamp);
       p[1] = filter(p[1], timestamp);
       p[2] = filter(p[2], timestamp);
-      if (arUtilQuatPos2Mat(q, p, m) < 0) return (-2);
-      return 0;
+      if (arUtilQuatPos2Mat(q, p, m) < 0) return {};
+      for(int i; i<4; i++){
+        for(int j; j<3; j++){
+          out_mat[i][j] =m[i][j];
+        }
+      }
+      return out_mat;
     }
 
     ~OneEuroFilter(void) {
