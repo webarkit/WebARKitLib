@@ -218,6 +218,26 @@ namespace OEF
       return out_mat;
     }
 
+    int filterMat2(ARdouble m[3][4], ARdouble out[3][4], TimeStamp timestamp=UndefinedTime) {
+      ARdouble q[4], p[3];
+      if (arUtilMat2QuatPos((const ARdouble (*)[4])m, q, p) < 0) return -1;
+      arUtilQuatNorm(q);
+      q[0] = filter(q[0], timestamp);
+      q[1] = filter(q[1], timestamp);
+      q[2] = filter(q[2], timestamp);
+      q[3] = filter(q[3], timestamp);
+      p[0] = filter(p[0], timestamp);
+      p[1] = filter(p[1], timestamp);
+      p[2] = filter(p[2], timestamp);
+      if (arUtilQuatPos2Mat(q, p, m) < 0) return -1;
+      for(int i; i<3; i++){
+        for(int j; j<4; j++){
+          out[i][j] = m[i][j];
+        }
+      }
+      return 0;
+    }
+
     ~OneEuroFilter(void) {
       delete x ;
       delete dx ;
