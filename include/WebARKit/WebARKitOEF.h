@@ -93,7 +93,7 @@ namespace OEF
 
     void setAlpha(double alpha) {
       if (alpha<=0.0 || alpha>1.0) 
-        webarkitLOGe("alpha should be in [0.0, 1.0]");
+        webarkitLOGe("alpha should be in [0.0, 1.0]: %f", alpha);
       a = alpha ;
     }
 
@@ -174,6 +174,7 @@ namespace OEF
 
     OneEuroFilter(double freq, 
 		  double mincutoff=1.0, double beta_=0.0, double dcutoff=1.0) {
+      webarkitLOGi("mincutoff is: %f", mincutoff);
       setFrequency(freq) ;
       setMinCutoff(mincutoff) ;
       setBeta(beta_) ;
@@ -185,6 +186,7 @@ namespace OEF
 
     double filter(double value, TimeStamp timestamp=UndefinedTime) {
       // update the sampling frequency based on timestamps
+      webarkitLOGi("timestamp is: %d", timestamp);
       if (lasttime!=UndefinedTime && timestamp!=UndefinedTime)
         freq = 1.0 / (timestamp-lasttime) ;
       lasttime = timestamp ;
@@ -229,12 +231,7 @@ namespace OEF
       p[0] = filter(p[0], timestamp);
       p[1] = filter(p[1], timestamp);
       p[2] = filter(p[2], timestamp);
-      if (arUtilQuatPos2Mat(q, p, m) < 0) return -1;
-      for(int i; i<3; i++){
-        for(int j; j<4; j++){
-          out[i][j] = m[i][j];
-        }
-      }
+      if (arUtilQuatPos2Mat(q, p, out) < 0) return -1;
       return 0;
     }
 
