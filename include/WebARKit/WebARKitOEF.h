@@ -92,8 +92,10 @@ namespace OEF
     bool initialized ;
 
     void setAlpha(double alpha) {
-      if (alpha<=0.0 || alpha>1.0) 
+      if (alpha<=0.0 || alpha>1.0) {
         webarkitLOGe("alpha should be in [0.0, 1.0]: %f", alpha);
+        alpha = 1.0;
+      }
       a = alpha ;
     }
 
@@ -187,6 +189,7 @@ namespace OEF
     double filter(double value, TimeStamp timestamp=UndefinedTime) {
       // update the sampling frequency based on timestamps
       webarkitLOGi("timestamp is: %d", timestamp);
+      webarkitLOGi("value from filter is: %d", value);
       if (lasttime!=UndefinedTime && timestamp!=UndefinedTime)
         freq = 1.0 / (timestamp-lasttime) ;
       lasttime = timestamp ;
