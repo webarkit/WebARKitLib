@@ -82,55 +82,57 @@
 
 namespace OEF
 {
-  typedef double TimeStamp ; // in seconds
+  typedef ARdouble TimeStamp ; // in seconds
 
-  static const TimeStamp UndefinedTime = -1.0 ;
+  static const TimeStamp UndefinedTime = -1.0;
 
   class LowPassFilter {
     
-    double y, a, s ;
-    bool initialized ;
+    ARdouble y, a, s;
+    bool initialized;
 
-    void setAlpha(double alpha) {
+    void setAlpha(ARdouble alpha) {
       if (alpha<=0.0 || alpha>1.0) {
         webarkitLOGe("alpha should be in [0.0, 1.0]: %f", alpha);
+        std::cout << alpha << std::endl;
         alpha = 1.0;
       }
-      a = alpha ;
+      std::cout << alpha << std::endl;
+      a = alpha;
     }
 
   public:
 
-    LowPassFilter(double alpha, double initval=0.0) {
+    LowPassFilter(ARdouble alpha, ARdouble initval=0.0) {
       y = s = initval ;
       setAlpha(alpha) ;
       initialized = false ;
     }
 
-    double filter(double value) {
-      double result ;
+    ARdouble filter(ARdouble value) {
+      ARdouble result ;
       if (initialized)
         result = a*value + (1.0-a)*s ;
       else {
         result = value ;
         initialized = true ;
       }
-      y = value ;
-      s = result ;
-      return result ;
+      y = value;
+      s = result;
+      return result;
     }
 
-    double filterWithAlpha(double value, double alpha) {
-      setAlpha(alpha) ;
-      return filter(value) ;
+    ARdouble filterWithAlpha(ARdouble value, ARdouble alpha) {
+      setAlpha(alpha);
+      return filter(value);
     }
 
     bool hasLastRawValue(void) {
-      return initialized ;
+      return initialized;
     }
 
-    double lastRawValue(void) {
-      return y ;
+    ARdouble lastRawValue(void) {
+      return y;
     }
 
   };
@@ -139,67 +141,68 @@ namespace OEF
 
   class OneEuroFilter {
 
-    double freq ;
-    double mincutoff ;
-    double beta_ ;
-    double dcutoff ;
-    LowPassFilter *x ;
-    LowPassFilter *dx ;
-    TimeStamp lasttime ;
+    ARdouble freq;
+    ARdouble mincutoff;
+    ARdouble beta_;
+    ARdouble dcutoff;
+    LowPassFilter *x;
+    LowPassFilter *dx;
+    TimeStamp lasttime;
 
-    double alpha(double cutoff) {
-      double te = 1.0 / freq ;
-      double tau = 1.0 / (2*M_PI*cutoff) ;
-      return 1.0 / (1.0 + tau/te) ;
+    ARdouble alpha(ARdouble cutoff) {
+      ARdouble te = 1.0 / freq;
+      ARdouble tau = 1.0 / (2.0*M_PI*cutoff);
+      return 1.0 / (1.0 + tau/te);
     }
 
-    void setFrequency(double f) {
+    void setFrequency(ARdouble f) {
       if (f<=0) webarkitLOGe("freq should be >0");
-      freq = f ;
+      freq = f;
     }
 
-    void setMinCutoff(double mc) {
+    void setMinCutoff(ARdouble mc) {
       if (mc<=0) webarkitLOGe("mincutoff should be >0");
-      mincutoff = mc ;
+      mincutoff = mc;
     }
 
-    void setBeta(double b) {
-      beta_ = b ;
+    void setBeta(ARdouble b) {
+      beta_ = b;
     }
 
-    void setDerivateCutoff(double dc) {
+    void setDerivateCutoff(ARdouble dc) {
       if (dc<=0) webarkitLOGe("dcutoff should be >0");
-      dcutoff = dc ;
+      dcutoff = dc;
     }
 
   public:
 
-    OneEuroFilter(double freq, 
-		  double mincutoff=1.0, double beta_=0.0, double dcutoff=1.0) {
+    OneEuroFilter(ARdouble freq, 
+		  ARdouble mincutoff=1.0, ARdouble beta_=0.0, ARdouble dcutoff=1.0) {
       webarkitLOGi("mincutoff is: %f", mincutoff);
-      setFrequency(freq) ;
-      setMinCutoff(mincutoff) ;
-      setBeta(beta_) ;
-      setDerivateCutoff(dcutoff) ;
-      x = new LowPassFilter(alpha(mincutoff)) ;
-      dx = new LowPassFilter(alpha(dcutoff)) ;
+      std::cout << mincutoff << std::endl;
+      setFrequency(freq);
+      setMinCutoff(mincutoff);
+      setBeta(beta_);
+      setDerivateCutoff(dcutoff);
+      x = new LowPassFilter(alpha(mincutoff));
+      dx = new LowPassFilter(alpha(dcutoff));
       lasttime = UndefinedTime ;
     }
 
-    double filter(double value, TimeStamp timestamp=UndefinedTime) {
+    ARdouble filter(ARdouble value, TimeStamp timestamp=UndefinedTime) {
       // update the sampling frequency based on timestamps
       webarkitLOGi("timestamp is: %d", timestamp);
-      webarkitLOGi("value from filter is: %d", value);
+      webarkitLOGi("value from filter is: %f", value);
       if (lasttime!=UndefinedTime && timestamp!=UndefinedTime)
-        freq = 1.0 / (timestamp-lasttime) ;
-      lasttime = timestamp ;
+        freq = 1.0 / (timestamp-lasttime);
+      lasttime = timestamp;
       // estimate the current variation per second 
-      double dvalue = x->hasLastRawValue() ? (value - x->lastRawValue())*freq : 0.0 ; // FIXME: 0.0 or value?
-      double edvalue = dx->filterWithAlpha(dvalue, alpha(dcutoff)) ;
+      ARdouble dvalue = x->hasLastRawValue() ? (value - x->lastRawValue())*freq : 0.0; // FIXME: 0.0 or value?
+      ARdouble edvalue = dx->filterWithAlpha(dvalue, alpha(dcutoff));
       // use it to update the cutoff frequency
-      double cutoff = mincutoff + beta_*fabs(edvalue) ;
+      ARdouble cutoff = mincutoff + beta_*fabs(edvalue);
       // filter the given value
-      return x->filterWithAlpha(value, alpha(cutoff)) ;
+      return x->filterWithAlpha(value, alpha(cutoff));
     }
 
     std::array<std::array<int, 3>, 4>  filterMat(ARdouble m[3][4], TimeStamp timestamp=UndefinedTime) {
@@ -223,10 +226,11 @@ namespace OEF
       return out_mat;
     }
 
-    int filterMat2(ARdouble m[3][4], ARdouble out[3][4], TimeStamp timestamp=UndefinedTime) {
+    int filterMat2(ARdouble m[3][4], TimeStamp timestamp=UndefinedTime) {
       ARdouble q[4], p[3];
-      if (arUtilMat2QuatPos((const ARdouble (*)[4])m, q, p) < 0) return -1;
+      if (arUtilMat2QuatPos(m, q, p) < 0) return -1;
       arUtilQuatNorm(q);
+      webarkitLOGi("q 0 is: %d", q[0]);
       q[0] = filter(q[0], timestamp);
       q[1] = filter(q[1], timestamp);
       q[2] = filter(q[2], timestamp);
@@ -234,13 +238,13 @@ namespace OEF
       p[0] = filter(p[0], timestamp);
       p[1] = filter(p[1], timestamp);
       p[2] = filter(p[2], timestamp);
-      if (arUtilQuatPos2Mat(q, p, out) < 0) return -1;
+      if (arUtilQuatPos2Mat(q, p, m) < 0) return -1;
       return 0;
     }
 
     ~OneEuroFilter(void) {
-      delete x ;
-      delete dx ;
+      delete x;
+      delete dx;
     }
 
   };
