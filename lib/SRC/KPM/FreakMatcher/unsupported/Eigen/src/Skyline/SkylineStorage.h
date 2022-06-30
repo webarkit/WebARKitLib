@@ -3,27 +3,16 @@
 //
 // Copyright (C) 2008-2009 Guillaume Saupin <guillaume.saupin@cea.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_SKYLINE_STORAGE_H
 #define EIGEN_SKYLINE_STORAGE_H
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 /** Stores a skyline set of values in three structures :
  * The diagonal elements
@@ -200,11 +189,11 @@ public:
     }
 
     inline void reset() {
-        memset(m_diag, 0, m_diagSize * sizeof (Scalar));
-        memset(m_upper, 0, m_upperSize * sizeof (Scalar));
-        memset(m_lower, 0, m_lowerSize * sizeof (Scalar));
-        memset(m_upperProfile, 0, m_diagSize * sizeof (Index));
-        memset(m_lowerProfile, 0, m_diagSize * sizeof (Index));
+        std::fill_n(m_diag, m_diagSize, Scalar(0));
+        std::fill_n(m_upper, m_upperSize, Scalar(0));
+        std::fill_n(m_lower, m_lowerSize, Scalar(0));
+        std::fill_n(m_upperProfile, m_diagSize, Index(0));
+        std::fill_n(m_lowerProfile, m_diagSize, Index(0));
     }
 
     void prune(Scalar reference, RealScalar epsilon = dummy_precision<RealScalar>()) {
@@ -267,4 +256,6 @@ public:
 
 };
 
-#endif // EIGEN_COMPRESSED_STORAGE_H
+} // end namespace Eigen
+
+#endif // EIGEN_SKYLINE_STORAGE_H

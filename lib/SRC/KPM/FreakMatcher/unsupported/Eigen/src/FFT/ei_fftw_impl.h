@@ -3,24 +3,13 @@
 //
 // Copyright (C) 2009 Mark Borgerding mark a borgerding net
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 namespace internal {
 
@@ -186,10 +175,10 @@ namespace internal {
       }
   };
 
-  template <typename _Scalar>
+  template <typename Scalar_>
   struct fftw_impl
   {
-      typedef _Scalar Scalar;
+      typedef Scalar_ Scalar;
       typedef std::complex<Scalar> Complex;
 
       inline
@@ -244,6 +233,8 @@ namespace internal {
   protected:
       typedef fftw_plan<Scalar> PlanData;
 
+      typedef Eigen::numext::int64_t int64_t;
+
       typedef std::map<int64_t,PlanData> PlanMap;
 
       PlanMap m_plans;
@@ -269,4 +260,4 @@ namespace internal {
 
 } // end namespace internal
 
-/* vim: set filetype=cpp et sw=2 ts=2 ai: */
+} // end namespace Eigen

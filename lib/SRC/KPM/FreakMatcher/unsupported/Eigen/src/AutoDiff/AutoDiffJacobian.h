@@ -3,27 +3,14 @@
 //
 // Copyright (C) 2009 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_AUTODIFF_JACOBIAN_H
 #define EIGEN_AUTODIFF_JACOBIAN_H
+
+#include "./InternalHeaderCheck.h"
 
 namespace Eigen
 {
@@ -35,37 +22,43 @@ public:
   AutoDiffJacobian(const Functor& f) : Functor(f) {}
 
   // forward constructors
-  template<typename T0>
-  AutoDiffJacobian(const T0& a0) : Functor(a0) {}
-  template<typename T0, typename T1>
-  AutoDiffJacobian(const T0& a0, const T1& a1) : Functor(a0, a1) {}
-  template<typename T0, typename T1, typename T2>
-  AutoDiffJacobian(const T0& a0, const T1& a1, const T1& a2) : Functor(a0, a1, a2) {}
-
-  enum {
-    InputsAtCompileTime = Functor::InputsAtCompileTime,
-    ValuesAtCompileTime = Functor::ValuesAtCompileTime
-  };
+  template<typename... T>
+  AutoDiffJacobian(const T& ...Values) : Functor(Values...) {}
 
   typedef typename Functor::InputType InputType;
   typedef typename Functor::ValueType ValueType;
-  typedef typename Functor::JacobianType JacobianType;
-  typedef typename JacobianType::Scalar Scalar;
+  typedef typename ValueType::Scalar Scalar;
+
+  enum {
+    InputsAtCompileTime = InputType::RowsAtCompileTime,
+    ValuesAtCompileTime = ValueType::RowsAtCompileTime
+  };
+
+  typedef Matrix<Scalar, ValuesAtCompileTime, InputsAtCompileTime> JacobianType;
   typedef typename JacobianType::Index Index;
 
-  typedef Matrix<Scalar,InputsAtCompileTime,1> DerivativeType;
+  typedef Matrix<Scalar, InputsAtCompileTime, 1> DerivativeType;
   typedef AutoDiffScalar<DerivativeType> ActiveScalar;
-
 
   typedef Matrix<ActiveScalar, InputsAtCompileTime, 1> ActiveInput;
   typedef Matrix<ActiveScalar, ValuesAtCompileTime, 1> ActiveValue;
 
-  void operator() (const InputType& x, ValueType* v, JacobianType* _jac=0) const
+  // Some compilers don't accept variadic parameters after a default parameter,
+  // i.e., we can't just write _jac=0 but we need to overload operator():
+  EIGEN_STRONG_INLINE
+  void operator() (const InputType& x, ValueType* v) const
+  {
+      this->operator()(x, v, 0);
+  }
+  template<typename... ParamsType>
+  void operator() (const InputType& x, ValueType* v, JacobianType* _jac,
+                   const ParamsType&... Params) const
   {
     eigen_assert(v!=0);
+
     if (!_jac)
     {
-      Functor::operator()(x, v);
+      Functor::operator()(x, v, Params...);
       return;
     }
 
@@ -76,12 +69,12 @@ public:
 
     if(InputsAtCompileTime==Dynamic)
       for (Index j=0; j<jac.rows(); j++)
-        av[j].derivatives().resize(this->inputs());
+        av[j].derivatives().resize(x.rows());
 
     for (Index i=0; i<jac.cols(); i++)
-      ax[i].derivatives() = DerivativeType::Unit(this->inputs(),i);
+      ax[i].derivatives() = DerivativeType::Unit(x.rows(),i);
 
-    Functor::operator()(ax, &av);
+    Functor::operator()(ax, &av, Params...);
 
     for (Index i=0; i<jac.rows(); i++)
     {
@@ -89,8 +82,6 @@ public:
       jac.row(i) = av[i].derivatives();
     }
   }
-protected:
-
 };
 
 }

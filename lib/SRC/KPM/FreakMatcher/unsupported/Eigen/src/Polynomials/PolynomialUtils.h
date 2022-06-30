@@ -3,27 +3,16 @@
 //
 // Copyright (C) 2010 Manuel Yguel <manuel.yguel@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_POLYNOMIAL_UTILS_H
 #define EIGEN_POLYNOMIAL_UTILS_H
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 /** \ingroup Polynomials_Module
  * \returns the evaluation of the polynomial at x using Horner algorithm.
@@ -33,8 +22,8 @@
  *  e.g. \f$ 1 + 3x^2 \f$ is stored as a vector \f$ [ 1, 0, 3 ] \f$.
  * \param[in] x : the value to evaluate the polynomial at.
  *
- * <i><b>Note for stability:</b></i>
- *  <dd> \f$ |x| \le 1 \f$ </dd>
+ * \note for stability:
+ *   \f$ |x| \le 1 \f$
  */
 template <typename Polynomials, typename T>
 inline
@@ -60,7 +49,7 @@ T poly_eval( const Polynomials& poly, const T& x )
 {
   typedef typename NumTraits<T>::Real Real;
 
-  if( internal::abs2( x ) <= Real(1) ){
+  if( numext::abs2( x ) <= Real(1) ){
     return poly_eval_horner( poly, x ); }
   else
   {
@@ -69,7 +58,7 @@ T poly_eval( const Polynomials& poly, const T& x )
     for( DenseIndex i=1; i<poly.size(); ++i ){
       val = val*inv_x + poly[i]; }
 
-    return std::pow(x,(T)(poly.size()-1)) * val;
+    return numext::pow(x,(T)(poly.size()-1)) * val;
   }
 }
 
@@ -80,22 +69,23 @@ T poly_eval( const Polynomials& poly, const T& x )
  *  by degrees i.e. poly[i] is the coefficient of degree i of the polynomial
  *  e.g. \f$ 1 + 3x^2 \f$ is stored as a vector \f$ [ 1, 0, 3 ] \f$.
  *
- *  <i><b>Precondition:</b></i>
- *  <dd> the leading coefficient of the input polynomial poly must be non zero </dd>
+ *  \pre
+ *   the leading coefficient of the input polynomial poly must be non zero
  */
 template <typename Polynomial>
 inline
 typename NumTraits<typename Polynomial::Scalar>::Real cauchy_max_bound( const Polynomial& poly )
 {
+  using std::abs;
   typedef typename Polynomial::Scalar Scalar;
   typedef typename NumTraits<Scalar>::Real Real;
 
-  assert( Scalar(0) != poly[poly.size()-1] );
+  eigen_assert( Scalar(0) != poly[poly.size()-1] );
   const Scalar inv_leading_coeff = Scalar(1)/poly[poly.size()-1];
   Real cb(0);
 
   for( DenseIndex i=0; i<poly.size()-1; ++i ){
-    cb += internal::abs(poly[i]*inv_leading_coeff); }
+    cb += abs(poly[i]*inv_leading_coeff); }
   return cb + Real(1);
 }
 
@@ -109,6 +99,7 @@ template <typename Polynomial>
 inline
 typename NumTraits<typename Polynomial::Scalar>::Real cauchy_min_bound( const Polynomial& poly )
 {
+  using std::abs;
   typedef typename Polynomial::Scalar Scalar;
   typedef typename NumTraits<Scalar>::Real Real;
 
@@ -120,7 +111,7 @@ typename NumTraits<typename Polynomial::Scalar>::Real cauchy_min_bound( const Po
   const Scalar inv_min_coeff = Scalar(1)/poly[i];
   Real cb(1);
   for( DenseIndex j=i+1; j<poly.size(); ++j ){
-    cb += internal::abs(poly[j]*inv_min_coeff); }
+    cb += abs(poly[j]*inv_min_coeff); }
   return Real(1)/cb;
 }
 
@@ -149,5 +140,6 @@ void roots_to_monicPolynomial( const RootVector& rv, Polynomial& poly )
   }
 }
 
+} // end namespace Eigen
 
 #endif // EIGEN_POLYNOMIAL_UTILS_H

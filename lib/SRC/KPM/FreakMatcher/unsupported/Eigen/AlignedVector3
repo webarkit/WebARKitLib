@@ -3,33 +3,20 @@
 //
 // Copyright (C) 2009 Gael Guennebaud <g.gael@free.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef EIGEN_ALIGNED_VECTOR3
-#define EIGEN_ALIGNED_VECTOR3
+#ifndef EIGEN_ALIGNED_VECTOR3_MODULE_H
+#define EIGEN_ALIGNED_VECTOR3_MODULE_H
 
-#include <Eigen/Geometry>
+#include "../../Eigen/Geometry"
+
+#include "../../Eigen/src/Core/util/DisableStupidWarnings.h"
 
 namespace Eigen {
 
-/** \ingroup Unsupported_modules
+/**
   * \defgroup AlignedVector3_Module Aligned vector3 module
   *
   * \code
@@ -50,28 +37,33 @@ namespace Eigen {
   *
   */
 // TODO specialize Cwise
-template<typename _Scalar> class AlignedVector3;
+template<typename Scalar_> class AlignedVector3;
 
 namespace internal {
-template<typename _Scalar> struct traits<AlignedVector3<_Scalar> >
-  : traits<Matrix<_Scalar,3,1,0,4,1> >
+template<typename Scalar_> struct traits<AlignedVector3<Scalar_> >
+  : traits<Matrix<Scalar_,3,1,0,4,1> >
 {
 };
 }
 
-template<typename _Scalar> class AlignedVector3
-  : public MatrixBase<AlignedVector3<_Scalar> >
+template<typename Scalar_> class AlignedVector3
+  : public MatrixBase<AlignedVector3<Scalar_> >
 {
-    typedef Matrix<_Scalar,4,1> CoeffType;
+    typedef Matrix<Scalar_,4,1> CoeffType;
     CoeffType m_coeffs;
   public:
 
-    typedef MatrixBase<AlignedVector3<_Scalar> > Base;	
+    typedef MatrixBase<AlignedVector3<Scalar_> > Base;
     EIGEN_DENSE_PUBLIC_INTERFACE(AlignedVector3)
     using Base::operator*;
 
     inline Index rows() const { return 3; }
     inline Index cols() const { return 1; }
+    
+    Scalar* data() { return m_coeffs.data(); }
+    const Scalar* data() const { return m_coeffs.data(); }
+    Index innerStride() const { return 1; }
+    Index outerStride() const { return 3; }
 
     inline const Scalar& coeff(Index row, Index col) const
     { return m_coeffs.coeff(row, col); }
@@ -85,6 +77,9 @@ template<typename _Scalar> class AlignedVector3
     inline Scalar& coeffRef(Index index)
     { return m_coeffs.coeffRef(index);}
 
+
+    inline AlignedVector3()
+    {}
 
     inline AlignedVector3(const Scalar& x, const Scalar& y, const Scalar& z)
       : m_coeffs(x, y, z, Scalar(0))
@@ -115,7 +110,7 @@ template<typename _Scalar> class AlignedVector3
     };
 
     template<typename Derived>
-    inline explicit AlignedVector3(const MatrixBase<Derived>& other)
+    inline AlignedVector3(const MatrixBase<Derived>& other)
     {
       generic_assign_selector<Derived>::run(*this,other.derived());
     }
@@ -123,6 +118,12 @@ template<typename _Scalar> class AlignedVector3
     inline AlignedVector3& operator=(const AlignedVector3& other)
     { m_coeffs = other.m_coeffs; return *this; }
 
+    template <typename Derived>
+    inline AlignedVector3& operator=(const MatrixBase<Derived>& other)
+    {
+      generic_assign_selector<Derived>::run(*this,other.derived());
+      return *this;
+    }
 
     inline AlignedVector3 operator+(const AlignedVector3& other) const
     { return AlignedVector3(m_coeffs + other.m_coeffs); }
@@ -132,6 +133,9 @@ template<typename _Scalar> class AlignedVector3
 
     inline AlignedVector3 operator-(const AlignedVector3& other) const
     { return AlignedVector3(m_coeffs - other.m_coeffs); }
+
+    inline AlignedVector3 operator-() const
+    { return AlignedVector3(-m_coeffs); }
 
     inline AlignedVector3 operator-=(const AlignedVector3& other)
     { m_coeffs -= other.m_coeffs; return *this; }
@@ -163,7 +167,7 @@ template<typename _Scalar> class AlignedVector3
       m_coeffs /= norm();
     }
 
-    inline AlignedVector3 normalized()
+    inline AlignedVector3 normalized() const
     {
       return AlignedVector3(m_coeffs / norm());
     }
@@ -182,7 +186,8 @@ template<typename _Scalar> class AlignedVector3
 
     inline Scalar norm() const
     {
-      return internal::sqrt(squaredNorm());
+      using std::sqrt;
+      return sqrt(squaredNorm());
     }
 
     inline AlignedVector3 cross(const AlignedVector3& other) const
@@ -191,14 +196,39 @@ template<typename _Scalar> class AlignedVector3
     }
 
     template<typename Derived>
-    inline bool isApprox(const MatrixBase<Derived>& other, RealScalar eps=NumTraits<Scalar>::dummy_precision()) const
+    inline bool isApprox(const MatrixBase<Derived>& other, const RealScalar& eps=NumTraits<Scalar>::dummy_precision()) const
     {
       return m_coeffs.template head<3>().isApprox(other,eps);
     }
+    
+    CoeffType& coeffs() { return m_coeffs; }
+    const CoeffType& coeffs() const { return m_coeffs; }
 };
+
+namespace internal {
+
+template<typename Scalar_>
+struct eval<AlignedVector3<Scalar_>, Dense>
+{
+ typedef const AlignedVector3<Scalar_>& type;
+};
+
+template<typename Scalar>
+struct evaluator<AlignedVector3<Scalar> >
+  : evaluator<Matrix<Scalar,4,1> >
+{
+  typedef AlignedVector3<Scalar> XprType;
+  typedef evaluator<Matrix<Scalar,4,1> > Base;
+  
+  evaluator(const XprType &m) : Base(m.coeffs()) {}  
+};
+
+}
 
 //@}
 
 }
 
-#endif // EIGEN_ALIGNED_VECTOR3
+#include "../../Eigen/src/Core/util/ReenableStupidWarnings.h"
+
+#endif // EIGEN_ALIGNED_VECTOR3_MODULE_H

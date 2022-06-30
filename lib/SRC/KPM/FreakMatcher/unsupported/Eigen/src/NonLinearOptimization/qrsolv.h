@@ -1,3 +1,7 @@
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
+
 namespace internal {
 
 // TODO : once qrsolv2 is removed, use ColPivHouseholderQR or PermutationMatrix instead of ipvt
@@ -59,7 +63,7 @@ void qrsolv(
             qtbpj = -givens.s() * wa[k] + givens.c() * qtbpj;
             wa[k] = temp;
 
-            /*           accumulate the tranformation in the row of s. */
+            /*           accumulate the transformation in the row of s. */
             for (i = k+1; i<n; ++i) {
                 temp = givens.c() * s(i,k) + givens.s() * sdiag[i];
                 sdiag[i] = -givens.s() * s(i,k) + givens.c() * sdiag[i];
@@ -85,3 +89,5 @@ void qrsolv(
 }
 
 } // end namespace internal
+
+} // end namespace Eigen

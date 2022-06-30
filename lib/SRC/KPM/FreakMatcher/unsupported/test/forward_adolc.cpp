@@ -3,35 +3,27 @@
 //
 // Copyright (C) 2008 Gael Guennebaud <g.gael@free.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "main.h"
+#include <Eigen/Dense>
+
 #define NUMBER_DIRECTIONS 16
 #include <unsupported/Eigen/AdolcForward>
 
-int adtl::ADOLC_numDir;
+template<typename Vector>
+EIGEN_DONT_INLINE typename Vector::Scalar foo(const Vector& p)
+{
+  typedef typename Vector::Scalar Scalar;
+  return (p-Vector(Scalar(-1),Scalar(1.))).norm() + (p.array().sqrt().abs() * p.array().sin()).sum() + p.dot(p);
+}
 
-template<typename _Scalar, int NX=Dynamic, int NY=Dynamic>
+template<typename Scalar_, int NX=Dynamic, int NY=Dynamic>
 struct TestFunc1
 {
-  typedef _Scalar Scalar;
+  typedef Scalar_ Scalar;
   enum {
     InputsAtCompileTime = NX,
     ValuesAtCompileTime = NY
@@ -43,7 +35,7 @@ struct TestFunc1
   int m_inputs, m_values;
 
   TestFunc1() : m_inputs(InputsAtCompileTime), m_values(ValuesAtCompileTime) {}
-  TestFunc1(int inputs, int values) : m_inputs(inputs), m_values(values) {}
+  TestFunc1(int inputs_, int values_) : m_inputs(inputs_), m_values(values_) {}
 
   int inputs() const { return m_inputs; }
   int values() const { return m_values; }
@@ -127,9 +119,9 @@ template<typename Func> void adolc_forward_jacobian(const Func& f)
     VERIFY_IS_APPROX(j, jref);
 }
 
-void test_forward_adolc()
+EIGEN_DECLARE_TEST(forward_adolc)
 {
-  adtl::ADOLC_numDir = NUMBER_DIRECTIONS;
+  adtl::setNumDir(NUMBER_DIRECTIONS);
 
   for(int i = 0; i < g_repeat; i++) {
     CALL_SUBTEST(( adolc_forward_jacobian(TestFunc1<double,2,2>()) ));
@@ -137,5 +129,13 @@ void test_forward_adolc()
     CALL_SUBTEST(( adolc_forward_jacobian(TestFunc1<double,3,2>()) ));
     CALL_SUBTEST(( adolc_forward_jacobian(TestFunc1<double,3,3>()) ));
     CALL_SUBTEST(( adolc_forward_jacobian(TestFunc1<double>(3,3)) ));
+  }
+
+  {
+    // simple instantiation tests
+    Matrix<adtl::adouble,2,1> x;
+    foo(x);
+    Matrix<adtl::adouble,Dynamic,Dynamic> A(4,4);;
+    A.selfadjointView<Lower>().eigenvalues();
   }
 }
