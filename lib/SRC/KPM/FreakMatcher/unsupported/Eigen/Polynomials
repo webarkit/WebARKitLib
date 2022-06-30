@@ -1,11 +1,19 @@
+// This file is part of Eigen, a lightweight C++ template library
+// for linear algebra.
+//
+//
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 #ifndef EIGEN_POLYNOMIALS_MODULE_H
 #define EIGEN_POLYNOMIALS_MODULE_H
 
-#include <Eigen/Core>
+#include "../../Eigen/Core"
 
-#include <Eigen/src/Core/util/DisableStupidWarnings.h>
+#include "../../Eigen/Eigenvalues"
 
-#include <Eigen/Eigenvalues>
+#include "../../Eigen/src/Core/util/DisableStupidWarnings.h"
 
 // Note that EIGEN_HIDE_HEAVY_CODE has to be defined per module
 #if (defined EIGEN_EXTERN_INSTANTIATIONS) && (EIGEN_EXTERN_INSTANTIATIONS>=2)
@@ -16,13 +24,8 @@
   #undef EIGEN_HIDE_HEAVY_CODE
 #endif
 
-namespace Eigen {
-
-/** \ingroup Unsupported_modules
+/**
   * \defgroup Polynomials_Module Polynomials module
-  *
-  *
-  *
   * \brief This module provides a QR based polynomial solver.
 	*
   * To use this module, add
@@ -129,9 +132,6 @@ namespace Eigen {
   Output: \verbinclude PolynomialSolver1.out
 */
 
-} // namespace Eigen
-
-#include <Eigen/src/Core/util/ReenableStupidWarnings.h>
+#include "../../Eigen/src/Core/util/ReenableStupidWarnings.h"
 
 #endif // EIGEN_POLYNOMIALS_MODULE_H
-/* vim: set filetype=cpp et sw=2 ts=2 ai: */

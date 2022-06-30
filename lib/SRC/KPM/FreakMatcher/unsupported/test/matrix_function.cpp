@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2010 Jitse Niesen <jitse@maths.leeds.ac.uk>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "main.h"
 #include <unsupported/Eigen/MatrixFunctions>
@@ -38,9 +23,8 @@ inline bool test_isApprox_abs(const Type1& a, const Type2& b)
 
 // Returns a matrix with eigenvalues clustered around 0, 1 and 2.
 template<typename MatrixType>
-MatrixType randomMatrixWithRealEivals(const typename MatrixType::Index size)
+MatrixType randomMatrixWithRealEivals(const Index size)
 {
-  typedef typename MatrixType::Index Index;
   typedef typename MatrixType::Scalar Scalar;
   typedef typename MatrixType::RealScalar RealScalar;
   MatrixType diag = MatrixType::Zero(size, size);
@@ -57,16 +41,15 @@ template <typename MatrixType, int IsComplex = NumTraits<typename internal::trai
 struct randomMatrixWithImagEivals
 {
   // Returns a matrix with eigenvalues clustered around 0 and +/- i.
-  static MatrixType run(const typename MatrixType::Index size);
+  static MatrixType run(const Index size);
 };
 
 // Partial specialization for real matrices
 template<typename MatrixType>
 struct randomMatrixWithImagEivals<MatrixType, 0>
 {
-  static MatrixType run(const typename MatrixType::Index size)
+  static MatrixType run(const Index size)
   {
-    typedef typename MatrixType::Index Index;
     typedef typename MatrixType::Scalar Scalar;
     MatrixType diag = MatrixType::Zero(size, size);
     Index i = 0;
@@ -92,9 +75,8 @@ struct randomMatrixWithImagEivals<MatrixType, 0>
 template<typename MatrixType>
 struct randomMatrixWithImagEivals<MatrixType, 1>
 {
-  static MatrixType run(const typename MatrixType::Index size)
+  static MatrixType run(const Index size)
   {
-    typedef typename MatrixType::Index Index;
     typedef typename MatrixType::Scalar Scalar;
     typedef typename MatrixType::RealScalar RealScalar;
     const Scalar imagUnit(0, 1);
@@ -117,7 +99,26 @@ void testMatrixExponential(const MatrixType& A)
   typedef typename NumTraits<Scalar>::Real RealScalar;
   typedef std::complex<RealScalar> ComplexScalar;
 
-  VERIFY_IS_APPROX(A.exp(), A.matrixFunction(StdStemFunctions<ComplexScalar>::exp));
+  VERIFY_IS_APPROX(A.exp(), A.matrixFunction(internal::stem_function_exp<ComplexScalar>));
+}
+
+template<typename MatrixType>
+void testMatrixLogarithm(const MatrixType& A)
+{
+  typedef typename internal::traits<MatrixType>::Scalar Scalar;
+  typedef typename NumTraits<Scalar>::Real RealScalar;
+
+  MatrixType scaledA;
+  RealScalar maxImagPartOfSpectrum = A.eigenvalues().imag().cwiseAbs().maxCoeff();
+  if (maxImagPartOfSpectrum >= RealScalar(0.9L * EIGEN_PI))
+    scaledA = A * RealScalar(0.9L * EIGEN_PI) / maxImagPartOfSpectrum;
+  else
+    scaledA = A;
+
+  // identity X.exp().log() = X only holds if Im(lambda) < pi for all eigenvalues of X
+  MatrixType expA = scaledA.exp();
+  MatrixType logExpA = expA.log();
+  VERIFY_IS_APPROX(logExpA, scaledA);
 }
 
 template<typename MatrixType>
@@ -157,6 +158,7 @@ template<typename MatrixType>
 void testMatrix(const MatrixType& A)
 {
   testMatrixExponential(A);
+  testMatrixLogarithm(A);
   testHyperbolicFunctions(A);
   testGonioFunctions(A);
 }
@@ -166,7 +168,6 @@ void testMatrixType(const MatrixType& m)
 {
   // Matrices with clustered eigenvalue lead to different code paths
   // in MatrixFunction.h and are thus useful for testing.
-  typedef typename MatrixType::Index Index;
 
   const Index size = m.rows();
   for (int i = 0; i < g_repeat; i++) {
@@ -176,7 +177,40 @@ void testMatrixType(const MatrixType& m)
   }
 }
 
-void test_matrix_function()
+template<typename MatrixType>
+void testMapRef(const MatrixType& A)
+{
+  // Test if passing Ref and Map objects is possible
+  // (Regression test for Bug #1796)
+  Index size = A.rows();
+  MatrixType X; X.setRandom(size, size);
+  MatrixType Y(size,size);
+  Ref<      MatrixType> R(Y);
+  Ref<const MatrixType> Rc(X);
+  Map<      MatrixType> M(Y.data(), size, size);
+  Map<const MatrixType> Mc(X.data(), size, size);
+
+  X = X*X; // make sure sqrt is possible
+  Y = X.sqrt();
+  R = Rc.sqrt();
+  M = Mc.sqrt();
+  Y = X.exp();
+  R = Rc.exp();
+  M = Mc.exp();
+  X = Y; // make sure log is possible
+  Y = X.log();
+  R = Rc.log();
+  M = Mc.log();
+
+  Y = X.cos() + Rc.cos() + Mc.cos();
+  Y = X.sin() + Rc.sin() + Mc.sin();
+
+  Y = X.cosh() + Rc.cosh() + Mc.cosh();
+  Y = X.sinh() + Rc.sinh() + Mc.sinh();
+}
+
+
+EIGEN_DECLARE_TEST(matrix_function)
 {
   CALL_SUBTEST_1(testMatrixType(Matrix<float,1,1>()));
   CALL_SUBTEST_2(testMatrixType(Matrix3cf()));
@@ -185,4 +219,9 @@ void test_matrix_function()
   CALL_SUBTEST_5(testMatrixType(Matrix<double,5,5,RowMajor>()));
   CALL_SUBTEST_6(testMatrixType(Matrix4cd()));
   CALL_SUBTEST_7(testMatrixType(MatrixXd(13,13)));
+
+  CALL_SUBTEST_1(testMapRef(Matrix<float,1,1>()));
+  CALL_SUBTEST_2(testMapRef(Matrix3cf()));
+  CALL_SUBTEST_3(testMapRef(MatrixXf(8,8)));
+  CALL_SUBTEST_7(testMapRef(MatrixXd(13,13)));
 }

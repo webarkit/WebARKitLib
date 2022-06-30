@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2010 Manuel Yguel <manuel.yguel@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_COMPANION_H
 #define EIGEN_COMPANION_H
@@ -29,15 +14,13 @@
 // * Eigen/Core
 // * Eigen/src/PolynomialSolver.h
 
-#ifndef EIGEN_PARSED_BY_DOXYGEN
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 namespace internal {
 
-template <typename T>
-T radix(){ return 2; }
-
-template <typename T>
-T radix2(){ return radix<T>()*radix<T>(); }
+#ifndef EIGEN_PARSED_BY_DOXYGEN
 
 template<int Size>
 struct decrement_if_fixed_size
@@ -48,32 +31,32 @@ struct decrement_if_fixed_size
 
 #endif
 
-template< typename _Scalar, int _Deg >
+template< typename Scalar_, int Deg_ >
 class companion
 {
   public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF_VECTORIZABLE_FIXED_SIZE(_Scalar,_Deg==Dynamic ? Dynamic : _Deg)
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW_IF_VECTORIZABLE_FIXED_SIZE(Scalar_,Deg_==Dynamic ? Dynamic : Deg_)
 
     enum {
-      Deg = _Deg,
+      Deg = Deg_,
       Deg_1=decrement_if_fixed_size<Deg>::ret
     };
 
-    typedef _Scalar                                Scalar;
+    typedef Scalar_                                Scalar;
     typedef typename NumTraits<Scalar>::Real       RealScalar;
     typedef Matrix<Scalar, Deg, 1>                 RightColumn;
     //typedef DiagonalMatrix< Scalar, Deg_1, Deg_1 > BottomLeftDiagonal;
     typedef Matrix<Scalar, Deg_1, 1>               BottomLeftDiagonal;
 
     typedef Matrix<Scalar, Deg, Deg>               DenseCompanionMatrixType;
-    typedef Matrix< Scalar, _Deg, Deg_1 >          LeftBlock;
+    typedef Matrix< Scalar, Deg_, Deg_1 >          LeftBlock;
     typedef Matrix< Scalar, Deg_1, Deg_1 >         BottomLeftBlock;
     typedef Matrix< Scalar, 1, Deg_1 >             LeftBlockFirstRow;
 
     typedef DenseIndex Index;
 
   public:
-    EIGEN_STRONG_INLINE const _Scalar operator()(Index row, Index col ) const
+    EIGEN_STRONG_INLINE const Scalar_ operator()(Index row, Index col ) const
     {
       if( m_bl_diag.rows() > col )
       {
@@ -88,8 +71,7 @@ class companion
     void setPolynomial( const VectorType& poly )
     {
       const Index deg = poly.size()-1;
-      m_monic = -1/poly[deg] * poly.head(deg);
-      //m_bl_diag.setIdentity( deg-1 );
+      m_monic = -poly.head(deg)/poly[deg];
       m_bl_diag.setOnes(deg-1);
     }
 
@@ -102,13 +84,13 @@ class companion
     {
       const Index deg   = m_monic.size();
       const Index deg_1 = deg-1;
-      DenseCompanionMatrixType companion(deg,deg);
-      companion <<
+      DenseCompanionMatrixType companMat(deg,deg);
+      companMat <<
         ( LeftBlock(deg,deg_1)
           << LeftBlockFirstRow::Zero(1,deg_1),
           BottomLeftBlock::Identity(deg-1,deg-1)*m_bl_diag.asDiagonal() ).finished()
         , m_monic;
-      return companion;
+      return companMat;
     }
 
 
@@ -117,20 +99,20 @@ class companion
     /** Helper function for the balancing algorithm.
      * \returns true if the row and the column, having colNorm and rowNorm
      * as norms, are balanced, false otherwise.
-     * colB and rowB are repectively the multipliers for
+     * colB and rowB are respectively the multipliers for
      * the column and the row in order to balance them.
      * */
-    bool balanced( Scalar colNorm, Scalar rowNorm,
-        bool& isBalanced, Scalar& colB, Scalar& rowB );
+    bool balanced( RealScalar colNorm, RealScalar rowNorm,
+        bool& isBalanced, RealScalar& colB, RealScalar& rowB );
 
     /** Helper function for the balancing algorithm.
      * \returns true if the row and the column, having colNorm and rowNorm
      * as norms, are balanced, false otherwise.
-     * colB and rowB are repectively the multipliers for
+     * colB and rowB are respectively the multipliers for
      * the column and the row in order to balance them.
      * */
-    bool balancedR( Scalar colNorm, Scalar rowNorm,
-        bool& isBalanced, Scalar& colB, Scalar& rowB );
+    bool balancedR( RealScalar colNorm, RealScalar rowNorm,
+        bool& isBalanced, RealScalar& colB, RealScalar& rowB );
 
   public:
     /**
@@ -150,12 +132,15 @@ class companion
 
 
 
-template< typename _Scalar, int _Deg >
+template< typename Scalar_, int Deg_ >
 inline
-bool companion<_Scalar,_Deg>::balanced( Scalar colNorm, Scalar rowNorm,
-    bool& isBalanced, Scalar& colB, Scalar& rowB )
+bool companion<Scalar_,Deg_>::balanced( RealScalar colNorm, RealScalar rowNorm,
+    bool& isBalanced, RealScalar& colB, RealScalar& rowB )
 {
-  if( Scalar(0) == colNorm || Scalar(0) == rowNorm ){ return true; }
+  if( RealScalar(0) == colNorm || RealScalar(0) == rowNorm 
+      || !(numext::isfinite)(colNorm) || !(numext::isfinite)(rowNorm)){
+    return true;
+  }
   else
   {
     //To find the balancing coefficients, if the radix is 2,
@@ -163,53 +148,61 @@ bool companion<_Scalar,_Deg>::balanced( Scalar colNorm, Scalar rowNorm,
     // \f$ 2^{2\sigma-1} < rowNorm / colNorm \le 2^{2\sigma+1} \f$
     // then the balancing coefficient for the row is \f$ 1/2^{\sigma} \f$
     // and the balancing coefficient for the column is \f$ 2^{\sigma} \f$
-    rowB = rowNorm / radix<Scalar>();
-    colB = Scalar(1);
-    const Scalar s = colNorm + rowNorm;
+    const RealScalar radix = RealScalar(2);
+    const RealScalar radix2 = RealScalar(4);
+    
+    rowB = rowNorm / radix;
+    colB = RealScalar(1);
+    const RealScalar s = colNorm + rowNorm;
 
-    while (colNorm < rowB)
+    // Find sigma s.t. rowNorm / 2 <= 2^(2*sigma) * colNorm
+    RealScalar scout = colNorm;
+    while (scout < rowB)
     {
-      colB *= radix<Scalar>();
-      colNorm *= radix2<Scalar>();
+      colB *= radix;
+      scout *= radix2;
+    }
+    
+    // We now have an upper-bound for sigma, try to lower it.
+    // Find sigma s.t. 2^(2*sigma) * colNorm / 2 < rowNorm
+    scout = colNorm * (colB / radix) * colB;  // Avoid overflow.
+    while (scout >= rowNorm)
+    {
+      colB /= radix;
+      scout /= radix2;
     }
 
-    rowB = rowNorm * radix<Scalar>();
-
-    while (colNorm >= rowB)
-    {
-      colB /= radix<Scalar>();
-      colNorm /= radix2<Scalar>();
-    }
-
-    //This line is used to avoid insubstantial balancing
-    if ((rowNorm + colNorm) < Scalar(0.95) * s * colB)
+    // This line is used to avoid insubstantial balancing.
+    if ((rowNorm + radix * scout) < RealScalar(0.95) * s * colB)
     {
       isBalanced = false;
-      rowB = Scalar(1) / colB;
+      rowB = RealScalar(1) / colB;
       return false;
     }
-    else{
-      return true; }
+    else
+    {
+      return true;
+    }
   }
 }
 
-template< typename _Scalar, int _Deg >
+template< typename Scalar_, int Deg_ >
 inline
-bool companion<_Scalar,_Deg>::balancedR( Scalar colNorm, Scalar rowNorm,
-    bool& isBalanced, Scalar& colB, Scalar& rowB )
+bool companion<Scalar_,Deg_>::balancedR( RealScalar colNorm, RealScalar rowNorm,
+    bool& isBalanced, RealScalar& colB, RealScalar& rowB )
 {
-  if( Scalar(0) == colNorm || Scalar(0) == rowNorm ){ return true; }
+  if( RealScalar(0) == colNorm || RealScalar(0) == rowNorm ){ return true; }
   else
   {
     /**
      * Set the norm of the column and the row to the geometric mean
      * of the row and column norm
      */
-    const _Scalar q = colNorm/rowNorm;
-    if( !isApprox( q, _Scalar(1) ) )
+    const RealScalar q = colNorm/rowNorm;
+    if( !isApprox( q, Scalar_(1) ) )
     {
       rowB = sqrt( colNorm/rowNorm );
-      colB = Scalar(1)/rowB;
+      colB = RealScalar(1)/rowB;
 
       isBalanced = false;
       return false;
@@ -220,9 +213,10 @@ bool companion<_Scalar,_Deg>::balancedR( Scalar colNorm, Scalar rowNorm,
 }
 
 
-template< typename _Scalar, int _Deg >
-void companion<_Scalar,_Deg>::balance()
+template< typename Scalar_, int Deg_ >
+void companion<Scalar_,Deg_>::balance()
 {
+  using std::abs;
   EIGEN_STATIC_ASSERT( Deg == Dynamic || 1 < Deg, YOU_MADE_A_PROGRAMMING_MISTAKE );
   const Index deg   = m_monic.size();
   const Index deg_1 = deg-1;
@@ -231,8 +225,8 @@ void companion<_Scalar,_Deg>::balance()
   while( !hasConverged )
   {
     hasConverged = true;
-    Scalar colNorm,rowNorm;
-    Scalar colB,rowB;
+    RealScalar colNorm,rowNorm;
+    RealScalar colB,rowB;
 
     //First row, first column excluding the diagonal
     //==============================================
@@ -282,5 +276,7 @@ void companion<_Scalar,_Deg>::balance()
 }
 
 } // end namespace internal
+
+} // end namespace Eigen
 
 #endif // EIGEN_COMPANION_H

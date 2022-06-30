@@ -3,27 +3,16 @@
 //
 // Copyright (C) 2010 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_STRIDE_H
 #define EIGEN_STRIDE_H
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen {
 
 /** \class Stride
   * \ingroup Core_Module
@@ -44,47 +33,61 @@
   * arguments to the constructor.
   *
   * Indeed, this class takes two template parameters:
-  *  \param _OuterStrideAtCompileTime the outer stride, or Dynamic if you want to specify it at runtime.
-  *  \param _InnerStrideAtCompileTime the inner stride, or Dynamic if you want to specify it at runtime.
+  *  \tparam OuterStrideAtCompileTime_ the outer stride, or Dynamic if you want to specify it at runtime.
+  *  \tparam InnerStrideAtCompileTime_ the inner stride, or Dynamic if you want to specify it at runtime.
   *
   * Here is an example:
   * \include Map_general_stride.cpp
   * Output: \verbinclude Map_general_stride.out
   *
+  * Both strides can be negative. However, a negative stride of -1 cannot be specified at compile time
+  * because of the ambiguity with Dynamic which is defined to -1 (historically, negative strides were
+  * not allowed).
+  *
+  * Note that for compile-time vectors (ColsAtCompileTime==1 or RowsAtCompile==1),
+  * the inner stride is the pointer increment between two consecutive elements,
+  * regardless of storage layout.
+  *
   * \sa class InnerStride, class OuterStride, \ref TopicStorageOrders
   */
-template<int _OuterStrideAtCompileTime, int _InnerStrideAtCompileTime>
+template<int OuterStrideAtCompileTime_, int InnerStrideAtCompileTime_>
 class Stride
 {
   public:
-    typedef DenseIndex Index;
+    typedef Eigen::Index Index; ///< \deprecated since Eigen 3.3
     enum {
-      InnerStrideAtCompileTime = _InnerStrideAtCompileTime,
-      OuterStrideAtCompileTime = _OuterStrideAtCompileTime
+      InnerStrideAtCompileTime = InnerStrideAtCompileTime_,
+      OuterStrideAtCompileTime = OuterStrideAtCompileTime_
     };
 
     /** Default constructor, for use when strides are fixed at compile time */
+    EIGEN_DEVICE_FUNC
     Stride()
       : m_outer(OuterStrideAtCompileTime), m_inner(InnerStrideAtCompileTime)
     {
+      // FIXME: for Eigen 4 we should use DynamicIndex instead of Dynamic.
+      // FIXME: for Eigen 4 we should also unify this API with fix<>
       eigen_assert(InnerStrideAtCompileTime != Dynamic && OuterStrideAtCompileTime != Dynamic);
     }
 
     /** Constructor allowing to pass the strides at runtime */
+    EIGEN_DEVICE_FUNC
     Stride(Index outerStride, Index innerStride)
       : m_outer(outerStride), m_inner(innerStride)
     {
-      eigen_assert(innerStride>=0 && outerStride>=0);
     }
 
     /** Copy constructor */
+    EIGEN_DEVICE_FUNC
     Stride(const Stride& other)
       : m_outer(other.outer()), m_inner(other.inner())
     {}
 
     /** \returns the outer stride */
+    EIGEN_DEVICE_FUNC EIGEN_CONSTEXPR
     inline Index outer() const { return m_outer.value(); }
     /** \returns the inner stride */
+    EIGEN_DEVICE_FUNC EIGEN_CONSTEXPR
     inline Index inner() const { return m_inner.value(); }
 
   protected:
@@ -94,26 +97,26 @@ class Stride
 
 /** \brief Convenience specialization of Stride to specify only an inner stride
   * See class Map for some examples */
-template<int Value = Dynamic>
+template<int Value>
 class InnerStride : public Stride<0, Value>
 {
     typedef Stride<0, Value> Base;
   public:
-    typedef DenseIndex Index;
-    InnerStride() : Base() {}
-    InnerStride(Index v) : Base(0, v) {}
+    EIGEN_DEVICE_FUNC InnerStride() : Base() {}
+    EIGEN_DEVICE_FUNC InnerStride(Index v) : Base(0, v) {} // FIXME making this explicit could break valid code
 };
 
 /** \brief Convenience specialization of Stride to specify only an outer stride
   * See class Map for some examples */
-template<int Value = Dynamic>
+template<int Value>
 class OuterStride : public Stride<Value, 0>
 {
     typedef Stride<Value, 0> Base;
   public:
-    typedef DenseIndex Index;
-    OuterStride() : Base() {}
-    OuterStride(Index v) : Base(v,0) {}
+    EIGEN_DEVICE_FUNC OuterStride() : Base() {}
+    EIGEN_DEVICE_FUNC OuterStride(Index v) : Base(v,0) {} // FIXME making this explicit could break valid code
 };
+
+} // end namespace Eigen
 
 #endif // EIGEN_STRIDE_H
