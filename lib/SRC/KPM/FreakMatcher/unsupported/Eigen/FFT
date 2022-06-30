@@ -3,35 +3,20 @@
 //
 // Copyright (C) 2009 Mark Borgerding mark a borgerding net
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#ifndef EIGEN_FFT_H
-#define EIGEN_FFT_H
+#ifndef EIGEN_FFT_MODULE_H
+#define EIGEN_FFT_MODULE_H
 
 #include <complex>
 #include <vector>
 #include <map>
-#include <Eigen/Core>
+#include "../../Eigen/Core"
 
 
-/** \ingroup Unsupported_modules
+/**
   * \defgroup FFT_Module Fast Fourier Transform module
   *
   * \code
@@ -44,10 +29,19 @@
   * The default implementation is based on kissfft. It is a small, free, and
   * reasonably efficient default.
   *
-  * There are currently two implementation backend:
+  * There are currently four implementation backend:
   *
+  * - kissfft(https://github.com/mborgerding/kissfft) : Simple and not so fast, BSD-3-Clause.
+  *   It is a mixed-radix Fast Fourier Transform based up on the principle, "Keep It Simple, Stupid."
+  *   Notice that:kissfft fails to handle "atypically-sized" inputs(i.e., sizes with large factors),a workaround is using fftw or pocketfft.
   * - fftw (http://www.fftw.org) : faster, GPL -- incompatible with Eigen in LGPL form, bigger code size.
-  * - MKL (http://en.wikipedia.org/wiki/Math_Kernel_Library) : fastest, commercial -- may be incompatible with Eigen in GPL form.
+  * - MKL (https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl-download.html) : fastest, free -- may be incompatible with Eigen in GPL form.
+  * - pocketfft (https://gitlab.mpcdf.mpg.de/mtr/pocketfft) : faster than kissfft, BSD 3-clause.
+  *   It is a heavily modified implementation of FFTPack, with the following advantages:
+  *   1.strictly C++11 compliant
+  *   2.more accurate twiddle factor computation
+  *   3.very fast plan generation
+  *   4.worst case complexity for transform sizes with large prime factors is N*log(N), because Bluestein's algorithm is used for these cases
   *
   * \section FFTDesign Design
   *
@@ -83,26 +77,34 @@
   */
  
 
+#include "../../Eigen/src/Core/util/DisableStupidWarnings.h"
+
 #ifdef EIGEN_FFTW_DEFAULT
 // FFTW: faster, GPL -- incompatible with Eigen in LGPL form, bigger code size
 #  include <fftw3.h>
+#  include "src/FFT/ei_fftw_impl.h"
    namespace Eigen {
-#    include "src/FFT/ei_fftw_impl.h"
      //template <typename T> typedef struct internal::fftw_impl  default_fft_impl; this does not work
      template <typename T> struct default_fft_impl : public internal::fftw_impl<T> {};
    }
 #elif defined EIGEN_MKL_DEFAULT
-// TODO 
-// intel Math Kernel Library: fastest, commercial -- may be incompatible with Eigen in GPL form
+// intel Math Kernel Library: fastest, free -- may be incompatible with Eigen in GPL form
+#  include "src/FFT/ei_imklfft_impl.h"
    namespace Eigen {
-#    include "src/FFT/ei_imklfft_impl.h"
-     template <typename T> struct default_fft_impl : public internal::imklfft_impl {};
+     template <typename T> struct default_fft_impl : public internal::imklfft::imklfft_impl<T> {};
    }
-#else
-// internal::kissfft_impl:  small, free, reasonably efficient default, derived from kissfft
-//
+#elif defined EIGEN_POCKETFFT_DEFAULT
+// internal::pocketfft_impl: a heavily modified implementation of FFTPack, with many advantages.
+# include<pocketfft_hdronly.h>
+# include"src/FFT/ei_pocketfft_impl.h"
   namespace Eigen {
-#   include "src/FFT/ei_kissfft_impl.h"
+     template <typename T>
+      struct default_fft_impl : public internal::pocketfft_impl<T> {};
+  }
+#else 
+// internal::kissfft_impl:  small, free, reasonably efficient default, derived from kissfft
+# include "src/FFT/ei_kissfft_impl.h"
+  namespace Eigen {
      template <typename T> 
        struct default_fft_impl : public internal::kissfft_impl<T> {};
   }
@@ -144,8 +146,6 @@ protected:
   const T_SrcMat & m_src;
   T_FftIfc & m_ifc;
   Index m_nfft;
-private:
-  fft_fwd_proxy& operator=(const fft_fwd_proxy&);
 };
 
 template<typename T_SrcMat,typename T_FftIfc> 
@@ -164,8 +164,6 @@ protected:
   const T_SrcMat & m_src;
   T_FftIfc & m_ifc;
   Index m_nfft;
-private:
-  fft_inv_proxy& operator=(const fft_inv_proxy&);
 };
 
 
@@ -212,19 +210,19 @@ class FFT
         m_impl.fwd(dst,src,static_cast<int>(nfft));
     }
 
-    /*
+#if defined EIGEN_FFTW_DEFAULT || defined EIGEN_POCKETFFT_DEFAULT || defined EIGEN_MKL_DEFAULT
     inline 
     void fwd2(Complex * dst, const Complex * src, int n0,int n1)
     {
       m_impl.fwd2(dst,src,n0,n1);
     }
-    */
+#endif
 
-    template <typename _Input>
+    template <typename Input_>
     inline
-    void fwd( std::vector<Complex> & dst, const std::vector<_Input> & src) 
+    void fwd( std::vector<Complex> & dst, const std::vector<Input_> & src)
     {
-      if ( NumTraits<_Input>::IsComplex == 0 && HasFlag(HalfSpectrum) )
+      if ( NumTraits<Input_>::IsComplex == 0 && HasFlag(HalfSpectrum) )
         dst.resize( (src.size()>>1)+1); // half the bins + Nyquist bin
       else
         dst.resize(src.size());
@@ -304,6 +302,7 @@ class FFT
     void inv( MatrixBase<OutputDerived> & dst, const MatrixBase<ComplexDerived> & src, Index nfft=-1)
     {
       typedef typename ComplexDerived::Scalar src_type;
+      typedef typename ComplexDerived::RealScalar real_type;
       typedef typename OutputDerived::Scalar dst_type;
       const bool realfft= (NumTraits<dst_type>::IsComplex == 0);
       EIGEN_STATIC_ASSERT_VECTOR_ONLY(OutputDerived)
@@ -344,9 +343,9 @@ class FFT
             tmp.head(nhead) = src.head(nhead);
             tmp.tail(ntail) = src.tail(ntail);
             if (resize_input<0) { //shrinking -- create the Nyquist bin as the average of the two bins that fold into it
-              tmp(nhead) = ( src(nfft/2) + src( src.size() - nfft/2 ) )*src_type(.5);
+              tmp(nhead) = ( src(nfft/2) + src( src.size() - nfft/2 ) )*real_type(.5);
             }else{ // expanding -- split the old Nyquist bin into two halves
-              tmp(nhead) = src(nhead) * src_type(.5);
+              tmp(nhead) = src(nhead) * real_type(.5);
               tmp(tmp.size()-nhead) = tmp(nhead);
             }
           }
@@ -359,19 +358,18 @@ class FFT
       }
     }
 
-    template <typename _Output>
+    template <typename Output_>
     inline
-    void inv( std::vector<_Output> & dst, const std::vector<Complex> & src,Index nfft=-1)
+    void inv( std::vector<Output_> & dst, const std::vector<Complex> & src,Index nfft=-1)
     {
       if (nfft<1)
-        nfft = ( NumTraits<_Output>::IsComplex == 0 && HasFlag(HalfSpectrum) ) ? 2*(src.size()-1) : src.size();
+        nfft = ( NumTraits<Output_>::IsComplex == 0 && HasFlag(HalfSpectrum) ) ? 2*(src.size()-1) : src.size();
       dst.resize( nfft );
       inv( &dst[0],&src[0],nfft);
     }
 
 
-    /*
-    // TODO: multi-dimensional FFTs
+#if defined EIGEN_FFTW_DEFAULT || defined EIGEN_POCKETFFT_DEFAULT || defined EIGEN_MKL_DEFAULT
     inline 
     void inv2(Complex * dst, const Complex * src, int n0,int n1)
     {
@@ -379,7 +377,8 @@ class FFT
       if ( HasFlag( Unscaled ) == false)
           scale(dst,1./(n0*n1),n0*n1);
     }
-  */
+#endif
+
 
     inline
     impl_type & impl() {return m_impl;}
@@ -429,5 +428,7 @@ void fft_inv_proxy<T_SrcMat,T_FftIfc>::evalTo(T_DestMat& dst) const
 }
 
 }
+
+#include "../../Eigen/src/Core/util/ReenableStupidWarnings.h"
+
 #endif
-/* vim: set filetype=cpp et sw=2 ts=2 ai: */

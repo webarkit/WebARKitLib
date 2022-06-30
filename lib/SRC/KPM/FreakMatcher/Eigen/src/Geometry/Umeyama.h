@@ -3,24 +3,9 @@
 //
 // Copyright (C) 2009 Hauke Heibel <hauke.heibel@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_UMEYAMA_H
 #define EIGEN_UMEYAMA_H
@@ -30,6 +15,10 @@
 // * Eigen/LU 
 // * Eigen/SVD
 // * Eigen/Array
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 #ifndef EIGEN_PARSED_BY_DOXYGEN
 
@@ -45,10 +34,10 @@ template<typename MatrixType, typename OtherMatrixType>
 struct umeyama_transform_matrix_type
 {
   enum {
-    MinRowsAtCompileTime = EIGEN_SIZE_MIN_PREFER_DYNAMIC(MatrixType::RowsAtCompileTime, OtherMatrixType::RowsAtCompileTime),
+    MinRowsAtCompileTime = internal::min_size_prefer_dynamic(MatrixType::RowsAtCompileTime, OtherMatrixType::RowsAtCompileTime),
 
     // When possible we want to choose some small fixed size value since the result
-    // is likely to fit on the stack. So here, EIGEN_SIZE_MIN_PREFER_DYNAMIC is not what we want.
+    // is likely to fit on the stack. So here, min_size_prefer_dynamic is not what we want.
     HomogeneousDimension = int(MinRowsAtCompileTime) == Dynamic ? Dynamic : int(MinRowsAtCompileTime)+1
   };
 
@@ -100,7 +89,7 @@ struct umeyama_transform_matrix_type
 * \f{align*}
 *   T = \begin{bmatrix} c\mathbf{R} & \mathbf{t} \\ \mathbf{0} & 1 \end{bmatrix}
 * \f}
-* minimizing the resudiual above. This transformation is always returned as an 
+* minimizing the residual above. This transformation is always returned as an 
 * Eigen::Matrix.
 */
 template <typename Derived, typename OtherDerived>
@@ -110,13 +99,12 @@ umeyama(const MatrixBase<Derived>& src, const MatrixBase<OtherDerived>& dst, boo
   typedef typename internal::umeyama_transform_matrix_type<Derived, OtherDerived>::type TransformationMatrixType;
   typedef typename internal::traits<TransformationMatrixType>::Scalar Scalar;
   typedef typename NumTraits<Scalar>::Real RealScalar;
-  typedef typename Derived::Index Index;
 
   EIGEN_STATIC_ASSERT(!NumTraits<Scalar>::IsComplex, NUMERIC_TYPE_MUST_BE_REAL)
   EIGEN_STATIC_ASSERT((internal::is_same<Scalar, typename internal::traits<OtherDerived>::Scalar>::value),
     YOU_MIXED_DIFFERENT_NUMERIC_TYPES__YOU_NEED_TO_USE_THE_CAST_METHOD_OF_MATRIXBASE_TO_CAST_NUMERIC_TYPES_EXPLICITLY)
 
-  enum { Dimension = EIGEN_SIZE_MIN_PREFER_DYNAMIC(Derived::RowsAtCompileTime, OtherDerived::RowsAtCompileTime) };
+  enum { Dimension = internal::min_size_prefer_dynamic(Derived::RowsAtCompileTime, OtherDerived::RowsAtCompileTime) };
 
   typedef Matrix<Scalar, Dimension, 1> VectorType;
   typedef Matrix<Scalar, Dimension, Dimension> MatrixType;
@@ -126,7 +114,7 @@ umeyama(const MatrixBase<Derived>& src, const MatrixBase<OtherDerived>& dst, boo
   const Index n = src.cols(); // number of measurements
 
   // required for demeaning ...
-  const RealScalar one_over_n = 1 / static_cast<RealScalar>(n);
+  const RealScalar one_over_n = RealScalar(1) / static_cast<RealScalar>(n);
 
   // computation of mean
   const VectorType src_mean = src.rowwise().sum() * one_over_n;
@@ -136,48 +124,45 @@ umeyama(const MatrixBase<Derived>& src, const MatrixBase<OtherDerived>& dst, boo
   const RowMajorMatrixType src_demean = src.colwise() - src_mean;
   const RowMajorMatrixType dst_demean = dst.colwise() - dst_mean;
 
-  // Eq. (36)-(37)
-  const Scalar src_var = src_demean.rowwise().squaredNorm().sum() * one_over_n;
-
   // Eq. (38)
   const MatrixType sigma = one_over_n * dst_demean * src_demean.transpose();
 
-  JacobiSVD<MatrixType> svd(sigma, ComputeFullU | ComputeFullV);
+  JacobiSVD<MatrixType, ComputeFullU | ComputeFullV> svd(sigma);
 
   // Initialize the resulting transformation with an identity matrix...
   TransformationMatrixType Rt = TransformationMatrixType::Identity(m+1,m+1);
 
   // Eq. (39)
   VectorType S = VectorType::Ones(m);
-  if (sigma.determinant()<0) S(m-1) = -1;
+
+  if  ( svd.matrixU().determinant() * svd.matrixV().determinant() < 0 )
+    S(m-1) = -1;
 
   // Eq. (40) and (43)
-  const VectorType& d = svd.singularValues();
-  Index rank = 0; for (Index i=0; i<m; ++i) if (!internal::isMuchSmallerThan(d.coeff(i),d.coeff(0))) ++rank;
-  if (rank == m-1) {
-    if ( svd.matrixU().determinant() * svd.matrixV().determinant() > 0 ) {
-      Rt.block(0,0,m,m).noalias() = svd.matrixU()*svd.matrixV().transpose();
-    } else {
-      const Scalar s = S(m-1); S(m-1) = -1;
-      Rt.block(0,0,m,m).noalias() = svd.matrixU() * S.asDiagonal() * svd.matrixV().transpose();
-      S(m-1) = s;
-    }
-  } else {
-    Rt.block(0,0,m,m).noalias() = svd.matrixU() * S.asDiagonal() * svd.matrixV().transpose();
+  Rt.block(0,0,m,m).noalias() = svd.matrixU() * S.asDiagonal() * svd.matrixV().transpose();
+
+  if (with_scaling)
+  {
+    // Eq. (36)-(37)
+    const Scalar src_var = src_demean.rowwise().squaredNorm().sum() * one_over_n;
+
+    // Eq. (42)
+    const Scalar c = Scalar(1)/src_var * svd.singularValues().dot(S);
+
+    // Eq. (41)
+    Rt.col(m).head(m) = dst_mean;
+    Rt.col(m).head(m).noalias() -= c*Rt.topLeftCorner(m,m)*src_mean;
+    Rt.block(0,0,m,m) *= c;
   }
-
-  // Eq. (42)
-  const Scalar c = 1/src_var * svd.singularValues().dot(S);
-
-  // Eq. (41)
-  // Note that we first assign dst_mean to the destination so that there no need
-  // for a temporary.
-  Rt.col(m).head(m) = dst_mean;
-  Rt.col(m).head(m).noalias() -= c*Rt.topLeftCorner(m,m)*src_mean;
-
-  if (with_scaling) Rt.block(0,0,m,m) *= c;
+  else
+  {
+    Rt.col(m).head(m) = dst_mean;
+    Rt.col(m).head(m).noalias() -= Rt.topLeftCorner(m,m)*src_mean;
+  }
 
   return Rt;
 }
+
+} // end namespace Eigen
 
 #endif // EIGEN_UMEYAMA_H

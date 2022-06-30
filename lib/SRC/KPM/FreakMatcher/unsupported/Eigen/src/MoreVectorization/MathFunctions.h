@@ -4,27 +4,16 @@
 // Copyright (C) 2009 Rohit Garg <rpg.314@gmail.com>
 // Copyright (C) 2009 Benoit Jacob <jacob.benoit.1@gmail.com>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_MOREVECTORIZATION_MATHFUNCTIONS_H
 #define EIGEN_MOREVECTORIZATION_MATHFUNCTIONS_H
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 namespace internal {
 
@@ -35,20 +24,20 @@ template<typename Packet> inline static Packet pasin(Packet a) { return std::asi
 
 template<> EIGEN_DONT_INLINE Packet4f pasin(Packet4f x)
 {
-  _EIGEN_DECLARE_CONST_Packet4f(half, 0.5);
-  _EIGEN_DECLARE_CONST_Packet4f(minus_half, -0.5);
-  _EIGEN_DECLARE_CONST_Packet4f(3half, 1.5);
+  EIGEN_DECLARE_CONST_Packet4f(half, 0.5);
+  EIGEN_DECLARE_CONST_Packet4f(minus_half, -0.5);
+  EIGEN_DECLARE_CONST_Packet4f(3half, 1.5);
 
-  _EIGEN_DECLARE_CONST_Packet4f_FROM_INT(sign_mask, 0x80000000);
+  EIGEN_DECLARE_CONST_Packet4f_FROM_INT(sign_mask, 0x80000000);
 
-  _EIGEN_DECLARE_CONST_Packet4f(pi, 3.141592654);
-  _EIGEN_DECLARE_CONST_Packet4f(pi_over_2, 3.141592654*0.5);
+  EIGEN_DECLARE_CONST_Packet4f(pi, 3.141592654);
+  EIGEN_DECLARE_CONST_Packet4f(pi_over_2, 3.141592654*0.5);
 
-  _EIGEN_DECLARE_CONST_Packet4f(asin1, 4.2163199048E-2);
-  _EIGEN_DECLARE_CONST_Packet4f(asin2, 2.4181311049E-2);
-  _EIGEN_DECLARE_CONST_Packet4f(asin3, 4.5470025998E-2);
-  _EIGEN_DECLARE_CONST_Packet4f(asin4, 7.4953002686E-2);
-  _EIGEN_DECLARE_CONST_Packet4f(asin5, 1.6666752422E-1);
+  EIGEN_DECLARE_CONST_Packet4f(asin1, 4.2163199048E-2);
+  EIGEN_DECLARE_CONST_Packet4f(asin2, 2.4181311049E-2);
+  EIGEN_DECLARE_CONST_Packet4f(asin3, 4.5470025998E-2);
+  EIGEN_DECLARE_CONST_Packet4f(asin4, 7.4953002686E-2);
+  EIGEN_DECLARE_CONST_Packet4f(asin5, 1.6666752422E-1);
 
   Packet4f a = pabs(x);//got the absolute value
 
@@ -99,8 +88,10 @@ template<> EIGEN_DONT_INLINE Packet4f pasin(Packet4f x)
   return _mm_xor_ps(z, sign_bit);
 }
 
+#endif // EIGEN_VECTORIZE_SSE
+
 } // end namespace internal
 
-#endif
+} // end namespace Eigen
 
 #endif // EIGEN_MOREVECTORIZATION_MATHFUNCTIONS_H

@@ -6,28 +6,16 @@
 //
 // Copyright (C) 2009 Thomas Capricelli <orzel@freehackers.org>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_LEVENBERGMARQUARDT__H
 #define EIGEN_LEVENBERGMARQUARDT__H
 
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 namespace LevenbergMarquardtSpace {
     enum Status {
@@ -59,18 +47,24 @@ namespace LevenbergMarquardtSpace {
 template<typename FunctorType, typename Scalar=double>
 class LevenbergMarquardt
 {
+    static Scalar sqrt_epsilon()
+    {
+      using std::sqrt;
+      return sqrt(NumTraits<Scalar>::epsilon());
+    }
+    
 public:
     LevenbergMarquardt(FunctorType &_functor)
         : functor(_functor) { nfev = njev = iter = 0;  fnorm = gnorm = 0.; useExternalScaling=false; }
 
     typedef DenseIndex Index;
-
+    
     struct Parameters {
         Parameters()
             : factor(Scalar(100.))
             , maxfev(400)
-            , ftol(internal::sqrt(NumTraits<Scalar>::epsilon()))
-            , xtol(internal::sqrt(NumTraits<Scalar>::epsilon()))
+            , ftol(sqrt_epsilon())
+            , xtol(sqrt_epsilon())
             , gtol(Scalar(0.))
             , epsfcn(Scalar(0.)) {}
         Scalar factor;
@@ -86,7 +80,7 @@ public:
 
     LevenbergMarquardtSpace::Status lmder1(
             FVectorType &x,
-            const Scalar tol = internal::sqrt(NumTraits<Scalar>::epsilon())
+            const Scalar tol = sqrt_epsilon()
             );
 
     LevenbergMarquardtSpace::Status minimize(FVectorType &x);
@@ -97,12 +91,12 @@ public:
             FunctorType &functor,
             FVectorType &x,
             Index *nfev,
-            const Scalar tol = internal::sqrt(NumTraits<Scalar>::epsilon())
+            const Scalar tol = sqrt_epsilon()
             );
 
     LevenbergMarquardtSpace::Status lmstr1(
             FVectorType  &x,
-            const Scalar tol = internal::sqrt(NumTraits<Scalar>::epsilon())
+            const Scalar tol = sqrt_epsilon()
             );
 
     LevenbergMarquardtSpace::Status minimizeOptimumStorage(FVectorType  &x);
@@ -123,6 +117,7 @@ public:
 
     Scalar lm_param(void) { return par; }
 private:
+    
     FunctorType &functor;
     Index n;
     Index m;
@@ -186,7 +181,7 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeInit(FVectorType  &x)
     fjac.resize(m, n);
     if (!useExternalScaling)
         diag.resize(n);
-    assert( (!useExternalScaling || diag.size()==n) || "When useExternalScaling is set, the caller must provide a valid 'diag'");
+    eigen_assert( (!useExternalScaling || diag.size()==n) && "When useExternalScaling is set, the caller must provide a valid 'diag'");
     qtf.resize(n);
 
     /* Function Body */
@@ -220,7 +215,10 @@ template<typename FunctorType, typename Scalar>
 LevenbergMarquardtSpace::Status
 LevenbergMarquardt<FunctorType,Scalar>::minimizeOneStep(FVectorType  &x)
 {
-    assert(x.size()==n); // check the caller is not cheating us
+    using std::abs;
+    using std::sqrt;
+
+    eigen_assert(x.size()==n); // check the caller is not cheating us
 
     /* calculate the jacobian matrix. */
     Index df_ret = functor.df(x, fjac);
@@ -263,7 +261,7 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOneStep(FVectorType  &x)
     if (fnorm != 0.)
         for (Index j = 0; j < n; ++j)
             if (wa2[permutation.indices()[j]] != 0.)
-                gnorm = (std::max)(gnorm, internal::abs( fjac.col(j).head(j+1).dot(qtf.head(j+1)/fnorm) / wa2[permutation.indices()[j]]));
+                gnorm = (std::max)(gnorm, abs( fjac.col(j).head(j+1).dot(qtf.head(j+1)/fnorm) / wa2[permutation.indices()[j]]));
 
     /* test for convergence of the gradient norm. */
     if (gnorm <= parameters.gtol)
@@ -296,13 +294,13 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOneStep(FVectorType  &x)
         /* compute the scaled actual reduction. */
         actred = -1.;
         if (Scalar(.1) * fnorm1 < fnorm)
-            actred = 1. - internal::abs2(fnorm1 / fnorm);
+            actred = 1. - numext::abs2(fnorm1 / fnorm);
 
         /* compute the scaled predicted reduction and */
         /* the scaled directional derivative. */
         wa3 = fjac.template triangularView<Upper>() * (qrfac.colsPermutation().inverse() *wa1);
-        temp1 = internal::abs2(wa3.stableNorm() / fnorm);
-        temp2 = internal::abs2(internal::sqrt(par) * pnorm / fnorm);
+        temp1 = numext::abs2(wa3.stableNorm() / fnorm);
+        temp2 = numext::abs2(sqrt(par) * pnorm / fnorm);
         prered = temp1 + temp2 / Scalar(.5);
         dirder = -(temp1 + temp2);
 
@@ -340,9 +338,9 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOneStep(FVectorType  &x)
         }
 
         /* tests for convergence. */
-        if (internal::abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1. && delta <= parameters.xtol * xnorm)
+        if (abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1. && delta <= parameters.xtol * xnorm)
             return LevenbergMarquardtSpace::RelativeErrorAndReductionTooSmall;
-        if (internal::abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1.)
+        if (abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1.)
             return LevenbergMarquardtSpace::RelativeReductionTooSmall;
         if (delta <= parameters.xtol * xnorm)
             return LevenbergMarquardtSpace::RelativeErrorTooSmall;
@@ -350,7 +348,7 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOneStep(FVectorType  &x)
         /* tests for termination and stringent tolerances. */
         if (nfev >= parameters.maxfev)
             return LevenbergMarquardtSpace::TooManyFunctionEvaluation;
-        if (internal::abs(actred) <= NumTraits<Scalar>::epsilon() && prered <= NumTraits<Scalar>::epsilon() && Scalar(.5) * ratio <= 1.)
+        if (abs(actred) <= NumTraits<Scalar>::epsilon() && prered <= NumTraits<Scalar>::epsilon() && Scalar(.5) * ratio <= 1.)
             return LevenbergMarquardtSpace::FtolTooSmall;
         if (delta <= NumTraits<Scalar>::epsilon() * xnorm)
             return LevenbergMarquardtSpace::XtolTooSmall;
@@ -402,7 +400,7 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOptimumStorageInit(FVectorType  
     fjac.resize(n, n);
     if (!useExternalScaling)
         diag.resize(n);
-    assert( (!useExternalScaling || diag.size()==n) || "When useExternalScaling is set, the caller must provide a valid 'diag'");
+    eigen_assert( (!useExternalScaling || diag.size()==n) && "When useExternalScaling is set, the caller must provide a valid 'diag'");
     qtf.resize(n);
 
     /* Function Body */
@@ -437,7 +435,10 @@ template<typename FunctorType, typename Scalar>
 LevenbergMarquardtSpace::Status
 LevenbergMarquardt<FunctorType,Scalar>::minimizeOptimumStorageOneStep(FVectorType  &x)
 {
-    assert(x.size()==n); // check the caller is not cheating us
+    using std::abs;
+    using std::sqrt;
+    
+    eigen_assert(x.size()==n); // check the caller is not cheating us
 
     Index i, j;
     bool sing;
@@ -510,7 +511,7 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOptimumStorageOneStep(FVectorTyp
     if (fnorm != 0.)
         for (j = 0; j < n; ++j)
             if (wa2[permutation.indices()[j]] != 0.)
-                gnorm = (std::max)(gnorm, internal::abs( fjac.col(j).head(j+1).dot(qtf.head(j+1)/fnorm) / wa2[permutation.indices()[j]]));
+                gnorm = (std::max)(gnorm, abs( fjac.col(j).head(j+1).dot(qtf.head(j+1)/fnorm) / wa2[permutation.indices()[j]]));
 
     /* test for convergence of the gradient norm. */
     if (gnorm <= parameters.gtol)
@@ -543,13 +544,13 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOptimumStorageOneStep(FVectorTyp
         /* compute the scaled actual reduction. */
         actred = -1.;
         if (Scalar(.1) * fnorm1 < fnorm)
-            actred = 1. - internal::abs2(fnorm1 / fnorm);
+            actred = 1. - numext::abs2(fnorm1 / fnorm);
 
         /* compute the scaled predicted reduction and */
         /* the scaled directional derivative. */
         wa3 = fjac.topLeftCorner(n,n).template triangularView<Upper>() * (permutation.inverse() * wa1);
-        temp1 = internal::abs2(wa3.stableNorm() / fnorm);
-        temp2 = internal::abs2(internal::sqrt(par) * pnorm / fnorm);
+        temp1 = numext::abs2(wa3.stableNorm() / fnorm);
+        temp2 = numext::abs2(sqrt(par) * pnorm / fnorm);
         prered = temp1 + temp2 / Scalar(.5);
         dirder = -(temp1 + temp2);
 
@@ -587,9 +588,9 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOptimumStorageOneStep(FVectorTyp
         }
 
         /* tests for convergence. */
-        if (internal::abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1. && delta <= parameters.xtol * xnorm)
+        if (abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1. && delta <= parameters.xtol * xnorm)
             return LevenbergMarquardtSpace::RelativeErrorAndReductionTooSmall;
-        if (internal::abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1.)
+        if (abs(actred) <= parameters.ftol && prered <= parameters.ftol && Scalar(.5) * ratio <= 1.)
             return LevenbergMarquardtSpace::RelativeReductionTooSmall;
         if (delta <= parameters.xtol * xnorm)
             return LevenbergMarquardtSpace::RelativeErrorTooSmall;
@@ -597,7 +598,7 @@ LevenbergMarquardt<FunctorType,Scalar>::minimizeOptimumStorageOneStep(FVectorTyp
         /* tests for termination and stringent tolerances. */
         if (nfev >= parameters.maxfev)
             return LevenbergMarquardtSpace::TooManyFunctionEvaluation;
-        if (internal::abs(actred) <= NumTraits<Scalar>::epsilon() && prered <= NumTraits<Scalar>::epsilon() && Scalar(.5) * ratio <= 1.)
+        if (abs(actred) <= NumTraits<Scalar>::epsilon() && prered <= NumTraits<Scalar>::epsilon() && Scalar(.5) * ratio <= 1.)
             return LevenbergMarquardtSpace::FtolTooSmall;
         if (delta <= NumTraits<Scalar>::epsilon() * xnorm)
             return LevenbergMarquardtSpace::XtolTooSmall;
@@ -651,6 +652,8 @@ LevenbergMarquardt<FunctorType,Scalar>::lmdif1(
     return info;
 }
 
-//vim: ai ts=4 sts=4 et sw=4
+} // end namespace Eigen
+
 #endif // EIGEN_LEVENBERGMARQUARDT__H
 
+//vim: ai ts=4 sts=4 et sw=4

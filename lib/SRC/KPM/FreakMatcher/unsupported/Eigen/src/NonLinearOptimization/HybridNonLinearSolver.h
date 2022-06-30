@@ -6,27 +6,16 @@
 //
 // Copyright (C) 2009 Thomas Capricelli <orzel@freehackers.org>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_HYBRIDNONLINEARSOLVER_H
 #define EIGEN_HYBRIDNONLINEARSOLVER_H
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 namespace HybridNonLinearSolverSpace { 
     enum Status {
@@ -65,7 +54,7 @@ public:
         Parameters()
             : factor(Scalar(100.))
             , maxfev(1000)
-            , xtol(internal::sqrt(NumTraits<Scalar>::epsilon()))
+            , xtol(numext::sqrt(NumTraits<Scalar>::epsilon()))
             , nb_of_subdiagonals(-1)
             , nb_of_superdiagonals(-1)
             , epsfcn(Scalar(0.)) {}
@@ -83,7 +72,7 @@ public:
 
     HybridNonLinearSolverSpace::Status hybrj1(
             FVectorType  &x,
-            const Scalar tol = internal::sqrt(NumTraits<Scalar>::epsilon())
+            const Scalar tol = numext::sqrt(NumTraits<Scalar>::epsilon())
             );
 
     HybridNonLinearSolverSpace::Status solveInit(FVectorType  &x);
@@ -92,7 +81,7 @@ public:
 
     HybridNonLinearSolverSpace::Status hybrd1(
             FVectorType  &x,
-            const Scalar tol = internal::sqrt(NumTraits<Scalar>::epsilon())
+            const Scalar tol = numext::sqrt(NumTraits<Scalar>::epsilon())
             );
 
     HybridNonLinearSolverSpace::Status solveNumericalDiffInit(FVectorType  &x);
@@ -163,7 +152,7 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveInit(FVectorType  &x)
     fjac.resize(n, n);
     if (!useExternalScaling)
         diag.resize(n);
-    assert( (!useExternalScaling || diag.size()==n) || "When useExternalScaling is set, the caller must provide a valid 'diag'");
+    eigen_assert( (!useExternalScaling || diag.size()==n) && "When useExternalScaling is set, the caller must provide a valid 'diag'");
 
     /* Function Body */
     nfev = 0;
@@ -198,7 +187,9 @@ template<typename FunctorType, typename Scalar>
 HybridNonLinearSolverSpace::Status
 HybridNonLinearSolver<FunctorType,Scalar>::solveOneStep(FVectorType  &x)
 {
-    assert(x.size()==n); // check the caller is not cheating us
+    using std::abs;
+    
+    eigen_assert(x.size()==n); // check the caller is not cheating us
 
     Index j;
     std::vector<JacobiRotation<Scalar> > v_givens(n), w_givens(n);
@@ -265,14 +256,14 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveOneStep(FVectorType  &x)
         /* compute the scaled actual reduction. */
         actred = -1.;
         if (fnorm1 < fnorm) /* Computing 2nd power */
-            actred = 1. - internal::abs2(fnorm1 / fnorm);
+            actred = 1. - numext::abs2(fnorm1 / fnorm);
 
         /* compute the scaled predicted reduction. */
         wa3 = R.template triangularView<Upper>()*wa1 + qtf;
         temp = wa3.stableNorm();
         prered = 0.;
         if (temp < fnorm) /* Computing 2nd power */
-            prered = 1. - internal::abs2(temp / fnorm);
+            prered = 1. - numext::abs2(temp / fnorm);
 
         /* compute the ratio of the actual to the predicted reduction. */
         ratio = 0.;
@@ -289,7 +280,7 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveOneStep(FVectorType  &x)
             ++ncsuc;
             if (ratio >= Scalar(.5) || ncsuc > 1)
                 delta = (std::max)(delta, pnorm / Scalar(.5));
-            if (internal::abs(ratio - 1.) <= Scalar(.1)) {
+            if (abs(ratio - 1.) <= Scalar(.1)) {
                 delta = pnorm / Scalar(.5);
             }
         }
@@ -401,7 +392,7 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveNumericalDiffInit(FVectorType  &
     fvec.resize(n);
     if (!useExternalScaling)
         diag.resize(n);
-    assert( (!useExternalScaling || diag.size()==n) || "When useExternalScaling is set, the caller must provide a valid 'diag'");
+    eigen_assert( (!useExternalScaling || diag.size()==n) && "When useExternalScaling is set, the caller must provide a valid 'diag'");
 
     /* Function Body */
     nfev = 0;
@@ -436,6 +427,9 @@ template<typename FunctorType, typename Scalar>
 HybridNonLinearSolverSpace::Status
 HybridNonLinearSolver<FunctorType,Scalar>::solveNumericalDiffOneStep(FVectorType  &x)
 {
+    using std::sqrt;
+    using std::abs;
+    
     assert(x.size()==n); // check the caller is not cheating us
 
     Index j;
@@ -505,14 +499,14 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveNumericalDiffOneStep(FVectorType
         /* compute the scaled actual reduction. */
         actred = -1.;
         if (fnorm1 < fnorm) /* Computing 2nd power */
-            actred = 1. - internal::abs2(fnorm1 / fnorm);
+            actred = 1. - numext::abs2(fnorm1 / fnorm);
 
         /* compute the scaled predicted reduction. */
         wa3 = R.template triangularView<Upper>()*wa1 + qtf;
         temp = wa3.stableNorm();
         prered = 0.;
         if (temp < fnorm) /* Computing 2nd power */
-            prered = 1. - internal::abs2(temp / fnorm);
+            prered = 1. - numext::abs2(temp / fnorm);
 
         /* compute the ratio of the actual to the predicted reduction. */
         ratio = 0.;
@@ -529,7 +523,7 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveNumericalDiffOneStep(FVectorType
             ++ncsuc;
             if (ratio >= Scalar(.5) || ncsuc > 1)
                 delta = (std::max)(delta, pnorm / Scalar(.5));
-            if (internal::abs(ratio - 1.) <= Scalar(.1)) {
+            if (abs(ratio - 1.) <= Scalar(.1)) {
                 delta = pnorm / Scalar(.5);
             }
         }
@@ -602,6 +596,8 @@ HybridNonLinearSolver<FunctorType,Scalar>::solveNumericalDiff(FVectorType  &x)
     return status;
 }
 
-//vim: ai ts=4 sts=4 et sw=4
+} // end namespace Eigen
+
 #endif // EIGEN_HYBRIDNONLINEARSOLVER_H
 
+//vim: ai ts=4 sts=4 et sw=4
