@@ -3,27 +3,16 @@
 //
 // Copyright (C) 2008-2010 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_TRIANGULAR_SOLVER_VECTOR_H
 #define EIGEN_TRIANGULAR_SOLVER_VECTOR_H
+
+#include "../InternalHeaderCheck.h"
+
+namespace Eigen {
 
 namespace internal {
 
@@ -38,7 +27,7 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheRight, Mode, Co
       >::run(size, _lhs, lhsStride, rhs);
   }
 };
-    
+
 // forward and backward substitution, row-major, rhs is a vector
 template<typename LhsScalar, typename RhsScalar, typename Index, int Mode, bool Conjugate>
 struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Conjugate, RowMajor>
@@ -50,11 +39,14 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Con
   {
     typedef Map<const Matrix<LhsScalar,Dynamic,Dynamic,RowMajor>, 0, OuterStride<> > LhsMap;
     const LhsMap lhs(_lhs,size,size,OuterStride<>(lhsStride));
-    typename internal::conditional<
-                          Conjugate,
-                          const CwiseUnaryOp<typename internal::scalar_conjugate_op<LhsScalar>,LhsMap>,
-                          const LhsMap&>
-                        ::type cjLhs(lhs);
+
+    typedef const_blas_data_mapper<LhsScalar,Index,RowMajor> LhsMapper;
+    typedef const_blas_data_mapper<RhsScalar,Index,ColMajor> RhsMapper;
+
+    std::conditional_t<
+                  Conjugate,
+                  const CwiseUnaryOp<typename internal::scalar_conjugate_op<LhsScalar>,LhsMap>,
+                  const LhsMap&> cjLhs(lhs);
     static const Index PanelWidth = EIGEN_TUNE_TRIANGULAR_PANEL_WIDTH;
     for(Index pi=IsLower ? 0 : size;
         IsLower ? pi<size : pi>0;
@@ -67,14 +59,14 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Con
       {
         // let's directly call the low level product function because:
         // 1 - it is faster to compile
-        // 2 - it is slighlty faster at runtime
+        // 2 - it is slightly faster at runtime
         Index startRow = IsLower ? pi : pi-actualPanelWidth;
         Index startCol = IsLower ? 0 : pi;
 
-        general_matrix_vector_product<Index,LhsScalar,RowMajor,Conjugate,RhsScalar,false>::run(
+        general_matrix_vector_product<Index,LhsScalar,LhsMapper,RowMajor,Conjugate,RhsScalar,RhsMapper,false>::run(
           actualPanelWidth, r,
-          &lhs.coeffRef(startRow,startCol), lhsStride,
-          rhs + startCol, 1,
+          LhsMapper(&lhs.coeffRef(startRow,startCol), lhsStride),
+          RhsMapper(rhs + startCol, 1),
           rhs + startRow, 1,
           RhsScalar(-1));
       }
@@ -85,8 +77,8 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Con
         Index s = IsLower ? pi   : i+1;
         if (k>0)
           rhs[i] -= (cjLhs.row(i).segment(s,k).transpose().cwiseProduct(Map<const Matrix<RhsScalar,Dynamic,1> >(rhs+s,k))).sum();
-        
-        if(!(Mode & UnitDiag))
+
+        if((!(Mode & UnitDiag)) && !is_identically_zero(rhs[i]))
           rhs[i] /= cjLhs(i,i);
       }
     }
@@ -104,10 +96,12 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Con
   {
     typedef Map<const Matrix<LhsScalar,Dynamic,Dynamic,ColMajor>, 0, OuterStride<> > LhsMap;
     const LhsMap lhs(_lhs,size,size,OuterStride<>(lhsStride));
-    typename internal::conditional<Conjugate,
-                                   const CwiseUnaryOp<typename internal::scalar_conjugate_op<LhsScalar>,LhsMap>,
-                                   const LhsMap&
-                                  >::type cjLhs(lhs);
+    typedef const_blas_data_mapper<LhsScalar,Index,ColMajor> LhsMapper;
+    typedef const_blas_data_mapper<RhsScalar,Index,ColMajor> RhsMapper;
+    std::conditional_t<Conjugate,
+                            const CwiseUnaryOp<typename internal::scalar_conjugate_op<LhsScalar>,LhsMap>,
+                            const LhsMap&
+                           > cjLhs(lhs);
     static const Index PanelWidth = EIGEN_TUNE_TRIANGULAR_PANEL_WIDTH;
 
     for(Index pi=IsLower ? 0 : size;
@@ -121,24 +115,27 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Con
       for(Index k=0; k<actualPanelWidth; ++k)
       {
         Index i = IsLower ? pi+k : pi-k-1;
-        if(!(Mode & UnitDiag))
-          rhs[i] /= cjLhs.coeff(i,i);
+        if(!is_identically_zero(rhs[i]))
+        {
+          if(!(Mode & UnitDiag))
+            rhs[i] /= cjLhs.coeff(i,i);
 
-        Index r = actualPanelWidth - k - 1; // remaining size
-        Index s = IsLower ? i+1 : i-r;
-        if (r>0)
-          Map<Matrix<RhsScalar,Dynamic,1> >(rhs+s,r) -= rhs[i] * cjLhs.col(i).segment(s,r);
+          Index r = actualPanelWidth - k - 1; // remaining size
+          Index s = IsLower ? i+1 : i-r;
+          if (r>0)
+            Map<Matrix<RhsScalar,Dynamic,1> >(rhs+s,r) -= rhs[i] * cjLhs.col(i).segment(s,r);
+        }
       }
       Index r = IsLower ? size - endBlock : startBlock; // remaining size
       if (r > 0)
       {
         // let's directly call the low level product function because:
         // 1 - it is faster to compile
-        // 2 - it is slighlty faster at runtime
-        general_matrix_vector_product<Index,LhsScalar,ColMajor,Conjugate,RhsScalar,false>::run(
+        // 2 - it is slightly faster at runtime
+        general_matrix_vector_product<Index,LhsScalar,LhsMapper,ColMajor,Conjugate,RhsScalar,RhsMapper,false>::run(
             r, actualPanelWidth,
-            &lhs.coeffRef(endBlock,startBlock), lhsStride,
-            rhs+startBlock, 1,
+            LhsMapper(&lhs.coeffRef(endBlock,startBlock), lhsStride),
+            RhsMapper(rhs+startBlock, 1),
             rhs+endBlock, 1, RhsScalar(-1));
       }
     }
@@ -146,5 +143,7 @@ struct triangular_solve_vector<LhsScalar, RhsScalar, Index, OnTheLeft, Mode, Con
 };
 
 } // end namespace internal
+
+} // end namespace Eigen
 
 #endif // EIGEN_TRIANGULAR_SOLVER_VECTOR_H

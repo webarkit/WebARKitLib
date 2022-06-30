@@ -1,11 +1,16 @@
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
+
 namespace internal {
 
 template <typename Scalar>
 void covar(
         Matrix< Scalar, Dynamic, Dynamic > &r,
         const VectorXi &ipvt,
-        Scalar tol = sqrt(NumTraits<Scalar>::epsilon()) )
+        Scalar tol = std::sqrt(NumTraits<Scalar>::epsilon()) )
 {
+    using std::abs;
     typedef DenseIndex Index;
 
     /* Local variables */
@@ -17,7 +22,7 @@ void covar(
     const Index n = r.cols();
     const Scalar tolr = tol * abs(r(0,0));
     Matrix< Scalar, Dynamic, 1 > wa(n);
-    assert(ipvt.size()==n);
+    eigen_assert(ipvt.size()==n);
 
     /* form the inverse of r in the full upper triangle of r. */
     l = -1;
@@ -63,3 +68,5 @@ void covar(
 }
 
 } // end namespace internal
+
+} // end namespace Eigen

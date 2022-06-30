@@ -3,29 +3,18 @@
 //
 // Copyright (C) 2008-2009 Guillaume Saupin <guillaume.saupin@cea.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_SKYLINEMATRIXBASE_H
 #define EIGEN_SKYLINEMATRIXBASE_H
 
 #include "SkylineUtil.h"
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen {
 
 /** \ingroup Skyline_Module
  *
@@ -57,8 +46,7 @@ public:
          * \sa MatrixBase::rows(), MatrixBase::cols(), RowsAtCompileTime, SizeAtCompileTime */
 
 
-        SizeAtCompileTime = (internal::size_at_compile_time<internal::traits<Derived>::RowsAtCompileTime,
-        internal::traits<Derived>::ColsAtCompileTime>::ret),
+        SizeAtCompileTime = (internal::size_of_xpr_at_compile_time<Derived>::ret),
         /**< This is equal to the number of coefficients, i.e. the number of
          * rows times the number of columns, or to \a Dynamic if this is not
          * known at compile-time. \sa RowsAtCompileTime, ColsAtCompileTime */
@@ -66,8 +54,8 @@ public:
         MaxRowsAtCompileTime = RowsAtCompileTime,
         MaxColsAtCompileTime = ColsAtCompileTime,
 
-        MaxSizeAtCompileTime = (internal::size_at_compile_time<MaxRowsAtCompileTime,
-        MaxColsAtCompileTime>::ret),
+        MaxSizeAtCompileTime = (internal::size_at_compile_time(MaxRowsAtCompileTime,
+        MaxColsAtCompileTime)),
 
         IsVectorAtCompileTime = RowsAtCompileTime == 1 || ColsAtCompileTime == 1,
         /**< This is set to true if either the number of rows or the number of
@@ -98,8 +86,8 @@ public:
     typedef typename NumTraits<Scalar>::Real RealScalar;
 
     /** type of the equivalent square matrix */
-    typedef Matrix<Scalar, EIGEN_SIZE_MAX(RowsAtCompileTime, ColsAtCompileTime),
-                           EIGEN_SIZE_MAX(RowsAtCompileTime, ColsAtCompileTime) > SquareMatrixType;
+    typedef Matrix<Scalar, internal::max_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime),
+                           internal::max_size_prefer_dynamic(RowsAtCompileTime, ColsAtCompileTime) > SquareMatrixType;
 
     inline const Derived& derived() const {
         return *static_cast<const Derived*> (this);
@@ -115,18 +103,18 @@ public:
 #endif // not EIGEN_PARSED_BY_DOXYGEN
 
     /** \returns the number of rows. \sa cols(), RowsAtCompileTime */
-    inline Index rows() const {
+    inline EIGEN_CONSTEXPR Index rows() const EIGEN_NOEXCEPT {
         return derived().rows();
     }
 
     /** \returns the number of columns. \sa rows(), ColsAtCompileTime*/
-    inline Index cols() const {
+    inline EIGEN_CONSTEXPR Index cols() const EIGEN_NOEXCEPT {
         return derived().cols();
     }
 
     /** \returns the number of coefficients, which is \a rows()*cols().
      * \sa rows(), cols(), SizeAtCompileTime. */
-    inline Index size() const {
+    inline EIGEN_CONSTEXPR Index size() const EIGEN_NOEXCEPT {
         return rows() * cols();
     }
 
@@ -220,4 +208,6 @@ protected:
     bool m_isRValue;
 };
 
-#endif // EIGEN_SkylineMatrixBase_H
+} // end namespace Eigen
+
+#endif // EIGEN_SKYLINEMATRIXBASE_H

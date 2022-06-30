@@ -3,27 +3,22 @@
 //
 // Copyright (C) 2008 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_RANDOMSETTER_H
 #define EIGEN_RANDOMSETTER_H
+
+#if defined(EIGEN_GOOGLEHASH_SUPPORT)
+// Ensure the ::google namespace exists, required for checking existence of 
+// ::google::dense_hash_map and ::google::sparse_hash_map.
+namespace google {}
+#endif
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen {
 
 /** Represents a std::map
   *
@@ -40,21 +35,8 @@ template<typename Scalar> struct StdMapTraits
   static void setInvalidKey(Type&, const KeyType&) {}
 };
 
-#ifdef EIGEN_UNORDERED_MAP_SUPPORT
+
 /** Represents a std::unordered_map
-  *
-  * To use it you need to both define EIGEN_UNORDERED_MAP_SUPPORT and include the unordered_map header file
-  * yourself making sure that unordered_map is defined in the std namespace.
-  *
-  * For instance, with current version of gcc you can either enable C++0x standard (-std=c++0x) or do:
-  * \code
-  * #include <tr1/unordered_map>
-  * #define EIGEN_UNORDERED_MAP_SUPPORT
-  * namespace std {
-  *   using std::tr1::unordered_map;
-  * }
-  * \endcode
-  *
   * \see RandomSetter
   */
 template<typename Scalar> struct StdUnorderedMapTraits
@@ -67,9 +49,27 @@ template<typename Scalar> struct StdUnorderedMapTraits
 
   static void setInvalidKey(Type&, const KeyType&) {}
 };
-#endif // EIGEN_UNORDERED_MAP_SUPPORT
 
-#ifdef _DENSE_HASH_MAP_H_
+#if defined(EIGEN_GOOGLEHASH_SUPPORT)
+
+namespace google {
+  
+// Namespace work-around, since sometimes dense_hash_map and sparse_hash_map
+// are in the global namespace, and other times they are under ::google.
+using namespace ::google;
+
+template<typename KeyType, typename Scalar>
+struct DenseHashMap {
+  typedef dense_hash_map<KeyType, Scalar> type;
+};
+
+template<typename KeyType, typename Scalar>
+struct SparseHashMap {
+  typedef sparse_hash_map<KeyType, Scalar> type;
+};
+
+} // namespace google
+
 /** Represents a google::dense_hash_map
   *
   * \see RandomSetter
@@ -77,7 +77,7 @@ template<typename Scalar> struct StdUnorderedMapTraits
 template<typename Scalar> struct GoogleDenseHashMapTraits
 {
   typedef int KeyType;
-  typedef google::dense_hash_map<KeyType,Scalar> Type;
+  typedef typename google::DenseHashMap<KeyType,Scalar>::type Type;
   enum {
     IsSorted = 0
   };
@@ -85,9 +85,7 @@ template<typename Scalar> struct GoogleDenseHashMapTraits
   static void setInvalidKey(Type& map, const KeyType& k)
   { map.set_empty_key(k); }
 };
-#endif
 
-#ifdef _SPARSE_HASH_MAP_H_
 /** Represents a google::sparse_hash_map
   *
   * \see RandomSetter
@@ -95,7 +93,7 @@ template<typename Scalar> struct GoogleDenseHashMapTraits
 template<typename Scalar> struct GoogleSparseHashMapTraits
 {
   typedef int KeyType;
-  typedef google::sparse_hash_map<KeyType,Scalar> Type;
+  typedef typename google::SparseHashMap<KeyType,Scalar>::type Type;
   enum {
     IsSorted = 0
   };
@@ -105,13 +103,13 @@ template<typename Scalar> struct GoogleSparseHashMapTraits
 #endif
 
 /** \class RandomSetter
-  *
+  * \ingroup SparseExtra_Module
   * \brief The RandomSetter is a wrapper object allowing to set/update a sparse matrix with random access
   *
-  * \param SparseMatrixType the type of the sparse matrix we are updating
-  * \param MapTraits a traits class representing the map implementation used for the temporary sparse storage.
+  * \tparam SparseMatrixType the type of the sparse matrix we are updating
+  * \tparam MapTraits a traits class representing the map implementation used for the temporary sparse storage.
   *                  Its default value depends on the system.
-  * \param OuterPacketBits defines the number of rows (or columns) manage by a single map object
+  * \tparam OuterPacketBits defines the number of rows (or columns) manage by a single map object
   *                        as a power of two exponent.
   *
   * This class temporarily represents a sparse matrix object using a generic map implementation allowing for
@@ -139,35 +137,32 @@ template<typename Scalar> struct GoogleSparseHashMapTraits
   *
   * The possible values for the template parameter MapTraits are:
   *  - \b StdMapTraits: corresponds to std::map. (does not perform very well)
-  *  - \b GnuHashMapTraits: corresponds to __gnu_cxx::hash_map (available only with GCC)
+  *  - \b StdUnorderedMapTraits: corresponds to std::unordered_map
   *  - \b GoogleDenseHashMapTraits: corresponds to google::dense_hash_map (best efficiency, reasonable memory consumption)
   *  - \b GoogleSparseHashMapTraits: corresponds to google::sparse_hash_map (best memory consumption, relatively good performance)
   *
   * The default map implementation depends on the availability, and the preferred order is:
-  * GoogleSparseHashMapTraits, GnuHashMapTraits, and finally StdMapTraits.
+  * GoogleSparseHashMapTraits, StdUnorderedMapTraits, and finally StdMapTraits.
   *
   * For performance and memory consumption reasons it is highly recommended to use one of
-  * the Google's hash_map implementation. To enable the support for them, you have two options:
-  *  - \#include <google/dense_hash_map> yourself \b before Eigen/Sparse header
-  *  - define EIGEN_GOOGLEHASH_SUPPORT
-  * In the later case the inclusion of <google/dense_hash_map> is made for you.
+  * Google's hash_map implementations. To enable the support for them, you must define
+  * EIGEN_GOOGLEHASH_SUPPORT. This will include both <google/dense_hash_map> and
+  * <google/sparse_hash_map> for you.
   *
-  * \see http://code.google.com/p/google-sparsehash/
+  * \see https://github.com/sparsehash/sparsehash
   */
 template<typename SparseMatrixType,
          template <typename T> class MapTraits =
-#if defined _DENSE_HASH_MAP_H_
+#if defined(EIGEN_GOOGLEHASH_SUPPORT)
           GoogleDenseHashMapTraits
-#elif defined _HASH_MAP
-          GnuHashMapTraits
 #else
-          StdMapTraits
+          StdUnorderedMapTraits
 #endif
          ,int OuterPacketBits = 6>
 class RandomSetter
 {
     typedef typename SparseMatrixType::Scalar Scalar;
-    typedef typename SparseMatrixType::Index Index;
+    typedef typename SparseMatrixType::StorageIndex StorageIndex;
 
     struct ScalarWrapper
     {
@@ -176,13 +171,11 @@ class RandomSetter
     };
     typedef typename MapTraits<ScalarWrapper>::KeyType KeyType;
     typedef typename MapTraits<ScalarWrapper>::Type HashMapType;
-    static const int OuterPacketMask = (1 << OuterPacketBits) - 1;
+    static constexpr int OuterPacketMask = (1 << OuterPacketBits) - 1;
     enum {
       SwapStorage = 1 - MapTraits<ScalarWrapper>::IsSorted,
       TargetRowMajor = (SparseMatrixType::Flags & RowMajorBit) ? 1 : 0,
-      SetterRowMajor = SwapStorage ? 1-TargetRowMajor : TargetRowMajor,
-      IsUpper = SparseMatrixType::Flags & Upper,
-      IsLower = SparseMatrixType::Flags & Lower
+      SetterRowMajor = SwapStorage ? 1-TargetRowMajor : TargetRowMajor
     };
 
   public:
@@ -227,6 +220,7 @@ class RandomSetter
       if (!SwapStorage) // also means the map is sorted
       {
         mp_target->setZero();
+        mp_target->makeCompressed();
         mp_target->reserve(nonZeros());
         Index prevOuter = -1;
         for (Index k=0; k<m_outerPackets; ++k)
@@ -263,15 +257,16 @@ class RandomSetter
           }
         }
         // prefix sum
-        Index count = 0;
+        StorageIndex count = 0;
         for (Index j=0; j<mp_target->outerSize(); ++j)
         {
-          Index tmp = positions[j];
-          mp_target->_outerIndexPtr()[j] = count;
+          StorageIndex tmp = positions[j];
+          mp_target->outerIndexPtr()[j] = count;
           positions[j] = count;
           count += tmp;
         }
-        mp_target->_outerIndexPtr()[mp_target->outerSize()] = count;
+        mp_target->makeCompressed();
+        mp_target->outerIndexPtr()[mp_target->outerSize()] = count;
         mp_target->resizeNonZeros(count);
         // pass 2
         for (Index k=0; k<m_outerPackets; ++k)
@@ -286,16 +281,16 @@ class RandomSetter
             // Note that we have to deal with at most 2^OuterPacketBits unsorted coefficients,
             // moreover those 2^OuterPacketBits coeffs are likely to be sparse, an so only a
             // small fraction of them have to be sorted, whence the following simple procedure:
-            Index posStart = mp_target->_outerIndexPtr()[outer];
+            Index posStart = mp_target->outerIndexPtr()[outer];
             Index i = (positions[outer]++) - 1;
-            while ( (i >= posStart) && (mp_target->_innerIndexPtr()[i] > inner) )
+            while ( (i >= posStart) && (mp_target->innerIndexPtr()[i] > inner) )
             {
-              mp_target->_valuePtr()[i+1] = mp_target->_valuePtr()[i];
-              mp_target->_innerIndexPtr()[i+1] = mp_target->_innerIndexPtr()[i];
+              mp_target->valuePtr()[i+1] = mp_target->valuePtr()[i];
+              mp_target->innerIndexPtr()[i+1] = mp_target->innerIndexPtr()[i];
               --i;
             }
-            mp_target->_innerIndexPtr()[i+1] = inner;
-            mp_target->_valuePtr()[i+1] = it->second.value;
+            mp_target->innerIndexPtr()[i+1] = internal::convert_index<StorageIndex>(inner);
+            mp_target->valuePtr()[i+1] = it->second.value;
           }
         }
       }
@@ -305,13 +300,11 @@ class RandomSetter
     /** \returns a reference to the coefficient at given coordinates \a row, \a col */
     Scalar& operator() (Index row, Index col)
     {
-      eigen_assert(((!IsUpper) || (row<=col)) && "Invalid access to an upper triangular matrix");
-      eigen_assert(((!IsLower) || (col<=row)) && "Invalid access to an upper triangular matrix");
       const Index outer = SetterRowMajor ? row : col;
       const Index inner = SetterRowMajor ? col : row;
       const Index outerMajor = outer >> OuterPacketBits; // index of the packet/map
       const Index outerMinor = outer & OuterPacketMask;  // index of the inner vector in the packet
-      const KeyType key = (KeyType(outerMinor)<<m_keyBitsOffset) | inner;
+      const KeyType key = internal::convert_index<KeyType>((outerMinor<<m_keyBitsOffset) | inner);
       return m_hashmaps[outerMajor][key].value;
     }
 
@@ -336,5 +329,7 @@ class RandomSetter
     Index m_outerPackets;
     unsigned char m_keyBitsOffset;
 };
+
+} // end namespace Eigen
 
 #endif // EIGEN_RANDOMSETTER_H

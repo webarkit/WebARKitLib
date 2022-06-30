@@ -3,27 +3,16 @@
 //
 // Copyright (C) 2008 Guillaume Saupin <guillaume.saupin@cea.fr>
 //
-// Eigen is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 3 of the License, or (at your option) any later version.
-//
-// Alternatively, you can redistribute it and/or
-// modify it under the terms of the GNU General Public License as
-// published by the Free Software Foundation; either version 2 of
-// the License, or (at your option) any later version.
-//
-// Eigen is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License or the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License and a copy of the GNU General Public License along with
-// Eigen. If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla
+// Public License v. 2.0. If a copy of the MPL was not distributed
+// with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #ifndef EIGEN_SKYLINEINPLACELU_H
 #define EIGEN_SKYLINEINPLACELU_H
+
+#include "./InternalHeaderCheck.h"
+
+namespace Eigen { 
 
 /** \ingroup Skyline_Module
  *
@@ -54,7 +43,7 @@ public:
 
     /** Sets the relative threshold value used to prune zero coefficients during the decomposition.
      *
-     * Setting a value greater than zero speeds up computation, and yields to an imcomplete
+     * Setting a value greater than zero speeds up computation, and yields to an incomplete
      * factorization with fewer non zero coefficients. Such approximate factors are especially
      * useful to initialize an iterative solver.
      *
@@ -129,7 +118,7 @@ protected:
  * using the default algorithm.
  */
 template<typename MatrixType>
-//template<typename _Scalar>
+//template<typename Scalar_>
 void SkylineInplaceLU<MatrixType>::compute() {
     const size_t rows = m_lu.rows();
     const size_t cols = m_lu.cols();
@@ -360,4 +349,6 @@ bool SkylineInplaceLU<MatrixType>::solve(const MatrixBase<BDerived> &b, MatrixBa
     return true;
 }
 
-#endif // EIGEN_SKYLINELU_H
+} // end namespace Eigen
+
+#endif // EIGEN_SKYLINEINPLACELU_H
