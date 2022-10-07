@@ -93,7 +93,7 @@ namespace OEF
 
     void setAlpha(ARdouble alpha) {
       if (alpha<=0.0 || alpha>1.0) {
-        webarkitLOGe("alpha should be in [0.0, 1.0]: %f", alpha);
+        webarkitLOGe("alpha should be in [0.0, 1.0]: %d", alpha);
         std::cout << alpha << std::endl;
         alpha = 1.0;
       }
@@ -178,7 +178,7 @@ namespace OEF
 
     OneEuroFilter(ARdouble freq, 
 		  ARdouble mincutoff=1.0, ARdouble beta_=0.0, ARdouble dcutoff=1.0) {
-      webarkitLOGi("mincutoff is: %f", mincutoff);
+      webarkitLOGi("mincutoff is: %d", mincutoff);
       std::cout << mincutoff << std::endl;
       setFrequency(freq);
       setMinCutoff(mincutoff);
@@ -192,7 +192,7 @@ namespace OEF
     ARdouble filter(ARdouble value, TimeStamp timestamp=UndefinedTime) {
       // update the sampling frequency based on timestamps
       webarkitLOGi("timestamp is: %d", timestamp);
-      webarkitLOGi("value from filter is: %f", value);
+      webarkitLOGi("value from filter is: %d", value);
       if (lasttime!=UndefinedTime && timestamp!=UndefinedTime)
         freq = 1.0 / (timestamp-lasttime);
       lasttime = timestamp;
