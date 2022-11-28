@@ -77,65 +77,77 @@ namespace vision {
     
     template<typename FEATURE_EXTRACTOR, typename STORE, typename MATCHER>
     void VisualDatabase<FEATURE_EXTRACTOR, STORE, MATCHER>::addImage(const vision::Image& image, id_t id) {
-        if(mKeyframeMap.find(id) != mKeyframeMap.end()) {
-            throw EXCEPTION("ID already exists");
-        }
+        try{
+            if(mKeyframeMap.find(id) != mKeyframeMap.end()) {
+                throw EXCEPTION("ID already exists");
+            }
         
-        // Allocate pyramid
-        if(mPyramid.images().size() == 0 ||
-           mPyramid.images()[0].width() != image.width() ||
-           mPyramid.images()[0].height() != image.height()) {
-            int num_octaves = numOctaves((int)image.width(), (int)image.height(), kMinCoarseSize);
-            mPyramid.alloc(image.width(), image.height(), num_octaves);
-        }
+            // Allocate pyramid
+            if(mPyramid.images().size() == 0 ||
+               mPyramid.images()[0].width() != image.width() ||
+               mPyramid.images()[0].height() != image.height()) {
+                int num_octaves = numOctaves((int)image.width(), (int)image.height(), kMinCoarseSize);
+                mPyramid.alloc(image.width(), image.height(), num_octaves);
+            }
         
-        // Build the pyramid
-        TIMED("Build Pyramid") {
-            mPyramid.build(image);
-        }
+            // Build the pyramid
+            TIMED("Build Pyramid") {
+                mPyramid.build(image);
+            }
         
-        // Add the image with a pyramid
-        addImage(&mPyramid, id);
+            // Add the image with a pyramid
+            addImage(&mPyramid, id);
+            } catch (...){
+              //log error...
+        }
     }
     
     template<typename FEATURE_EXTRACTOR, typename STORE, typename MATCHER>
     void VisualDatabase<FEATURE_EXTRACTOR, STORE, MATCHER>::addImage(const GaussianScaleSpacePyramid* pyramid, id_t id) {
-        if(mKeyframeMap.find(id) != mKeyframeMap.end()) {
-            throw EXCEPTION("ID already exists");
-        }
+        try{
+            if(mKeyframeMap.find(id) != mKeyframeMap.end()) {
+                throw EXCEPTION("ID already exists");
+            }
         
-        // Allocate detector
-        if(mDetector.width() != pyramid->images()[0].width() ||
-           mDetector.height() != pyramid->images()[0].height()) {
-            mDetector.alloc(pyramid);
-        }
+            // Allocate detector
+            if(mDetector.width() != pyramid->images()[0].width() ||
+               mDetector.height() != pyramid->images()[0].height()) {
+               mDetector.alloc(pyramid);
+            }
         
-        // Find the features on the image
-        keyframe_ptr_t keyframe(new keyframe_t());
-        keyframe->setWidth((int)pyramid->images()[0].width());
-        keyframe->setHeight((int)pyramid->images()[0].height());
-        TIMED("Extract Features") {
-            FindFeatures<FEATURE_EXTRACTOR, kBytesPerFeature>(keyframe.get(), pyramid, &mDetector, &mFeatureExtractor);
-        }
-        LOG_INFO("Found %d features", keyframe->store().size());
+            // Find the features on the image
+            keyframe_ptr_t keyframe(new keyframe_t());
+            keyframe->setWidth((int)pyramid->images()[0].width());
+            keyframe->setHeight((int)pyramid->images()[0].height());
+            TIMED("Extract Features") {
+                FindFeatures<FEATURE_EXTRACTOR, kBytesPerFeature>(keyframe.get(), pyramid, &mDetector, &mFeatureExtractor);
+            }
+            LOG_INFO("Found %d features", keyframe->store().size());
         
-        // Build the feature index
-        TIMED("Build Index") {
-            keyframe->buildIndex();
-        }
+            // Build the feature index
+            TIMED("Build Index") {
+                keyframe->buildIndex();
+            }
         
-        // Store the keyframe
-        mKeyframeMap[id] = keyframe;
+            // Store the keyframe
+            mKeyframeMap[id] = keyframe;
+        } catch (...) {
+            // log error...
+        }
     }
     
     template<typename FEATURE_EXTRACTOR, typename STORE, typename MATCHER>
     void VisualDatabase<FEATURE_EXTRACTOR, STORE, MATCHER>::addKeyframe(keyframe_ptr_t keyframe , id_t id) {
-        typename keyframe_map_t::iterator it = mKeyframeMap.find(id);
-        if(it != mKeyframeMap.end()) {
-            throw EXCEPTION("ID already exists");
-        }
+        try{
+            typename keyframe_map_t::iterator it = mKeyframeMap.find(id);
+            if(it != mKeyframeMap.end()) {
+                throw EXCEPTION("ID already exists");
+            }
         
-        mKeyframeMap[id] = keyframe;
+            mKeyframeMap[id] = keyframe;
+        } catch (...) {
+            // log error...
+        }
     }
     
     template<typename FEATURE_EXTRACTOR, typename STORE, typename MATCHER>
