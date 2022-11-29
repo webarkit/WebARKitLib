@@ -121,44 +121,48 @@ void Image::alloc(ImageType type,
                   size_t width,
                   size_t height,
                   int step,
-                  size_t channels) throw(Exception) {
+                  size_t channels) {
     size_t size;
-    
+
     ASSERT(width > 0, "Width cannot be zero");
     ASSERT(height > 0, "Height cannot be zero");
     ASSERT(step >= width, "Step must be greater than or equal the width");
     ASSERT(channels > 0, "Number of channels cannot be zero");
-    
-    // Find the step size
-    if(step < 0) {
-        switch(step) {
+
+    try {
+        // Find the step size
+        if (step < 0) {
+            switch (step) {
             case AUTO_STEP:
             default:
-                mStep = calculate_unit_size(type)*channels*width;
-                break;
-        };
-    } else {
-        mStep = step;
-    }
-    
-    size = mStep*height;
-    
-    // Allocate image data
-    if(mSize != size) {
-        mData.reset(new unsigned char[size]);
-        ASSERT(mData.get(), "Data pointer is NULL");
-        
-        if(mData.get() == NULL) {
-            throw EXCEPTION("Unable to allocate image data");
+                mStep = calculate_unit_size(type) * channels * width;
+            break;
+            };
+        } else {
+            mStep = step;
         }
+
+        size = mStep * height;
+
+        // Allocate image data
+        if (mSize != size) {
+            mData.reset(new unsigned char[size]);
+            ASSERT(mData.get(), "Data pointer is NULL");
+
+            if (mData.get() == NULL) {
+                throw EXCEPTION("Unable to allocate image data");
+            }
+        }
+
+        // Set variables
+        mType = type;
+        mWidth = width;
+        mHeight = height;
+        mChannels = channels;
+        mSize = size;
+    } catch (...) {
+        // log error...
     }
-    
-    // Set variables
-    mType       = type;
-    mWidth      = width;
-    mHeight     = height;
-    mChannels   = channels;
-    mSize       = size;
 }
 
 void Image::release() {
