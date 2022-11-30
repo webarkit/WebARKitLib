@@ -98,7 +98,7 @@ namespace vision {
             // Add the image with a pyramid
             addImage(&mPyramid, id);
             } catch (...){
-              //log error...
+                LOG_FATAL("Fatal Error: something goes wrong with VisualDatabase::addImage");
         }
     }
     
@@ -133,6 +133,7 @@ namespace vision {
             mKeyframeMap[id] = keyframe;
         } catch (...) {
             // log error...
+            LOG_FATAL("Fatal Error: something goes wrong with VisualDatabase::addImage");
         }
     }
     
@@ -146,7 +147,7 @@ namespace vision {
         
             mKeyframeMap[id] = keyframe;
         } catch (...) {
-            // log error...
+            LOG_FATAL("Fatal Error: something goes wrong with VisualDatabase::addKeyframe");
         }
     }
     
