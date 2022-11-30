@@ -161,7 +161,7 @@ void Image::alloc(ImageType type,
         mChannels = channels;
         mSize = size;
     } catch (...) {
-        // log error...
+        LOG_FATAL("Error: Invalid settings for the image");
     }
 }
 
