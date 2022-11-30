@@ -37,6 +37,7 @@
 
 #include "exception.h"
 #include "error.h"
+#include "logger.h"
 #include <memory>
 
 namespace vision {
