@@ -26,8 +26,6 @@ void WebARKitOrbTracker::initialize_gray_raw(uchar *refData, size_t refCols,
 
   initialized = true;
 
-  free(refData);
-
   std::cout << "Tracker ready!" << std::endl;
 }
 
@@ -44,7 +42,6 @@ void WebARKitOrbTracker::processFrameData(uchar *frameData, size_t frameCols,
   }
   processFrame(grayFrame);
   grayFrame.release();
-  free(frameData);
 }
 
 void WebARKitOrbTracker::processFrame(cv::Mat &frame) {

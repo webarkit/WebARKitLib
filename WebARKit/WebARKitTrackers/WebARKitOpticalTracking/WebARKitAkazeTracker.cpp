@@ -24,7 +24,6 @@ void WebARKitAkazeTracker::initialize_gray_raw(uchar *refData, size_t refCols,
   corners[3] = cvPoint(0, refRows);
 
   initialized = true;
-  free(refData);
 
   std::cout << "Tracker ready!" << std::endl;
 }
@@ -42,7 +41,6 @@ void WebARKitAkazeTracker::processFrameData(uchar *frameData, size_t frameCols,
   }
   processFrame(grayFrame);
   grayFrame.release();
-  free(frameData);
 }
 
 void WebARKitAkazeTracker::processFrame(cv::Mat &frame) {
