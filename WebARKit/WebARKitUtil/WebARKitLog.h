@@ -33,7 +33,7 @@ inline int webarkitLogLevel = WEBARKIT_LOG_LEVEL_DEFAULT;
 inline void webarkitLogv(const char *tag, const int logLevel, const char *format, va_list ap) {
   va_list ap2;
   size_t len;
-  const char *logLevelStrings[] = {"debug", "info", "warning", "error"};
+  const char *logLevelStrings[] = {"debug", "\033[34minfo\033[0m", "warning", "error"};
   const size_t logLevelStringsCount =
       (sizeof(logLevelStrings) / sizeof(logLevelStrings[0]));
   size_t logLevelStringLen;
@@ -69,6 +69,7 @@ inline void webarkitLogv(const char *tag, const int logLevel, const char *format
   }
 
   std::vsnprintf(buf.data() + logLevelStringLen, len + 1, format, ap);
+  va_end(ap);
   len += logLevelStringLen;
 
   std::fprintf(stderr, "%s\n", buf.data());
