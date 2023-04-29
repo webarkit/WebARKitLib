@@ -33,7 +33,7 @@ inline int webarkitLogLevel = WEBARKIT_LOG_LEVEL_DEFAULT;
 inline void webarkitLogv(const char *tag, const int logLevel, const char *format, va_list ap) {
   va_list ap2;
   size_t len;
-  const char *logLevelStrings[] = {"debug", "\033[34minfo\033[0m", "warning", "error"};
+  const char *logLevelStrings[] = {"\033[37;40mdebug\033[0m", "\033[37;42minfo\033[0m", "\033[37;44mwarning\033[0m", "\033[37;41merror\033[0m"};
   const size_t logLevelStringsCount =
       (sizeof(logLevelStrings) / sizeof(logLevelStrings[0]));
   size_t logLevelStringLen;
@@ -55,8 +55,7 @@ inline void webarkitLogv(const char *tag, const int logLevel, const char *format
   // Add characters required for logLevelString.
   if (logLevel >= 0 && logLevel < (int)logLevelStringsCount) {
     logLevelStringLen =
-        15 + strlen(logLevelStrings[logLevel]); // +3 for brackets and a space,
-                                               // e.g. "[debug] ".
+        13 + strlen(logLevelStrings[logLevel]); // +13 for WEBARKITLOG text and a space.
   } else {
     logLevelStringLen = 0;
   }
@@ -64,7 +63,7 @@ inline void webarkitLogv(const char *tag, const int logLevel, const char *format
   std::vector<char> buf(1+std::vsnprintf(nullptr, 0, format, ap));
 
   if (logLevelStringLen > 0) {
-    std::snprintf(buf.data(), logLevelStringLen + 1, "WEBARKITLOG [%s] ",
+    std::snprintf(buf.data(), logLevelStringLen + 1, "WEBARKITLOG %s ",
                   logLevelStrings[logLevel]);
   }
 
