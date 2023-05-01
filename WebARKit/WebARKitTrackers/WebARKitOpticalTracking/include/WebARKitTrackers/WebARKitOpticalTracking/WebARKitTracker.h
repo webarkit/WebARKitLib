@@ -26,13 +26,18 @@ public:
 
 protected:
   virtual bool resetTracking(cv::Mat &frameCurr) = 0;
-  virtual bool track(cv::Mat &frameCurr) = 0;
+  bool track(cv::Mat &currIm);
   virtual void processFrame(cv::Mat &frame) = 0;
   bool homographyValid(cv::Mat &H);
   void fill_output(cv::Mat &H);
   void clear_output();
   bool _valid;
   std::vector<cv::Point2f> corners;
+  cv::Mat m_H;
+  cv::Mat prevIm;
+  int numMatches;
+  std::vector<cv::Point2f> framePts;
+  bool initialized;
 
 private:
   std::vector<double>

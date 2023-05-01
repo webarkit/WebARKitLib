@@ -15,12 +15,6 @@ class WebARKitOrbTracker : public WebARKitTracker {
   cv::Mat refGray, refDescr;
   std::vector<cv::KeyPoint> refKeyPts;
 
-  cv::Mat m_H;
-
-  cv::Mat prevIm;
-  int numMatches;
-  std::vector<cv::Point2f> framePts;
-
 public:
   WebARKitOrbTracker();
   void initialize_gray_raw(uchar *refData, size_t refCols,
@@ -30,9 +24,7 @@ public:
 
 private:
   bool resetTracking(cv::Mat &frameCurr) override;
-  bool track(cv::Mat &frameCurr) override;
   void processFrame(cv::Mat &frame) override;
-  bool initialized;
 };
 
 } // namespace webarkit
