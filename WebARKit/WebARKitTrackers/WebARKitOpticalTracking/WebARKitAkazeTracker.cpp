@@ -46,8 +46,9 @@ void WebARKitAkazeTracker::processFrameData(uchar *frameData, size_t frameCols,
 void WebARKitAkazeTracker::processFrame(cv::Mat &frame) {
   if (!this->_valid) {
     this->_valid = resetTracking(frame);
+  } else {
+    this->_valid = track(frame);
   }
-  this->_valid = track(frame);
 }
 
 bool WebARKitAkazeTracker::resetTracking(cv::Mat &frameCurr) {

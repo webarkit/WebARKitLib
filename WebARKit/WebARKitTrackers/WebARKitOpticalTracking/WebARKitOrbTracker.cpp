@@ -47,8 +47,9 @@ void WebARKitOrbTracker::processFrameData(uchar *frameData, size_t frameCols,
 void WebARKitOrbTracker::processFrame(cv::Mat &frame) {
   if (!this->_valid) {
     this->_valid = resetTracking(frame);
+  } else {
+    this->_valid = track(frame);
   }
-  this->_valid = track(frame);
 }
 
 bool WebARKitOrbTracker::resetTracking(cv::Mat &currIm) {
