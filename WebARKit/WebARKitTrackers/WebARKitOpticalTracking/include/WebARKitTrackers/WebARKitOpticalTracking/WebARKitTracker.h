@@ -15,7 +15,12 @@ namespace webarkit {
 class WebARKitTracker {
   public:
     WebARKitTracker();
+
     ~WebARKitTracker();
+
+    WebARKitTracker(WebARKitTracker&&);
+
+    WebARKitTracker& operator=(WebARKitTracker&&);
 
     void initialize(webarkit::TRACKER_TYPE trackerType);
 

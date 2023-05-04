@@ -236,7 +236,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
 WebARKitTracker::WebARKitTracker() : _trackerImpl(new WebARKitTrackerImpl()) {}
 
-WebARKitTracker::~WebARKitTracker() = default;
+WebARKitTracker::~WebARKitTracker() = default; //destructor
+
+WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; //copy constructor
+
+WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; //move assignment operator
 
 void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { _trackerImpl->initialize(trackerType); }
 
