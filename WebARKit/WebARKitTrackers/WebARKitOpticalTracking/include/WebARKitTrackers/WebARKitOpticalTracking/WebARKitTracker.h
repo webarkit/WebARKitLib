@@ -15,6 +15,8 @@ namespace webarkit {
 class WebARKitTracker {
   public:
     WebARKitTracker();
+    ~WebARKitTracker();
+
 
     void initialize(webarkit::TRACKER_TYPE trackerType);
 

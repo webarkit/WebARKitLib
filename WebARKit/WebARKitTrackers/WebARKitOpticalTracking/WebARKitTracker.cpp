@@ -5,6 +5,8 @@ namespace webarkit {
 
 WebARKitTracker::WebARKitTracker() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0) {}
 
+WebARKitTracker::~WebARKitTracker() = default;
+
 void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { setDetectorType(trackerType); }
 
 void WebARKitTracker::setDetectorType(webarkit::TRACKER_TYPE trackerType) {
