@@ -17,7 +17,6 @@ class WebARKitTracker {
     WebARKitTracker();
     ~WebARKitTracker();
 
-
     void initialize(webarkit::TRACKER_TYPE trackerType);
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows);
@@ -28,45 +27,10 @@ class WebARKitTracker {
 
     bool isValid();
 
-  protected:
-    bool resetTracking(cv::Mat& frameCurr);
-
-    bool track(cv::Mat& currIm);
-
-    void processFrame(cv::Mat& frame);
-
-    bool homographyValid(cv::Mat& H);
-
-    void fill_output(cv::Mat& H);
-
-    void clear_output();
-
-    bool _valid;
-
-    std::vector<cv::Point2f> corners;
-
-    cv::Mat m_H;
-
-    cv::Mat prevIm;
-
-    int numMatches;
-
-    std::vector<cv::Point2f> framePts;
-
-    bool initialized;
-
   private:
-    std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
+    class WebARKitTrackerImpl;
 
-    cv::Ptr<cv::Feature2D> _featureDetector;
-
-    cv::Ptr<cv::BFMatcher> _matcher;
-
-    cv::Mat refGray, refDescr;
-
-    std::vector<cv::KeyPoint> refKeyPts;
-
-    void setDetectorType(webarkit::TRACKER_TYPE trackerType);
+    std::shared_ptr<WebARKitTrackerImpl> _trackerImpl;
 };
 
 } // namespace webarkit
