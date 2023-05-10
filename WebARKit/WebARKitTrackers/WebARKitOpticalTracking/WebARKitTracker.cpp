@@ -389,6 +389,46 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return false;
     }
 
+    std::vector<cv::Point2f> GetVerticesFromPoint(cv::Point ptOrig, int width = markerTemplateWidth, int height = markerTemplateWidth)
+    {
+        std::vector<cv::Point2f> vertexPoints;
+        vertexPoints.push_back(cv::Point2f(ptOrig.x - width/2, ptOrig.y - height/2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x + width/2, ptOrig.y - height/2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x + width/2, ptOrig.y + height/2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x - width/2, ptOrig.y + height/2));
+        return vertexPoints;
+    }
+    
+    std::vector<cv::Point2f> GetVerticesFromTopCorner(int x, int y, int width, int height)
+    {
+        std::vector<cv::Point2f> vertexPoints;
+        vertexPoints.push_back(cv::Point2f(x, y));
+        vertexPoints.push_back(cv::Point2f(x + width, y));
+        vertexPoints.push_back(cv::Point2f(x + width, y + height));
+        vertexPoints.push_back(cv::Point2f(x, y + height));
+        return vertexPoints;
+    }
+
+    cv::Rect GetTemplateRoi(cv::Point2f pt)
+    {
+        return cv::Rect(pt.x-(markerTemplateWidth/2), pt.y-(markerTemplateWidth/2), markerTemplateWidth, markerTemplateWidth);
+    }
+    
+    bool IsRoiValidForFrame(cv::Rect frameRoi, cv::Rect roi)
+    {
+        return (roi & frameRoi) == roi;
+    }
+    
+    cv::Rect InflateRoi(cv::Rect roi, int inflationFactor)
+    {
+        cv::Rect newRoi = roi;
+        newRoi.x -= inflationFactor;
+        newRoi.y -= inflationFactor;
+        newRoi.width += 2 * inflationFactor;
+        newRoi.height += 2 * inflationFactor;
+        return newRoi;
+    }
+
     void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType) {
         _selectedFeatureDetectorType = trackerType;
         _featureDetectorW.SetFeatureDetector(trackerType);

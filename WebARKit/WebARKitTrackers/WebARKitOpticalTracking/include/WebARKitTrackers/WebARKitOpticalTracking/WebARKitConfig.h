@@ -17,6 +17,7 @@ extern const cv::Size winSize;
 extern cv::TermCriteria termcrit;
 extern const int MAX_COUNT;
 extern const int minRequiredDetectedFeatures;
+extern const int markerTemplateWidth;
 extern const int featureDetectPyramidLevel;
 extern const double nn_match_ratio; ///< Nearest-neighbour matching ratio
 extern const double ransac_thresh;  ///< RANSAC inlier threshold
