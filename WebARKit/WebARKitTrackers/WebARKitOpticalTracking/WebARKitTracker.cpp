@@ -1,23 +1,28 @@
+#include <WebARKitTrackers/WebARKitOpticalTracking/HarrisDetector.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
-#include <WebARKitTrackers/WebARKitOpticalTracking/HarrisDetector.h>
+
 
 namespace webarkit {
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
-    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0){ _featureDetectorW = WebARKitFeatureDetector();};
+    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0) {
+        _featureDetectorW = WebARKitFeatureDetector();
+    };
+
     ~WebARKitTrackerImpl() = default;
 
-    void initialize(webarkit::TRACKER_TYPE trackerType) { 
-        SetFeatureDetector(trackerType); 
-        setDetectorType(trackerType); }
+    void initialize(webarkit::TRACKER_TYPE trackerType) {
+        SetFeatureDetector(trackerType);
+        setDetectorType(trackerType);
+    }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
         std::cout << "Init Tracker!" << std::endl;
         cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
 
-        // Uncomment this line if you want to test the HarrisDetector class... 
+        // Uncomment this line if you want to test the HarrisDetector class...
         // _harrisDetector.FindCorners(refGray);
 
         this->_featureDetector->detectAndCompute(refGray, cv::noArray(), refKeyPts, refDescr);
@@ -236,8 +241,26 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     webarkit::TRACKER_TYPE _selectedFeatureDetectorType;
 
-    void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType)
-    {
+    cv::Mat CreateFeatureMask(cv::Mat frame) {
+        cv::Mat featureMask;
+        for (int i = 0; i < _trackables.size(); i++) {
+            if (_trackables[i]._isDetected) {
+                if (featureMask.empty()) {
+                    // Only create mask if we have something to draw in it.
+                    featureMask = cv::Mat::ones(frame.size(), CV_8UC1);
+                }
+                std::vector<std::vector<cv::Point>> contours(1);
+                for (int j = 0; j < 4; j++) {
+                    contours[0].push_back(cv::Point(_trackables[i]._bBoxTransformed[j].x / featureDetectPyramidLevel,
+                                                    _trackables[i]._bBoxTransformed[j].y / featureDetectPyramidLevel));
+                }
+                drawContours(featureMask, contours, 0, cv::Scalar(0), -1, 8);
+            }
+        }
+        return featureMask;
+    }
+
+    void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType) {
         _selectedFeatureDetectorType = trackerType;
         _featureDetectorW.SetFeatureDetector(trackerType);
     }
@@ -254,11 +277,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
 WebARKitTracker::WebARKitTracker() : _trackerImpl(new WebARKitTrackerImpl()) {}
 
-WebARKitTracker::~WebARKitTracker() = default; //destructor
+WebARKitTracker::~WebARKitTracker() = default; // destructor
 
-WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; //copy constructor
+WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; // copy constructor
 
-WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; //move assignment operator
+WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // move assignment operator
 
 void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { _trackerImpl->initialize(trackerType); }
 
