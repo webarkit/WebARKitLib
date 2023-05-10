@@ -1,14 +1,17 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/HarrisDetector.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/TrackableInfo.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
-
 
 namespace webarkit {
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
-    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0) {
+    WebARKitTrackerImpl()
+        : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _currentlyTrackedMarkers(0) {
         _featureDetectorW = WebARKitFeatureDetector();
+        _maxNumberOfMarkersToTrack = 1;
     };
 
     ~WebARKitTrackerImpl() = default;
@@ -225,6 +228,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
     bool initialized;
 
   private:
+    int _maxNumberOfMarkersToTrack;
+
     std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
 
     WebARKitFeatureDetector _featureDetectorW;
@@ -238,6 +243,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
     cv::Mat refGray, refDescr;
 
     std::vector<cv::KeyPoint> refKeyPts;
+
+    std::vector<TrackableInfo> _trackables;
+
+    int _currentlyTrackedMarkers;
 
     webarkit::TRACKER_TYPE _selectedFeatureDetectorType;
 
@@ -258,6 +267,64 @@ class WebARKitTracker::WebARKitTrackerImpl {
             }
         }
         return featureMask;
+    }
+
+    bool CanDetectNewFeatures() { return (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack); }
+
+    bool CanMatchNewFeatures(int detectedFeaturesSize) { return (detectedFeaturesSize > minRequiredDetectedFeatures); }
+
+    void MatchFeatures(std::vector<cv::KeyPoint> newFrameFeatures, cv::Mat newFrameDescriptors) {
+        int maxMatches = 0;
+        int bestMatchIndex = -1;
+        std::vector<cv::KeyPoint> finalMatched1, finalMatched2;
+        for (int i = 0; i < _trackables.size(); i++) {
+            if (!_trackables[i]._isDetected) {
+                std::vector<std::vector<cv::DMatch>> matches =
+                    _featureDetectorW.MatchFeatures(newFrameDescriptors, _trackables[i]._descriptors);
+                if (matches.size() > minRequiredDetectedFeatures) {
+                    std::vector<cv::KeyPoint> matched1, matched2;
+                    std::vector<uchar> status;
+                    int totalGoodMatches = 0;
+                    for (unsigned int j = 0; j < matches.size(); j++) {
+                        // Ratio Test for outlier removal, removes ambiguous matches.
+                        if (matches[j][0].distance < nn_match_ratio * matches[j][1].distance) {
+                            matched1.push_back(newFrameFeatures[matches[j][0].queryIdx]);
+                            matched2.push_back(_trackables[i]._featurePoints[matches[j][0].trainIdx]);
+                            status.push_back(1);
+                            totalGoodMatches++;
+                        } else {
+                            status.push_back(0);
+                        }
+                    }
+                    if (totalGoodMatches > maxMatches) {
+                        finalMatched1 = matched1;
+                        finalMatched2 = matched2;
+                        maxMatches = totalGoodMatches;
+                        bestMatchIndex = i;
+                    }
+                }
+            }
+        }
+
+        if (maxMatches > 0) {
+            for (int i = 0; i < finalMatched1.size(); i++) {
+                finalMatched1[i].pt.x *= featureDetectPyramidLevel;
+                finalMatched1[i].pt.y *= featureDetectPyramidLevel;
+            }
+
+            HomographyInfo homoInfo = GetHomographyInliers(Points(finalMatched2), Points(finalMatched1));
+            if (homoInfo.validHomography) {
+                // std::cout << "New marker detected" << std::endl;
+                _trackables[bestMatchIndex]._trackSelection.SelectPoints();
+                _trackables[bestMatchIndex]._trackSelection.SetHomography(homoInfo.homography);
+                _trackables[bestMatchIndex]._isDetected = true;
+                _trackables[bestMatchIndex]._resetTracks = true;
+
+                perspectiveTransform(_trackables[bestMatchIndex]._bBox, _trackables[bestMatchIndex]._bBoxTransformed,
+                                     homoInfo.homography);
+                _currentlyTrackedMarkers++;
+            }
+        }
     }
 
     void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType) {

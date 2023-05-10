@@ -4,6 +4,8 @@
 #include "WebARKitEnums.h"
 #include "WebARKitConfig.h"
 #include "WebARKitFeatureDetector.h"
+#include "TrackableInfo.h"
+#include "HomographyInfo.h"
 
 namespace webarkit {
 
