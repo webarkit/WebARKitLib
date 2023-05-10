@@ -2,13 +2,8 @@
 #define WEBARKIT_TRACKER_H
 
 #include "WebARKitEnums.h"
-#include <iostream>
-#include <opencv2/calib3d/calib3d.hpp>
-#include <opencv2/core.hpp>
-#include <opencv2/core/types_c.h>
-#include <opencv2/features2d.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/opencv.hpp>
+#include "WebARKitConfig.h"
+#include "WebARKitFeatureDetector.h"
 
 namespace webarkit {
 

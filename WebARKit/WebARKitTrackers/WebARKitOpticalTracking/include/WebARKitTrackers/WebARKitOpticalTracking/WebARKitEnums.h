@@ -5,7 +5,9 @@ namespace webarkit {
 
 enum TRACKER_TYPE {
     AKAZE_TRACKER = 0,
-    ORB_TRACKER = 1
+    ORB_TRACKER = 1,
+    BRISK_TRACKER = 2,
+    KAZE_TRACKER = 3
 };
 
 enum ColorSpace {

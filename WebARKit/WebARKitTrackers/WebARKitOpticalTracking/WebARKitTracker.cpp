@@ -1,18 +1,24 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/HarrisDetector.h>
 
 namespace webarkit {
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
-    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0){};
+    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0){ _featureDetectorW = WebARKitFeatureDetector();};
     ~WebARKitTrackerImpl() = default;
 
-    void initialize(webarkit::TRACKER_TYPE trackerType) { setDetectorType(trackerType); }
+    void initialize(webarkit::TRACKER_TYPE trackerType) { 
+        SetFeatureDetector(trackerType); 
+        setDetectorType(trackerType); }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
         std::cout << "Init Tracker!" << std::endl;
         cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
+
+        // Uncomment this line if you want to test the HarrisDetector class... 
+        // _harrisDetector.FindCorners(refGray);
 
         this->_featureDetector->detectAndCompute(refGray, cv::noArray(), refKeyPts, refDescr);
 
@@ -216,6 +222,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
   private:
     std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
 
+    WebARKitFeatureDetector _featureDetectorW;
+
+    HarrisDetector _harrisDetector;
+
     cv::Ptr<cv::Feature2D> _featureDetector;
 
     cv::Ptr<cv::BFMatcher> _matcher;
@@ -223,6 +233,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
     cv::Mat refGray, refDescr;
 
     std::vector<cv::KeyPoint> refKeyPts;
+
+    webarkit::TRACKER_TYPE _selectedFeatureDetectorType;
+
+    void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType)
+    {
+        _selectedFeatureDetectorType = trackerType;
+        _featureDetectorW.SetFeatureDetector(trackerType);
+    }
 
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
         if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
