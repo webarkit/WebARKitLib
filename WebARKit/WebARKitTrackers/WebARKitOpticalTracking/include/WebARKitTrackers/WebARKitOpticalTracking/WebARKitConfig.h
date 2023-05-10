@@ -13,11 +13,15 @@ extern const double GOOD_MATCH_RATIO;
 extern const int MAX_FEATURES;
 extern const int N;
 extern const int MIN_NUM_MATCHES;
+extern const int maxLevel; ///< Maximum number of levels in optical flow image pyramid.
+extern const cv::Size subPixWinSize;
 extern const cv::Size winSize;
 extern cv::TermCriteria termcrit;
 extern const int MAX_COUNT;
+extern const int searchRadius;
 extern const int minRequiredDetectedFeatures;
 extern const int markerTemplateWidth;
+extern const int match_method;
 extern const int featureDetectPyramidLevel;
 extern const double nn_match_ratio; ///< Nearest-neighbour matching ratio
 extern const double ransac_thresh;  ///< RANSAC inlier threshold

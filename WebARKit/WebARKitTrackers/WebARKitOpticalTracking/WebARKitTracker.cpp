@@ -4,7 +4,6 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 
-
 namespace webarkit {
 
 class WebARKitTracker::WebARKitTrackerImpl {
@@ -13,6 +12,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _currentlyTrackedMarkers(0) {
         _featureDetectorW = WebARKitFeatureDetector();
         _maxNumberOfMarkersToTrack = 1;
+        _frameSizeX = 0;
+        _frameSizeY = 0;
     };
 
     ~WebARKitTrackerImpl() = default;
@@ -20,6 +21,46 @@ class WebARKitTracker::WebARKitTrackerImpl {
     void initialize(webarkit::TRACKER_TYPE trackerType) {
         SetFeatureDetector(trackerType);
         setDetectorType(trackerType);
+    }
+
+    void initialize_w(webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) {
+        _frameSizeX = xsize;
+        _frameSizeY = ysize;
+        SetFeatureDetector(trackerType);
+        setDetectorType(trackerType);
+    }
+
+    void AddMarker(std::shared_ptr<unsigned char> buff, std::string fileName, int width, int height, int uid,
+                   float scale) {
+        TrackableInfo newTrackable;
+        // cv::Mat() wraps `buff` rather than copying it, but this is OK as we share ownership with caller via the
+        // shared_ptr.
+        newTrackable._imageBuff = buff;
+        newTrackable._image = cv::Mat(height, width, CV_8UC1, buff.get());
+        if (!newTrackable._image.empty()) {
+            newTrackable._id = uid;
+            newTrackable._fileName = fileName;
+            newTrackable._scale = scale;
+            newTrackable._width = newTrackable._image.cols;
+            newTrackable._height = newTrackable._image.rows;
+            newTrackable._featurePoints = _featureDetectorW.DetectFeatures(newTrackable._image, cv::Mat());
+            newTrackable._descriptors =
+                _featureDetectorW.CalcDescriptors(newTrackable._image, newTrackable._featurePoints);
+            newTrackable._cornerPoints = _harrisDetector.FindCorners(newTrackable._image);
+            newTrackable._bBox.push_back(cv::Point2f(0, 0));
+            newTrackable._bBox.push_back(cv::Point2f(newTrackable._width, 0));
+            newTrackable._bBox.push_back(cv::Point2f(newTrackable._width, newTrackable._height));
+            newTrackable._bBox.push_back(cv::Point2f(0, newTrackable._height));
+            newTrackable._isTracking = false;
+            newTrackable._isDetected = false;
+            newTrackable._resetTracks = false;
+            newTrackable._trackSelection = TrackingPointSelector(newTrackable._cornerPoints, newTrackable._width,
+                                                                 newTrackable._height, markerTemplateWidth);
+
+            _trackables.push_back(newTrackable);
+            std::cout << "Marker added." << std::endl;
+            // ARLOGi("2D marker added.\n");
+        }
     }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
@@ -53,6 +94,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
         processFrame(grayFrame);
         grayFrame.release();
     };
+
+    void ProcessFrameData_w(unsigned char* frame) {
+        // Just wraps `frame` rather than copying it, i.e. `frame` must remain valid
+        // for the duration of the call.
+        cv::Mat newFrame(_frameSizeY, _frameSizeX, CV_8UC1, frame);
+        ProcessFrame_w(newFrame);
+        newFrame.release();
+    }
 
     std::vector<double> getOutputData() { return output; };
 
@@ -247,11 +296,19 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     int _frameCount;
 
+    int _frameSizeX;
+
+    int _frameSizeY;
+
     std::vector<cv::Mat> _pyramid, _prevPyramid;
 
     std::vector<TrackableInfo> _trackables;
 
     int _currentlyTrackedMarkers;
+
+    cv::Mat _K;
+
+    cv::Mat _distortionCoeff;
 
     webarkit::TRACKER_TYPE _selectedFeatureDetectorType;
 
@@ -372,14 +429,15 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
     }
 
-    bool UpdateTrackableHomography(int trackableId, std::vector<cv::Point2f> matchedPoints1, std::vector<cv::Point2f> matchedPoints2)
-    {
-        if (matchedPoints1.size()>4) {
+    bool UpdateTrackableHomography(int trackableId, std::vector<cv::Point2f> matchedPoints1,
+                                   std::vector<cv::Point2f> matchedPoints2) {
+        if (matchedPoints1.size() > 4) {
             HomographyInfo homoInfo = GetHomographyInliers(matchedPoints1, matchedPoints2);
             if (homoInfo.validHomography) {
                 _trackables[trackableId]._trackSelection.UpdatePointStatus(homoInfo.status);
                 _trackables[trackableId]._trackSelection.SetHomography(homoInfo.homography);
-                perspectiveTransform(_trackables[trackableId]._bBox, _trackables[trackableId]._bBoxTransformed, homoInfo.homography);
+                perspectiveTransform(_trackables[trackableId]._bBox, _trackables[trackableId]._bBoxTransformed,
+                                     homoInfo.homography);
                 if (_frameCount > 1) {
                     _trackables[trackableId]._resetTracks = true;
                 }
@@ -389,18 +447,17 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return false;
     }
 
-    std::vector<cv::Point2f> GetVerticesFromPoint(cv::Point ptOrig, int width = markerTemplateWidth, int height = markerTemplateWidth)
-    {
+    std::vector<cv::Point2f> GetVerticesFromPoint(cv::Point ptOrig, int width = markerTemplateWidth,
+                                                  int height = markerTemplateWidth) {
         std::vector<cv::Point2f> vertexPoints;
-        vertexPoints.push_back(cv::Point2f(ptOrig.x - width/2, ptOrig.y - height/2));
-        vertexPoints.push_back(cv::Point2f(ptOrig.x + width/2, ptOrig.y - height/2));
-        vertexPoints.push_back(cv::Point2f(ptOrig.x + width/2, ptOrig.y + height/2));
-        vertexPoints.push_back(cv::Point2f(ptOrig.x - width/2, ptOrig.y + height/2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x - width / 2, ptOrig.y - height / 2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x + width / 2, ptOrig.y - height / 2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x + width / 2, ptOrig.y + height / 2));
+        vertexPoints.push_back(cv::Point2f(ptOrig.x - width / 2, ptOrig.y + height / 2));
         return vertexPoints;
     }
-    
-    std::vector<cv::Point2f> GetVerticesFromTopCorner(int x, int y, int width, int height)
-    {
+
+    std::vector<cv::Point2f> GetVerticesFromTopCorner(int x, int y, int width, int height) {
         std::vector<cv::Point2f> vertexPoints;
         vertexPoints.push_back(cv::Point2f(x, y));
         vertexPoints.push_back(cv::Point2f(x + width, y));
@@ -409,24 +466,210 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return vertexPoints;
     }
 
-    cv::Rect GetTemplateRoi(cv::Point2f pt)
-    {
-        return cv::Rect(pt.x-(markerTemplateWidth/2), pt.y-(markerTemplateWidth/2), markerTemplateWidth, markerTemplateWidth);
+    cv::Rect GetTemplateRoi(cv::Point2f pt) {
+        return cv::Rect(pt.x - (markerTemplateWidth / 2), pt.y - (markerTemplateWidth / 2), markerTemplateWidth,
+                        markerTemplateWidth);
     }
-    
-    bool IsRoiValidForFrame(cv::Rect frameRoi, cv::Rect roi)
-    {
-        return (roi & frameRoi) == roi;
-    }
-    
-    cv::Rect InflateRoi(cv::Rect roi, int inflationFactor)
-    {
+
+    bool IsRoiValidForFrame(cv::Rect frameRoi, cv::Rect roi) { return (roi & frameRoi) == roi; }
+
+    cv::Rect InflateRoi(cv::Rect roi, int inflationFactor) {
         cv::Rect newRoi = roi;
         newRoi.x -= inflationFactor;
         newRoi.y -= inflationFactor;
         newRoi.width += 2 * inflationFactor;
         newRoi.height += 2 * inflationFactor;
         return newRoi;
+    }
+
+    std::vector<cv::Point2f> FloorVertexPoints(std::vector<cv::Point2f> vertexPoints) {
+        std::vector<cv::Point2f> testVertexPoints = vertexPoints;
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        for (int k = 0; k < testVertexPoints.size(); k++) {
+            if (testVertexPoints[k].x < minX) {
+                minX = testVertexPoints[k].x;
+            }
+            if (testVertexPoints[k].y < minY) {
+                minY = testVertexPoints[k].y;
+            }
+        }
+        for (int k = 0; k < testVertexPoints.size(); k++) {
+            testVertexPoints[k].x -= minX;
+            testVertexPoints[k].y -= minY;
+        }
+        return testVertexPoints;
+    }
+
+    cv::Mat MatchTemplateToImage(cv::Mat searchImage, cv::Mat warpedTemplate) {
+        int result_cols = searchImage.cols - warpedTemplate.cols + 1;
+        int result_rows = searchImage.rows - warpedTemplate.rows + 1;
+        if (result_cols > 0 && result_rows > 0) {
+            cv::Mat result;
+            result.create(result_rows, result_cols, CV_32FC1);
+
+            double minVal;
+            double maxVal;
+            minMaxLoc(warpedTemplate, &minVal, &maxVal, 0, 0, cv::Mat());
+
+            cv::Mat normSeatchROI;
+            normalize(searchImage, normSeatchROI, minVal, maxVal, cv::NORM_MINMAX, -1, cv::Mat());
+            /// Do the Matching and Normalize
+            matchTemplate(normSeatchROI, warpedTemplate, result, match_method);
+            return result;
+        } else {
+            // std::cout << "Results image too small" << std::endl;
+            return cv::Mat();
+        }
+    }
+
+    void RunTemplateMatching(cv::Mat frame, int trackableId) {
+        // std::cout << "Starting template match" << std::endl;
+        std::vector<cv::Point2f> finalTemplatePoints, finalTemplateMatchPoints;
+        // Get a handle on the corresponding points from current image and the marker
+        std::vector<cv::Point2f> trackablePoints = _trackables[trackableId]._trackSelection.GetTrackedFeatures();
+        std::vector<cv::Point2f> trackablePointsWarped =
+            _trackables[trackableId]._trackSelection.GetSelectedFeaturesWarped();
+        // Create an empty result image - May be able to pre-initialize this container
+
+        for (int j = 0; j < trackablePointsWarped.size(); j++) {
+            auto pt = trackablePointsWarped[j];
+            if (cv::pointPolygonTest(_trackables[trackableId]._bBoxTransformed, trackablePointsWarped[j], true) > 0) {
+                auto ptOrig = trackablePoints[j];
+
+                cv::Rect templateRoi = GetTemplateRoi(pt);
+                cv::Rect frameROI(0, 0, frame.cols, frame.rows);
+                if (IsRoiValidForFrame(frameROI, templateRoi)) {
+                    cv::Rect markerRoi(0, 0, _trackables[trackableId]._image.cols,
+                                       _trackables[trackableId]._image.rows);
+
+                    std::vector<cv::Point2f> vertexPoints = GetVerticesFromPoint(ptOrig);
+                    std::vector<cv::Point2f> vertexPointsResults;
+                    perspectiveTransform(vertexPoints, vertexPointsResults,
+                                         _trackables[trackableId]._trackSelection.GetHomography());
+
+                    cv::Rect srcBoundingBox = cv::boundingRect(cv::Mat(vertexPointsResults));
+
+                    vertexPoints.clear();
+                    vertexPoints = GetVerticesFromTopCorner(srcBoundingBox.x, srcBoundingBox.y, srcBoundingBox.width,
+                                                            srcBoundingBox.height);
+                    perspectiveTransform(vertexPoints, vertexPointsResults,
+                                         _trackables[trackableId]._trackSelection.GetHomography().inv());
+
+                    std::vector<cv::Point2f> testVertexPoints = FloorVertexPoints(vertexPointsResults);
+                    std::vector<cv::Point2f> finalWarpPoints =
+                        GetVerticesFromTopCorner(0, 0, srcBoundingBox.width, srcBoundingBox.height);
+                    cv::Mat templateHomography =
+                        findHomography(testVertexPoints, finalWarpPoints, cv::RANSAC, ransac_thresh);
+
+                    if (!templateHomography.empty()) {
+                        cv::Rect templateBoundingBox = cv::boundingRect(cv::Mat(vertexPointsResults));
+                        cv::Rect searchROI = InflateRoi(templateRoi, searchRadius);
+                        if (IsRoiValidForFrame(frameROI, searchROI)) {
+                            searchROI = searchROI & frameROI;
+                            templateBoundingBox = templateBoundingBox & markerRoi;
+
+                            if (templateBoundingBox.area() > 0 && searchROI.area() > templateBoundingBox.area()) {
+                                cv::Mat searchImage = frame(searchROI);
+                                cv::Mat templateImage = _trackables[trackableId]._image(templateBoundingBox);
+                                cv::Mat warpedTemplate;
+
+                                warpPerspective(templateImage, warpedTemplate, templateHomography,
+                                                srcBoundingBox.size());
+                                cv::Mat matchResult = MatchTemplateToImage(searchImage, warpedTemplate);
+
+                                if (!matchResult.empty()) {
+                                    double minVal;
+                                    double maxVal;
+                                    cv::Point minLoc, maxLoc, matchLoc;
+                                    minMaxLoc(matchResult, &minVal, &maxVal, &minLoc, &maxLoc, cv::Mat());
+                                    if (minVal < 0.5) {
+                                        matchLoc = minLoc;
+                                        matchLoc.x += searchROI.x + (warpedTemplate.cols / 2);
+                                        matchLoc.y += searchROI.y + (warpedTemplate.rows / 2);
+                                        finalTemplatePoints.push_back(ptOrig);
+                                        finalTemplateMatchPoints.push_back(matchLoc);
+                                    }
+                                }
+                            } else {
+                                // std::cout << "ROIs not good" << std::endl;
+                            }
+                        }
+                    } else {
+                        // std::cout << "Empty homography" << std::endl;
+                    }
+                }
+            }
+        }
+        if (!UpdateTrackableHomography(trackableId, finalTemplatePoints, finalTemplateMatchPoints)) {
+            _trackables[trackableId]._isTracking = false;
+            _trackables[trackableId]._isDetected = false;
+            _currentlyTrackedMarkers--;
+        }
+    }
+
+    void BuildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
+
+    void SwapImagePyramid() { _pyramid.swap(_prevPyramid); }
+
+    void ProcessFrame_w(cv::Mat frame) {
+        // std::cout << "Building pyramid" << std::endl;
+        BuildImagePyramid(frame);
+        // std::cout << "Drawing detected markers to mask" << std::endl;
+        if (CanDetectNewFeatures()) {
+            // std::cout << "Detecting new features" << std::endl;
+            cv::Mat detectionFrame;
+            cv::pyrDown(frame, detectionFrame,
+                        cv::Size(frame.cols / featureDetectPyramidLevel, frame.rows / featureDetectPyramidLevel));
+            cv::Mat featureMask = CreateFeatureMask(detectionFrame);
+            std::vector<cv::KeyPoint> newFrameFeatures = _featureDetectorW.DetectFeatures(detectionFrame, featureMask);
+
+            if (CanMatchNewFeatures(static_cast<int>(newFrameFeatures.size()))) {
+                // std::cout << "Matching new features" << std::endl;
+                cv::Mat newFrameDescriptors = _featureDetectorW.CalcDescriptors(detectionFrame, newFrameFeatures);
+                MatchFeatures(newFrameFeatures, newFrameDescriptors);
+            }
+        }
+        if (_frameCount > 0) {
+            if ((_currentlyTrackedMarkers > 0) && (_prevPyramid.size() > 0)) {
+                // std::cout << "Begin tracking phase" << std::endl;
+                for (int i = 0; i < _trackables.size(); i++) {
+                    if (_trackables[i]._isDetected) {
+                        std::vector<cv::Point2f> trackablePoints = SelectTrackablePoints(i);
+                        std::vector<cv::Point2f> trackablePointsWarped =
+                            _trackables[i]._trackSelection.GetSelectedFeaturesWarped();
+                        // std::cout << "Starting Optical Flow" << std::endl;
+                        RunOpticalFlow(i, trackablePoints, trackablePointsWarped);
+                        if (_trackables[i]._isTracking) {
+                            // Refine optical flow with template match.
+                            RunTemplateMatching(frame, i);
+                        }
+                    }
+                }
+            }
+        }
+        for (auto&& t : _trackables) {
+            if (t._isDetected || t._isTracking) {
+
+                std::vector<cv::Point2f> imgPoints = t._trackSelection.GetSelectedFeaturesWarped();
+                std::vector<cv::Point3f> objPoints = t._trackSelection.GetSelectedFeatures3d();
+
+                CameraPoseFromPoints(t._pose, objPoints, imgPoints);
+            }
+        }
+        SwapImagePyramid();
+        _frameCount++;
+    }
+
+    void CameraPoseFromPoints(cv::Mat& pose, std::vector<cv::Point3f> objPts, std::vector<cv::Point2f> imgPts) {
+        cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
+        cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
+
+        cv::solvePnPRansac(objPts, imgPts, _K, _distortionCoeff, rvec, tvec);
+
+        cv::Mat rMat;
+        Rodrigues(rvec, rMat);
+        cv::hconcat(rMat, tvec, pose);
     }
 
     void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType) {
@@ -454,13 +697,22 @@ WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // mov
 
 void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { _trackerImpl->initialize(trackerType); }
 
+void WebARKitTracker::initialize_w(webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) { _trackerImpl->initialize_w(trackerType, xsize, ysize); }
+
 void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows) {
     _trackerImpl->initTracker(refData, refCols, refRows);
+}
+
+void WebARKitTracker::AddMarker(std::shared_ptr<unsigned char> buff, std::string fileName, int width, int height, int uid, float scale)
+{
+    _trackerImpl->AddMarker(buff, fileName, width, height, uid, scale);
 }
 
 void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
     _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace);
 }
+
+void WebARKitTracker::ProcessFrameData_w(uchar* frameData) { _trackerImpl->ProcessFrameData_w(frameData); }
 
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
 

@@ -4,10 +4,15 @@ extern const double GOOD_MATCH_RATIO = 0.7f;
 extern const int MAX_FEATURES = 8000;
 extern const int N = 10;
 extern const int MIN_NUM_MATCHES = 20;
+extern const int maxLevel = 3; ///< Maximum number of levels in optical flow image pyramid.
+extern const cv::Size subPixWinSize(10,10);
 extern const cv::Size winSize(31,31);
 extern cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
 extern const int MAX_COUNT = 300;
+extern const int searchRadius = 15;
 extern const int minRequiredDetectedFeatures = 50;
+extern const int markerTemplateWidth = 15;
+extern const int match_method = cv::TM_SQDIFF_NORMED;
 extern const int featureDetectPyramidLevel = 2; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
 extern const double nn_match_ratio = 0.8f; ///< Nearest-neighbour matching ratio
 extern const double ransac_thresh = 2.5f; ///< RANSAC inlier threshold
