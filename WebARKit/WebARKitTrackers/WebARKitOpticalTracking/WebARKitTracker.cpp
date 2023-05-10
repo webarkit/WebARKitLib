@@ -1,8 +1,9 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/HarrisDetector.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/TrackableInfo.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
-#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
+
 
 namespace webarkit {
 
@@ -244,6 +245,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     std::vector<cv::KeyPoint> refKeyPts;
 
+    int _frameCount;
+
+    std::vector<cv::Mat> _pyramid, _prevPyramid;
+
     std::vector<TrackableInfo> _trackables;
 
     int _currentlyTrackedMarkers;
@@ -325,6 +330,63 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 _currentlyTrackedMarkers++;
             }
         }
+    }
+
+    std::vector<cv::Point2f> SelectTrackablePoints(int trackableIndex) {
+        if (_trackables[trackableIndex]._resetTracks) {
+            _trackables[trackableIndex]._trackSelection.SelectPoints();
+            _trackables[trackableIndex]._resetTracks = false;
+            return _trackables[trackableIndex]._trackSelection.GetSelectedFeatures();
+        } else {
+            return _trackables[trackableIndex]._trackSelection.GetTrackedFeatures();
+        }
+    }
+
+    void RunOpticalFlow(int trackableId, std::vector<cv::Point2f> trackablePoints,
+                        std::vector<cv::Point2f> trackablePointsWarped) {
+        std::vector<cv::Point2f> flowResultPoints, trackablePointsWarpedResult;
+        std::vector<uchar> statusFirstPass, statusSecondPass;
+        std::vector<float> err;
+        cv::calcOpticalFlowPyrLK(_prevPyramid, _pyramid, trackablePointsWarped, flowResultPoints, statusFirstPass, err,
+                                 winSize, 3, termcrit, 0, 0.001);
+        cv::calcOpticalFlowPyrLK(_pyramid, _prevPyramid, flowResultPoints, trackablePointsWarpedResult,
+                                 statusSecondPass, err, winSize, 3, termcrit, 0, 0.001);
+
+        int killed1 = 0;
+        std::vector<cv::Point2f> filteredTrackablePoints, filteredTrackedPoints;
+        for (auto j = 0; j != flowResultPoints.size(); ++j) {
+            if (!statusFirstPass[j] || !statusSecondPass[j]) {
+                statusFirstPass[j] = (uchar)0;
+                killed1++;
+                continue;
+            }
+            filteredTrackablePoints.push_back(trackablePoints[j]);
+            filteredTrackedPoints.push_back(flowResultPoints[j]);
+        }
+        if (UpdateTrackableHomography(trackableId, filteredTrackablePoints, filteredTrackedPoints)) {
+            _trackables[trackableId]._isTracking = true;
+        } else {
+            _trackables[trackableId]._isDetected = false;
+            _trackables[trackableId]._isTracking = false;
+            _currentlyTrackedMarkers--;
+        }
+    }
+
+    bool UpdateTrackableHomography(int trackableId, std::vector<cv::Point2f> matchedPoints1, std::vector<cv::Point2f> matchedPoints2)
+    {
+        if (matchedPoints1.size()>4) {
+            HomographyInfo homoInfo = GetHomographyInliers(matchedPoints1, matchedPoints2);
+            if (homoInfo.validHomography) {
+                _trackables[trackableId]._trackSelection.UpdatePointStatus(homoInfo.status);
+                _trackables[trackableId]._trackSelection.SetHomography(homoInfo.homography);
+                perspectiveTransform(_trackables[trackableId]._bBox, _trackables[trackableId]._bBoxTransformed, homoInfo.homography);
+                if (_frameCount > 1) {
+                    _trackables[trackableId]._resetTracks = true;
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     void SetFeatureDetector(webarkit::TRACKER_TYPE trackerType) {
