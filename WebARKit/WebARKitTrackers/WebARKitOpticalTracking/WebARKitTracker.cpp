@@ -686,7 +686,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         BuildImagePyramid(frame);
         // std::cout << "Drawing detected markers to mask" << std::endl;
         if (CanDetectNewFeatures()) {
-            // std::cout << "Detecting new features" << std::endl;
+            std::cout << "Detecting new features" << std::endl;
             cv::Mat detectionFrame;
             cv::pyrDown(frame, detectionFrame,
                         cv::Size(frame.cols / featureDetectPyramidLevel, frame.rows / featureDetectPyramidLevel));
@@ -694,7 +694,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             std::vector<cv::KeyPoint> newFrameFeatures = _featureDetectorW.DetectFeatures(detectionFrame, featureMask);
 
             if (CanMatchNewFeatures(static_cast<int>(newFrameFeatures.size()))) {
-                // std::cout << "Matching new features" << std::endl;
+                std::cout << "Matching new features" << std::endl;
                 cv::Mat newFrameDescriptors = _featureDetectorW.CalcDescriptors(detectionFrame, newFrameFeatures);
                 MatchFeatures(newFrameFeatures, newFrameDescriptors);
             }
