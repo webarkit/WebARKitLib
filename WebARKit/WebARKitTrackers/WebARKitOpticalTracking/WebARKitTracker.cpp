@@ -1,3 +1,6 @@
+#include <AR/ar.h>
+#include <AR/config.h>
+#include <WebARKit/WebARKitLog.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/HarrisDetector.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/TrackableInfo.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
@@ -5,6 +8,7 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 
 namespace webarkit {
+static int gCameraID = 0;
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
@@ -14,6 +18,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         _maxNumberOfMarkersToTrack = 1;
         _frameSizeX = 0;
         _frameSizeY = 0;
+        _K = cv::Mat();
+        _distortionCoeff = cv::Mat();
     };
 
     ~WebARKitTrackerImpl() = default;
@@ -28,15 +34,51 @@ class WebARKitTracker::WebARKitTrackerImpl {
         _frameSizeY = ysize;
         SetFeatureDetector(trackerType);
         setDetectorType(trackerType);
+        _K = cv::Mat(3, 3, CV_64FC1);
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                _K.at<double>(i, j) = (double)(m_param.mat[i][j]);
+            }
+        }
+        std::cout << "dist function version: " << m_param.dist_function_version << std::endl;
+        if (m_param.dist_function_version == 5) {
+            // k1,k2,p1,p2,k3,k4,k5,k6,s1,s2,s3,s4.
+            _distortionCoeff = cv::Mat::zeros(12, 1, CV_64F);
+            for (int i = 0; i < 12; i++)
+                _distortionCoeff.at<double>(i) = m_param.dist_factor[i];
+        } else if (m_param.dist_function_version == 4) {
+            _distortionCoeff = cv::Mat::zeros(5, 1, CV_64F);
+            // k1,k2,p1,p2, and k3=0.
+            for (int i = 0; i < 4; i++)
+                _distortionCoeff.at<double>(i) = m_param.dist_factor[i];
+            _distortionCoeff.at<double>(4) = 0.0;
+        } else {
+            ARLOGw("Unsupported camera parameters.\n");
+        }
     }
 
-    void AddMarker(std::shared_ptr<unsigned char> buff, std::string fileName, int width, int height, int uid,
-                   float scale) {
+    int loadARParam(std::string cparam_name, webarkit::TRACKER_TYPE trackerType) {
+        // ARParam param;
+        if (arParamLoad(cparam_name.c_str(), 1, &m_param) < 0) {
+            ARLOGe("loadCamera(): Error loading parameter file %s for camera.", cparam_name.c_str());
+            return -1;
+        }
+        std::cout << "param xsize: " << m_param.xsize << std::endl;
+        std::cout << "dist function version: " << m_param.dist_function_version << std::endl;
+        int cameraID = gCameraID++;
+        cameraParams[cameraID] = m_param;
+
+        initialize_w(trackerType, m_param.xsize, m_param.ysize);
+
+        return cameraID;
+    }
+
+    void AddMarker(uchar* buff, std::string fileName, int width, int height, int uid, float scale) {
         TrackableInfo newTrackable;
         // cv::Mat() wraps `buff` rather than copying it, but this is OK as we share ownership with caller via the
         // shared_ptr.
-        newTrackable._imageBuff = buff;
-        newTrackable._image = cv::Mat(height, width, CV_8UC1, buff.get());
+        // newTrackable._imageBuff = buff;
+        newTrackable._image = cv::Mat(height, width, CV_8UC1, buff);
         if (!newTrackable._image.empty()) {
             newTrackable._id = uid;
             newTrackable._fileName = fileName;
@@ -58,9 +100,32 @@ class WebARKitTracker::WebARKitTrackerImpl {
                                                                  newTrackable._height, markerTemplateWidth);
 
             _trackables.push_back(newTrackable);
-            std::cout << "Marker added." << std::endl;
+            std::cout << "2D Marker added." << std::endl;
             // ARLOGi("2D marker added.\n");
         }
+    }
+
+    bool GetTrackablePose(int trackableId, float transMat[3][4]) {
+        auto t = std::find_if(_trackables.begin(), _trackables.end(),
+                              [&](const TrackableInfo& e) { return e._id == trackableId; });
+        if (t != _trackables.end()) {
+            cv::Mat poseOut;
+            t->_pose.convertTo(poseOut, CV_32FC1);
+            // std::cout << "poseOut" << std::endl;
+            // std::cout << poseOut << std::endl;
+            memcpy(transMat, poseOut.ptr<float>(0), 3 * 4 * sizeof(float));
+            return true;
+        }
+        return false;
+    }
+
+    bool IsTrackableVisible(int trackableId) {
+        auto t = std::find_if(_trackables.begin(), _trackables.end(),
+                              [&](const TrackableInfo& e) { return e._id == trackableId; });
+        if (t != _trackables.end()) {
+            return (t->_isDetected || t->_isTracking);
+        }
+        return false;
     }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
@@ -279,6 +344,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
   private:
     int _maxNumberOfMarkersToTrack;
+
+    std::unordered_map<int, ARParam> cameraParams;
+
+    ARParam m_param;
 
     std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
 
@@ -665,6 +734,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
         cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
 
+        // to compute the transformation matrix we need kc and dist coefficients from Camera !!
         cv::solvePnPRansac(objPts, imgPts, _K, _distortionCoeff, rvec, tvec);
 
         cv::Mat rMat;
@@ -697,16 +767,27 @@ WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // mov
 
 void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { _trackerImpl->initialize(trackerType); }
 
-void WebARKitTracker::initialize_w(webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) { _trackerImpl->initialize_w(trackerType, xsize, ysize); }
+void WebARKitTracker::initialize_w(webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) {
+    _trackerImpl->initialize_w(trackerType, xsize, ysize);
+}
 
 void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows) {
     _trackerImpl->initTracker(refData, refCols, refRows);
 }
 
-void WebARKitTracker::AddMarker(std::shared_ptr<unsigned char> buff, std::string fileName, int width, int height, int uid, float scale)
-{
+void WebARKitTracker::loadARParam(std::string paramName, webarkit::TRACKER_TYPE trackerType) {
+    _trackerImpl->loadARParam(paramName, trackerType);
+}
+
+void WebARKitTracker::AddMarker(uchar* buff, std::string fileName, int width, int height, int uid, float scale) {
     _trackerImpl->AddMarker(buff, fileName, width, height, uid, scale);
 }
+
+bool WebARKitTracker::GetTrackablePose(int trackableId, float transMat[3][4]) {
+    return _trackerImpl->GetTrackablePose(trackableId, transMat);
+}
+
+bool WebARKitTracker::IsTrackableVisible(int trackableId) { return _trackerImpl->IsTrackableVisible(trackableId); }
 
 void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
     _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace);

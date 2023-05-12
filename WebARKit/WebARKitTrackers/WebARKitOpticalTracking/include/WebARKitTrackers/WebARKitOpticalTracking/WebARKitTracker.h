@@ -26,7 +26,13 @@ class WebARKitTracker {
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows);
 
-    void AddMarker(std::shared_ptr<unsigned char> buff, std::string fileName, int width, int height, int uid, float scale);
+    void loadARParam(std::string paramName, webarkit::TRACKER_TYPE trackerType);
+
+    void AddMarker(uchar* buff, std::string fileName, int width, int height, int uid, float scale);
+
+    bool GetTrackablePose(int trackableId, float transMat[3][4]);
+
+    bool IsTrackableVisible(int trackableId);
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
 
