@@ -26,7 +26,7 @@ class WebARKitTracker {
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows);
 
-    void loadARParam(std::string paramName, webarkit::TRACKER_TYPE trackerType);
+    void loadARParam(std::string paramName, webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize);
 
     void AddMarker(uchar* buff, std::string fileName, int width, int height, int uid, float scale);
 
@@ -36,7 +36,7 @@ class WebARKitTracker {
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
 
-    void ProcessFrameData_w(uchar* frameData);
+    void ProcessFrameData_w(uchar* frame);
 
     std::vector<double> getOutputData();
 

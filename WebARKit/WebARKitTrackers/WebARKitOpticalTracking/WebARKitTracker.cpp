@@ -8,14 +8,17 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 
 namespace webarkit {
-static int gCameraID = 0;
+//static int gCameraID = 0;
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
-        : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _currentlyTrackedMarkers(0) {
-        _featureDetectorW = WebARKitFeatureDetector();
+        : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0)
+        {
         _maxNumberOfMarkersToTrack = 1;
+        _featureDetectorW = WebARKitFeatureDetector();
+        _currentlyTrackedMarkers = 0;
+        //_maxNumberOfMarkersToTrack = 1;
         _frameSizeX = 0;
         _frameSizeY = 0;
         _K = cv::Mat();
@@ -57,20 +60,23 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
     }
 
-    int loadARParam(std::string cparam_name, webarkit::TRACKER_TYPE trackerType) {
+    int loadARParam(std::string cparam_name, webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) {
         // ARParam param;
         if (arParamLoad(cparam_name.c_str(), 1, &m_param) < 0) {
             ARLOGe("loadCamera(): Error loading parameter file %s for camera.", cparam_name.c_str());
             return -1;
         }
-        std::cout << "param xsize: " << m_param.xsize << std::endl;
-        std::cout << "dist function version: " << m_param.dist_function_version << std::endl;
-        int cameraID = gCameraID++;
-        cameraParams[cameraID] = m_param;
+        //std::cout << "param xsize: " << m_param.xsize << std::endl;
+        //std::cout << "dist function version: " << m_param.dist_function_version << std::endl;
+        //int cameraID = gCameraID++;
+        //cameraParams[cameraID] = m_param;
 
-        initialize_w(trackerType, m_param.xsize, m_param.ysize);
+        initialize_w(trackerType, xsize, ysize);
 
-        return cameraID;
+        //initialize_w(trackerType, m_param.xsize, m_param.ysize);
+
+        //return cameraID;
+        return 1;
     }
 
     void AddMarker(uchar* buff, std::string fileName, int width, int height, int uid, float scale) {
@@ -160,7 +166,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         grayFrame.release();
     };
 
-    void ProcessFrameData_w(unsigned char* frame) {
+    void ProcessFrameData_w(uchar* frame) {
         // Just wraps `frame` rather than copying it, i.e. `frame` must remain valid
         // for the duration of the call.
         cv::Mat newFrame(_frameSizeY, _frameSizeX, CV_8UC1, frame);
@@ -400,7 +406,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return featureMask;
     }
 
-    bool CanDetectNewFeatures() { return (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack); }
+    //bool CanDetectNewFeatures() { return (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack); }
+    bool CanDetectNewFeatures() { return true; }
 
     bool CanMatchNewFeatures(int detectedFeaturesSize) { return (detectedFeaturesSize > minRequiredDetectedFeatures); }
 
@@ -410,6 +417,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         std::vector<cv::KeyPoint> finalMatched1, finalMatched2;
         for (int i = 0; i < _trackables.size(); i++) {
             if (!_trackables[i]._isDetected) {
+                std::cout << "trackable to match" << std::endl;
                 std::vector<std::vector<cv::DMatch>> matches =
                     _featureDetectorW.MatchFeatures(newFrameDescriptors, _trackables[i]._descriptors);
                 if (matches.size() > minRequiredDetectedFeatures) {
@@ -445,7 +453,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
             HomographyInfo homoInfo = GetHomographyInliers(Points(finalMatched2), Points(finalMatched1));
             if (homoInfo.validHomography) {
-                // std::cout << "New marker detected" << std::endl;
+                std::cout << "New marker detected" << std::endl;
                 _trackables[bestMatchIndex]._trackSelection.SelectPoints();
                 _trackables[bestMatchIndex]._trackSelection.SetHomography(homoInfo.homography);
                 _trackables[bestMatchIndex]._isDetected = true;
@@ -570,7 +578,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return testVertexPoints;
     }
 
-    cv::Mat MatchTemplateToImage(cv::Mat searchImage, cv::Mat warpedTemplate) {
+    cv::Mat MatchTemplateToImage(cv::Mat& searchImage, cv::Mat& warpedTemplate) {
         int result_cols = searchImage.cols - warpedTemplate.cols + 1;
         int result_rows = searchImage.rows - warpedTemplate.rows + 1;
         if (result_cols > 0 && result_rows > 0) {
@@ -592,7 +600,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
     }
 
-    void RunTemplateMatching(cv::Mat frame, int trackableId) {
+    void RunTemplateMatching(cv::Mat& frame, int trackableId) {
         // std::cout << "Starting template match" << std::endl;
         std::vector<cv::Point2f> finalTemplatePoints, finalTemplateMatchPoints;
         // Get a handle on the corresponding points from current image and the marker
@@ -677,14 +685,16 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
     }
 
-    void BuildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
+    void BuildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
     void SwapImagePyramid() { _pyramid.swap(_prevPyramid); }
 
-    void ProcessFrame_w(cv::Mat frame) {
+    void ProcessFrame_w(cv::Mat& frame) {
         // std::cout << "Building pyramid" << std::endl;
         BuildImagePyramid(frame);
         // std::cout << "Drawing detected markers to mask" << std::endl;
+        std::cout << "Currently tracked markers: " <<  _currentlyTrackedMarkers << std::endl;
+        std::cout << "Max n. markers 2 track: " << _maxNumberOfMarkersToTrack << std::endl;
         if (CanDetectNewFeatures()) {
             std::cout << "Detecting new features" << std::endl;
             cv::Mat detectionFrame;
@@ -701,13 +711,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
         if (_frameCount > 0) {
             if ((_currentlyTrackedMarkers > 0) && (_prevPyramid.size() > 0)) {
-                // std::cout << "Begin tracking phase" << std::endl;
+                std::cout << "Begin tracking phase" << std::endl;
                 for (int i = 0; i < _trackables.size(); i++) {
                     if (_trackables[i]._isDetected) {
                         std::vector<cv::Point2f> trackablePoints = SelectTrackablePoints(i);
                         std::vector<cv::Point2f> trackablePointsWarped =
                             _trackables[i]._trackSelection.GetSelectedFeaturesWarped();
-                        // std::cout << "Starting Optical Flow" << std::endl;
+                        std::cout << "Starting Optical Flow" << std::endl;
                         RunOpticalFlow(i, trackablePoints, trackablePointsWarped);
                         if (_trackables[i]._isTracking) {
                             // Refine optical flow with template match.
@@ -775,8 +785,8 @@ void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows
     _trackerImpl->initTracker(refData, refCols, refRows);
 }
 
-void WebARKitTracker::loadARParam(std::string paramName, webarkit::TRACKER_TYPE trackerType) {
-    _trackerImpl->loadARParam(paramName, trackerType);
+void WebARKitTracker::loadARParam(std::string paramName, webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) {
+    _trackerImpl->loadARParam(paramName, trackerType, xsize, ysize);
 }
 
 void WebARKitTracker::AddMarker(uchar* buff, std::string fileName, int width, int height, int uid, float scale) {
