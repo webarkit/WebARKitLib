@@ -46,11 +46,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
   protected:
     bool resetTracking(cv::Mat& currIm) {
         if (!initialized) {
-            std::cout << "Reference image not found. AR is unintialized!" << std::endl;
+            WEBARKIT_LOGe("Reference image not found. AR is unintialized!\n");
             return NULL;
         }
 
-        std::cout << "Reset Tracking!" << std::endl;
+        WEBARKIT_LOGi("Reset Tracking!\n");
 
         clear_output();
 
@@ -81,7 +81,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 numMatches = framePts.size();
 
                 if (currIm.empty()) {
-                    std::cout << "prevIm is empty!" << std::endl;
+                    WEBARKIT_LOGe("prevIm is empty!\n");
                     return NULL;
                 }
                 currIm.copyTo(prevIm);
@@ -93,16 +93,16 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     bool track(cv::Mat& currIm) {
         if (!initialized) {
-            std::cout << "Reference image not found. AR is unintialized!" << std::endl;
+            WEBARKIT_LOGe("Reference image not found. AR is unintialized!\n");
             return NULL;
         }
 
         if (prevIm.empty()) {
-            std::cout << "Tracking is uninitialized!" << std::endl;
+            WEBARKIT_LOGe("Tracking is uninitialized!\n");
             return NULL;
         }
 
-        std::cout << "Start tracking!" << std::endl;
+        WEBARKIT_LOGi("Start tracking!\n");
         clear_output();
 
         // use optical flow to track keypoints
