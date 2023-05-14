@@ -16,7 +16,7 @@ extern const int MIN_NUM_MATCHES;
 extern const int maxLevel; ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size subPixWinSize;
 extern const cv::Size winSize;
-extern cv::TermCriteria termcrit;
+extern const cv::TermCriteria termcrit;
 extern const int MAX_COUNT;
 extern const int searchRadius;
 extern const int minRequiredDetectedFeatures;

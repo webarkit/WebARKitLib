@@ -7,7 +7,7 @@ extern const int MIN_NUM_MATCHES = 20;
 extern const int maxLevel = 3; ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size subPixWinSize(10,10);
 extern const cv::Size winSize(31,31);
-extern cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
+extern const cv::TermCriteria termcrit(cv::TermCriteria::COUNT|cv::TermCriteria::EPS,20,0.03);
 extern const int MAX_COUNT = 300;
 extern const int searchRadius = 15;
 extern const int minRequiredDetectedFeatures = 50;

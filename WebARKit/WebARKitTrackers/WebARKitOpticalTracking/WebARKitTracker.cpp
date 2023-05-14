@@ -124,6 +124,17 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return false;
     }
 
+    float* GetTrackablePosePtr(int trackableId) {
+        auto t = std::find_if(_trackables.begin(), _trackables.end(),
+                              [&](const TrackableInfo& e) { return e._id == trackableId; });
+        if (t != _trackables.end()) {
+            cv::Mat poseOut;
+            t->_pose.convertTo(poseOut, CV_32FC1);
+            return poseOut.ptr<float>(0);
+        }
+        return nullptr;
+    }
+
     bool IsTrackableVisible(int trackableId) {
         auto t = std::find_if(_trackables.begin(), _trackables.end(),
                               [&](const TrackableInfo& e) { return e._id == trackableId; });
@@ -793,6 +804,10 @@ void WebARKitTracker::AddMarker(uchar* buff, std::string fileName, int width, in
 
 bool WebARKitTracker::GetTrackablePose(int trackableId, float transMat[3][4]) {
     return _trackerImpl->GetTrackablePose(trackableId, transMat);
+}
+
+float* WebARKitTracker::GetTrackablePosePtr(int trackableId) {
+    return _trackerImpl->GetTrackablePosePtr(trackableId);
 }
 
 bool WebARKitTracker::IsTrackableVisible(int trackableId) { return _trackerImpl->IsTrackableVisible(trackableId); }

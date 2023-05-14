@@ -32,6 +32,8 @@ class WebARKitTracker {
 
     bool GetTrackablePose(int trackableId, float transMat[3][4]);
 
+    float* GetTrackablePosePtr(int trackableId);
+
     bool IsTrackableVisible(int trackableId);
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
