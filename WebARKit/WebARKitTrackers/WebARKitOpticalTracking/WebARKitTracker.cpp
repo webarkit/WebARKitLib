@@ -15,10 +15,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0)
         {
-        _maxNumberOfMarkersToTrack = 1;
         _featureDetectorW = WebARKitFeatureDetector();
         _currentlyTrackedMarkers = 0;
-        //_maxNumberOfMarkersToTrack = 1;
         _frameSizeX = 0;
         _frameSizeY = 0;
         _K = cv::Mat();
@@ -28,13 +26,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType) {
-        SetFeatureDetector(trackerType);
+        //SetFeatureDetector(trackerType);
         setDetectorType(trackerType);
     }
 
     void initialize_w(webarkit::TRACKER_TYPE trackerType, size_t xsize, size_t ysize) {
         _frameSizeX = xsize;
         _frameSizeY = ysize;
+        _maxNumberOfMarkersToTrack = 1;
         SetFeatureDetector(trackerType);
         setDetectorType(trackerType);
         _K = cv::Mat(3, 3, CV_64FC1);
@@ -406,8 +405,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return featureMask;
     }
 
-    //bool CanDetectNewFeatures() { return (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack); }
-    bool CanDetectNewFeatures() { return true; }
+    bool CanDetectNewFeatures() { return (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack); }
 
     bool CanMatchNewFeatures(int detectedFeaturesSize) { return (detectedFeaturesSize > minRequiredDetectedFeatures); }
 
