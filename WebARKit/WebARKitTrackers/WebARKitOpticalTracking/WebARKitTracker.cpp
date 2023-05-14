@@ -11,7 +11,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
     void initialize(webarkit::TRACKER_TYPE trackerType) { setDetectorType(trackerType); }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
-        std::cout << "Init Tracker!" << std::endl;
+        WEBARKIT_LOGi("Init Tracker!\n");
         cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
 
         this->_featureDetector->detectAndCompute(refGray, cv::noArray(), refKeyPts, refDescr);
@@ -23,7 +23,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         initialized = true;
 
-        std::cout << "Tracker ready!" << std::endl;
+        WEBARKIT_LOGi("Tracker ready!\n");
     };
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
