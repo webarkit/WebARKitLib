@@ -12,9 +12,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
         WEBARKIT_LOGi("Init Tracker!\n");
+
         cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
 
-        this->_featureDetector->detectAndCompute(refGray, cv::noArray(), refKeyPts, refDescr);
+        this->_featureDetector->detect(refGray, refKeyPts, cv::noArray());
+        this->_featureDescriptor->compute(refGray, refKeyPts, refDescr);
 
         corners[0] = cvPoint(0, 0);
         corners[1] = cvPoint(refCols, 0);
@@ -57,7 +59,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
 
-        this->_featureDetector->detectAndCompute(currIm, cv::noArray(), frameKeyPts, frameDescr);
+        this->_featureDetector->detect(currIm, frameKeyPts, cv::noArray());
+        this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
 
         std::vector<std::vector<cv::DMatch>> knnMatches;
         _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
@@ -218,6 +221,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     cv::Ptr<cv::Feature2D> _featureDetector;
 
+    cv::Ptr<cv::Feature2D> _featureDescriptor;
+
     cv::Ptr<cv::BFMatcher> _matcher;
 
     cv::Mat refGray, refDescr;
@@ -227,8 +232,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
         if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
             this->_featureDetector = cv::AKAZE::create();
+            this->_featureDescriptor = cv::AKAZE::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::ORB_TRACKER) {
             this->_featureDetector = cv::ORB::create(MAX_FEATURES);
+            this->_featureDescriptor = cv::ORB::create(MAX_FEATURES);
         }
         _matcher = cv::BFMatcher::create();
     };
