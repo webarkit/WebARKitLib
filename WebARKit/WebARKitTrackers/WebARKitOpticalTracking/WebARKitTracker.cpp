@@ -6,7 +6,8 @@ namespace webarkit {
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
-        : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _nn_match_ratio(0.7f){};
+        : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
+          _nn_match_ratio(0.7f){};
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType) {
@@ -30,6 +31,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
         corners[1] = cvPoint(refCols, 0);
         corners[2] = cvPoint(refCols, refRows);
         corners[3] = cvPoint(0, refRows);
+
+        _bBox.push_back(cv::Point2f(0, 0));
+        _bBox.push_back(cv::Point2f(refCols, 0));
+        _bBox.push_back(cv::Point2f((refCols, refRows)));
+        _bBox.push_back(cv::Point2f(0, refRows));
 
         initialized = true;
 
@@ -68,31 +74,36 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
-
-        this->_featureDetector->detect(currIm, frameKeyPts, cv::noArray());
-        this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
-
-        std::vector<std::vector<cv::DMatch>> knnMatches;
-        _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
-
-        framePts.clear();
-        std::vector<cv::Point2f> refPts;
-
-        // find the best matches
-        for (size_t i = 0; i < knnMatches.size(); ++i) {
-            if (knnMatches[i][0].distance < _nn_match_ratio * knnMatches[i][1].distance) {
-                framePts.push_back(frameKeyPts[knnMatches[i][0].queryIdx].pt);
-                refPts.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
-            }
-        }
-
         bool valid;
 
-        if (framePts.size() >= MIN_NUM_MATCHES) {
-            m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
-            if ((valid = homographyValid(m_H))) {
-                numMatches = framePts.size();
-                swapImagePyramid();
+        cv::Mat featureMask = createFeatureMask(currIm);
+
+        this->_featureDetector->detect(currIm, frameKeyPts, featureMask);
+        this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
+
+        if (!_isDetected) {
+            std::vector<std::vector<cv::DMatch>> knnMatches;
+            _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
+
+            framePts.clear();
+            std::vector<cv::Point2f> refPts;
+
+            // find the best matches
+            for (size_t i = 0; i < knnMatches.size(); ++i) {
+                if (knnMatches[i][0].distance < _nn_match_ratio * knnMatches[i][1].distance) {
+                    framePts.push_back(frameKeyPts[knnMatches[i][0].queryIdx].pt);
+                    refPts.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
+                }
+            }
+
+            if (framePts.size() >= MIN_NUM_MATCHES) {
+                m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
+                if ((valid = homographyValid(m_H))) {
+                    _isDetected = true;
+                    numMatches = framePts.size();
+                    perspectiveTransform(_bBox, _bBoxTransformed, m_H);
+                    swapImagePyramid();
+                }
             }
         }
 
@@ -158,6 +169,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
             framePts = goodPtsCurr;
             if ((valid = homographyValid(m_H))) {
                 fill_output(m_H);
+                _isDetected = true;
+            } else {
+                _isDetected = false;
             }
         }
 
@@ -212,7 +226,26 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
 
+    cv::Mat createFeatureMask(cv::Mat frame) {
+        cv::Mat featureMask;
+        if (_isDetected) {
+            if (featureMask.empty()) {
+                // Only create mask if we have something to draw in it.
+                featureMask = cv::Mat::ones(frame.size(), CV_8UC1);
+            }
+            std::vector<std::vector<cv::Point>> contours(1);
+            for (int j = 0; j < 4; j++) {
+                contours[0].push_back(cv::Point(_bBoxTransformed[j].x / featureDetectPyramidLevel,
+                                                _bBoxTransformed[j].y / featureDetectPyramidLevel));
+            }
+            drawContours(featureMask, contours, 0, cv::Scalar(0), -1, 8);
+        }
+        return featureMask;
+    }
+
     bool _valid;
+
+    bool _isDetected;
 
     std::vector<cv::Point2f> corners;
 
@@ -244,6 +277,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
     double _nn_match_ratio;
 
     std::vector<cv::Mat> _pyramid, _prevPyramid;
+
+    std::vector<cv::Point2f> _bBoxTransformed;
+
+    std::vector<cv::Point2f> _bBox;
 
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
         _trackerType = trackerType;
