@@ -5,11 +5,12 @@ namespace webarkit {
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
-    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _nn_match_ratio(0.7f) {};
+    WebARKitTrackerImpl()
+        : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _nn_match_ratio(0.7f){};
     ~WebARKitTrackerImpl() = default;
 
-    void initialize(webarkit::TRACKER_TYPE trackerType) { 
-        setDetectorType(trackerType); 
+    void initialize(webarkit::TRACKER_TYPE trackerType) {
+        setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
         } else {
@@ -44,6 +45,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         } else if (colorSpace == ColorSpace::GRAY) {
             grayFrame = cv::Mat(frameRows, frameCols, CV_8UC1, frameData);
         }
+        cv::blur(grayFrame, grayFrame, blurSize);
+        buildImagePyramid(grayFrame);
         processFrame(grayFrame);
         grayFrame.release();
     };
@@ -89,25 +92,20 @@ class WebARKitTracker::WebARKitTrackerImpl {
             m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
             if ((valid = homographyValid(m_H))) {
                 numMatches = framePts.size();
-
-                if (currIm.empty()) {
-                    WEBARKIT_LOGe("prevIm is empty!\n");
-                    return NULL;
-                }
-                currIm.copyTo(prevIm);
+                swapImagePyramid();
             }
         }
 
         return valid;
     };
 
-    bool track(cv::Mat& currIm) {
+    bool track() {
         if (!initialized) {
             WEBARKIT_LOGe("Reference image not found. AR is unintialized!\n");
             return NULL;
         }
 
-        if (prevIm.empty()) {
+        if (_prevPyramid.empty()) {
             WEBARKIT_LOGe("Tracking is uninitialized!\n");
             return NULL;
         }
@@ -120,7 +118,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         std::vector<uchar> status;
         std::vector<cv::Point2f> currPts, goodPtsCurr, goodPtsPrev;
         bool valid;
-        calcOpticalFlowPyrLK(prevIm, currIm, framePts, currPts, status, err);
+        calcOpticalFlowPyrLK(_prevPyramid, _pyramid, framePts, currPts, status, err, winSize, maxLevel, termcrit, 0,
+                             0.001);
 
         // calculate average variance
         double mean, avg_variance = 0.0;
@@ -162,7 +161,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             }
         }
 
-        currIm.copyTo(prevIm);
+        swapImagePyramid();
 
         return valid;
     };
@@ -171,7 +170,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         if (!this->_valid) {
             this->_valid = resetTracking(frame);
         } else {
-            this->_valid = track(frame);
+            this->_valid = track();
         }
     };
 
@@ -209,6 +208,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     void clear_output() { output = std::vector<double>(17, 0.0); };
 
+    void buildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
+
+    void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
+
     bool _valid;
 
     std::vector<cv::Point2f> corners;
@@ -240,6 +243,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     double _nn_match_ratio;
 
+    std::vector<cv::Mat> _pyramid, _prevPyramid;
+
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
         _trackerType = trackerType;
         if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
@@ -261,11 +266,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
 WebARKitTracker::WebARKitTracker() : _trackerImpl(new WebARKitTrackerImpl()) {}
 
-WebARKitTracker::~WebARKitTracker() = default; //destructor
+WebARKitTracker::~WebARKitTracker() = default; // destructor
 
-WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; //copy constructor
+WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; // copy constructor
 
-WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; //move assignment operator
+WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // move assignment operator
 
 void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { _trackerImpl->initialize(trackerType); }
 

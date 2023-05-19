@@ -1,9 +1,21 @@
 #ifndef WEBARKIT_CONFIG_H
 #define WEBARKIT_CONFIG_H
+
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/core/types_c.h>
+#include <opencv2/features2d.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/opencv.hpp>
+
 extern const double DEFAULT_NN_MATCH_RATIO;
 extern const double TEBLID_NN_MATCH_RATIO;
 extern const int DEFAULT_MAX_FEATURES;
 extern const int TEBLID_MAX_FEATURES;
 extern const int N;
 extern const int MIN_NUM_MATCHES;
+extern const int maxLevel;  ///< Maximum number of levels in optical flow image pyramid.
+extern const cv::Size winSize;
+extern const cv::TermCriteria termcrit;
+extern const cv::Size blurSize;
 #endif
