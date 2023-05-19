@@ -5,10 +5,17 @@ namespace webarkit {
 
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
-    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0){};
+    WebARKitTrackerImpl() : corners(4), initialized(false), output(17, 0.0), _valid(false), numMatches(0), _nn_match_ratio(0.7f) {};
     ~WebARKitTrackerImpl() = default;
 
-    void initialize(webarkit::TRACKER_TYPE trackerType) { setDetectorType(trackerType); }
+    void initialize(webarkit::TRACKER_TYPE trackerType) { 
+        setDetectorType(trackerType); 
+        if (trackerType == webarkit::TEBLID_TRACKER) {
+            _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
+        } else {
+            _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
+        }
+    }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
         WEBARKIT_LOGi("Init Tracker!\n");
@@ -70,7 +77,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         // find the best matches
         for (size_t i = 0; i < knnMatches.size(); ++i) {
-            if (knnMatches[i][0].distance < GOOD_MATCH_RATIO * knnMatches[i][1].distance) {
+            if (knnMatches[i][0].distance < _nn_match_ratio * knnMatches[i][1].distance) {
                 framePts.push_back(frameKeyPts[knnMatches[i][0].queryIdx].pt);
                 refPts.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
             }
@@ -229,13 +236,24 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     std::vector<cv::KeyPoint> refKeyPts;
 
+    webarkit::TRACKER_TYPE _trackerType;
+
+    double _nn_match_ratio;
+
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
+        _trackerType = trackerType;
         if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
             this->_featureDetector = cv::AKAZE::create();
             this->_featureDescriptor = cv::AKAZE::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::ORB_TRACKER) {
-            this->_featureDetector = cv::ORB::create(MAX_FEATURES);
-            this->_featureDescriptor = cv::ORB::create(MAX_FEATURES);
+            this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
+            this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
+        } else if (trackerType == webarkit::TRACKER_TYPE::FREAK_TRACKER) {
+            this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
+            this->_featureDescriptor = cv::xfeatures2d::FREAK::create();
+        } else if (trackerType == webarkit::TRACKER_TYPE::TEBLID_TRACKER) {
+            this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
+            this->_featureDescriptor = cv::xfeatures2d::TEBLID::create(1.00f);
         }
         _matcher = cv::BFMatcher::create();
     };

@@ -9,6 +9,7 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/Xfeatures2d.hpp>
 
 namespace webarkit {
 
