@@ -24,7 +24,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
 
-        this->_featureDetector->detect(refGray, refKeyPts, cv::noArray());
+        cv::Mat trackerFeatureMask = createTrackerFeatureMask(refGray);
+
+        this->_featureDetector->detect(refGray, refKeyPts, trackerFeatureMask);
         this->_featureDescriptor->compute(refGray, refKeyPts, refDescr);
 
         corners[0] = cvPoint(0, 0);
@@ -81,6 +83,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         this->_featureDetector->detect(currIm, frameKeyPts, featureMask);
         this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
 
+        WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
+
         if (!_isDetected) {
             std::vector<std::vector<cv::DMatch>> knnMatches;
             _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
@@ -95,6 +99,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
                     refPts.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
                 }
             }
+
+            WEBARKIT_LOG("Num Matches: %d\n", framePts.size());
 
             if (framePts.size() >= MIN_NUM_MATCHES) {
                 m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
@@ -220,18 +226,34 @@ class WebARKitTracker::WebARKitTrackerImpl {
         output[16] = warped[3].y;
     };
 
-    void clear_output() { output = std::vector<double>(17, 0.0); };
+    void clear_output() {
+        output = std::vector<double>(17, 0.0);
+        _isDetected = false;
+    };
 
     void buildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
+
+    cv::Mat createTrackerFeatureMask(cv::Mat frame) {
+        cv::Mat featureMask;
+        if (featureMask.empty()) {
+            // Only create mask if we have something to draw in it.
+            featureMask = cv::Mat::zeros(frame.size(), frame.type());
+        }
+        cv::Rect innerRegion(featureBorder, featureBorder, frame.cols - (featureBorder * 2),
+                             frame.rows - (featureBorder * 2));
+        cv::Mat maskRoi(featureMask, innerRegion);
+        maskRoi.setTo(cv::Scalar(255));
+        return featureMask;
+    }
 
     cv::Mat createFeatureMask(cv::Mat frame) {
         cv::Mat featureMask;
         if (_isDetected) {
             if (featureMask.empty()) {
                 // Only create mask if we have something to draw in it.
-                featureMask = cv::Mat::ones(frame.size(), CV_8UC1);
+                featureMask = cv::Mat::ones(frame.size(), frame.type());
             }
             std::vector<std::vector<cv::Point>> contours(1);
             for (int j = 0; j < 4; j++) {

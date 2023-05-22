@@ -17,6 +17,7 @@ extern const int MIN_NUM_MATCHES;
 extern const int maxLevel;  ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size winSize;
 extern const cv::TermCriteria termcrit;
-extern const int featureDetectPyramidLevel; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
+extern const double featureDetectPyramidLevel; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
+extern const int featureBorder;
 extern const cv::Size blurSize;
 #endif
