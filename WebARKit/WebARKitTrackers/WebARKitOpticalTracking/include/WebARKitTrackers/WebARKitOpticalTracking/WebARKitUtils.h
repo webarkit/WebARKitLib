@@ -12,7 +12,7 @@ namespace webarkit {
         }                                                                                                              \
     }
 
-static auto im_gray(uchar* data, size_t cols, size_t rows) {
+/*static auto im_gray(uchar* data, size_t cols, size_t rows) {
     uint32_t idx;
     uchar gray[rows][cols];
     for (int i = 0; i < rows; ++i) {
@@ -31,7 +31,7 @@ static auto im_gray(uchar* data, size_t cols, size_t rows) {
     }
 
     return cv::Mat(rows, cols, CV_8UC1, gray);
-}
+}*/
 
 static cv::Mat grayscale(uchar data[], size_t cols, size_t rows, ColorSpace colorType) {
     int cn;
