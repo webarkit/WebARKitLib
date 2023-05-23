@@ -1,8 +1,18 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
+#include <iostream>
 
 namespace webarkit {
 
-static cv::Mat im_gray(uchar data[], size_t cols, size_t rows) {
+#define arMalloc(V, T, S)                                                                                              \
+    {                                                                                                                  \
+        if (((V) = (T*)malloc(sizeof(T) * (S))) == NULL) {                                                             \
+            std::cout << "Out of memory!!" << std::endl;                                                               \
+            exit(1);                                                                                                   \
+        }                                                                                                              \
+    }
+
+static auto im_gray(uchar* data, size_t cols, size_t rows) {
     uint32_t idx;
     uchar gray[rows][cols];
     for (int i = 0; i < rows; ++i) {
@@ -53,6 +63,27 @@ static cv::Mat grayscale(uchar data[], size_t cols, size_t rows, ColorSpace colo
         q += cn;
     }
     return cv::Mat(cols, rows, CV_8UC1, gray.data());
+}
+
+unsigned int webarkitGetVersion(char** versionStringRef) {
+    const char* version = WEBARKIT_HEADER_VERSION_STRING.c_str();
+    char* s;
+
+    if (versionStringRef) {
+        arMalloc(s, char, sizeof(version));
+        strncpy(s, version, sizeof(version));
+        *versionStringRef = s;
+    }
+    // Represent full version number (major, minor, tiny, build) in
+    // binary coded decimal. N.B: Integer division.
+    return (0x10000000u * ((unsigned int)WEBARKIT_HEADER_VERSION_MAJOR / 10u) +
+            0x01000000u * ((unsigned int)WEBARKIT_HEADER_VERSION_MAJOR % 10u) +
+            0x00100000u * ((unsigned int)WEBARKIT_HEADER_VERSION_MINOR / 10u) +
+            0x00010000u * ((unsigned int)WEBARKIT_HEADER_VERSION_MINOR % 10u) +
+            0x00001000u * ((unsigned int)WEBARKIT_HEADER_VERSION_TINY / 10u) +
+            0x00000100u * ((unsigned int)WEBARKIT_HEADER_VERSION_TINY % 10u) +
+            0x00000010u * ((unsigned int)WEBARKIT_HEADER_VERSION_DEV / 10u) +
+            0x00000001u * ((unsigned int)WEBARKIT_HEADER_VERSION_DEV % 10u));
 }
 
 } // namespace webarkit
