@@ -36,7 +36,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         _bBox.push_back(cv::Point2f(0, 0));
         _bBox.push_back(cv::Point2f(refCols, 0));
-        _bBox.push_back(cv::Point2f((refCols, refRows)));
+        _bBox.push_back(cv::Point2f(refCols, refRows));
         _bBox.push_back(cv::Point2f(0, refRows));
 
         initialized = true;
@@ -100,7 +100,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 }
             }
 
-            WEBARKIT_LOG("Num Matches: %d\n", framePts.size());
+            WEBARKIT_LOG("Num Matches: %zu\n", framePts.size());
 
             if (framePts.size() >= MIN_NUM_MATCHES) {
                 m_H = cv::findHomography(refPts, framePts, cv::RANSAC);

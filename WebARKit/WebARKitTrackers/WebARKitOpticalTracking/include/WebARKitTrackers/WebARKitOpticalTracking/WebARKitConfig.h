@@ -20,4 +20,9 @@ extern const cv::TermCriteria termcrit;
 extern const double featureDetectPyramidLevel; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
 extern const int featureBorder;
 extern const cv::Size blurSize;
+extern const std::string WEBARKIT_HEADER_VERSION_STRING;
+extern const int WEBARKIT_HEADER_VERSION_MAJOR;
+extern const int WEBARKIT_HEADER_VERSION_MINOR;
+extern const int WEBARKIT_HEADER_VERSION_TINY;
+extern const int WEBARKIT_HEADER_VERSION_DEV;
 #endif
