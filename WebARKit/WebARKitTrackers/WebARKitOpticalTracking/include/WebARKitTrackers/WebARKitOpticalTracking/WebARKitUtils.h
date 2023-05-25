@@ -1,16 +1,11 @@
+#ifndef WEBARKIT_UTILS_H
+#define WEBARKIT_UTILS_H
+
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 #include <iostream>
 
 namespace webarkit {
-
-#define arMalloc(V, T, S)                                                                                              \
-    {                                                                                                                  \
-        if (((V) = (T*)malloc(sizeof(T) * (S))) == NULL) {                                                             \
-            std::cout << "Out of memory!!" << std::endl;                                                               \
-            exit(1);                                                                                                   \
-        }                                                                                                              \
-    }
 
 /*static auto im_gray(uchar* data, size_t cols, size_t rows) {
     uint32_t idx;
@@ -65,15 +60,13 @@ static cv::Mat grayscale(uchar data[], size_t cols, size_t rows, ColorSpace colo
     return cv::Mat(cols, rows, CV_8UC1, gray.data());
 }
 
-unsigned int webarkitGetVersion(char** versionStringRef) {
-    const char* version = WEBARKIT_HEADER_VERSION_STRING.c_str();
-    char* s;
+unsigned int inline webarkitGetVersion(char** versionStringRef) {
+    std::string version = WEBARKIT_HEADER_VERSION_STRING;
 
     if (versionStringRef) {
-        arMalloc(s, char, sizeof(version));
-        strncpy(s, version, sizeof(version));
-        *versionStringRef = s;
+        *versionStringRef = version.data();
     }
+
     // Represent full version number (major, minor, tiny, build) in
     // binary coded decimal. N.B: Integer division.
     return (0x10000000u * ((unsigned int)WEBARKIT_HEADER_VERSION_MAJOR / 10u) +
@@ -87,3 +80,5 @@ unsigned int webarkitGetVersion(char** versionStringRef) {
 }
 
 } // namespace webarkit
+
+#endif // WEBARKIT_UTILS_H
