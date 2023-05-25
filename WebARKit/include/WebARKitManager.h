@@ -55,7 +55,8 @@ class WebARKitManager {
 
     WebARKitState state; ///< Current state of operation, progress through initialisation
     char* versionString;
-    std::shared_ptr<WebARKitTracker> m_Tracker;
+    std::shared_ptr<WebARKitTracker> m_tracker;
+    webarkit::TRACKER_TYPE m_trackerType;
 
   public:
     WebARKitManager();
@@ -71,13 +72,17 @@ class WebARKitManager {
      * Start trackable management so trackables can be added and removed.
      * @return       true if initialisation was OK, false if an error occured.
      */
-    bool initialiseBase();
+    bool initialiseBase(webarkit::TRACKER_TYPE trackerType);
 
-    std::shared_ptr<webarkit::WebARKitTracker> getTracker() { return m_Tracker; };
+    std::shared_ptr<webarkit::WebARKitTracker> getTracker() { return m_tracker; };
+
+    bool initTracker(uchar* refData, size_t refCols, size_t refRows);
 
     bool update();
 
     void setLogLevel(int logLevel);
+
+    bool shutdown() {};
 };
 
 } // namespace webarkit
