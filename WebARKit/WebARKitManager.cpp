@@ -51,4 +51,16 @@ bool WebARKitManager::initTracker(uchar* refData, size_t refCols, size_t refRows
     return true;
 }
 
+void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
+  m_tracker->processFrameData(frameData, frameCols, frameRows, colorSpace);
+}
+
+std::vector<double> WebARKitManager::getOutputData() {
+    return m_tracker->getOutputData();
+};
+
+bool WebARKitManager::isValid() {
+  return m_tracker->isValid();
+}
+
 } // namespace webarkit
