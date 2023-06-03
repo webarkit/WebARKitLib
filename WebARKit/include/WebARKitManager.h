@@ -83,6 +83,12 @@ class WebARKitManager {
     void setLogLevel(int logLevel);
 
     bool shutdown() {};
+
+    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
+
+    std::vector<double> getOutputData();
+
+    bool isValid();
 };
 
 } // namespace webarkit
