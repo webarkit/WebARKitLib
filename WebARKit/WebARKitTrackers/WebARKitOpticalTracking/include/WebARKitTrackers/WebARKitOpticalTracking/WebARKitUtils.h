@@ -64,7 +64,7 @@ unsigned int inline webarkitGetVersion(char** versionStringRef) {
     std::string version = WEBARKIT_HEADER_VERSION_STRING;
 
     if (versionStringRef) {
-        *versionStringRef = version.data();
+        *versionStringRef = (char*)version.data();
     }
 
     // Represent full version number (major, minor, tiny, build) in
