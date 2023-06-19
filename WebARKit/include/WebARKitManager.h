@@ -59,7 +59,14 @@ class WebARKitManager {
     webarkit::TRACKER_TYPE m_trackerType;
 
   public:
+    /**
+     * Constructor.
+     */
     WebARKitManager();
+
+    /**
+     * Destructor.
+     */
     ~WebARKitManager();
 
     /**
@@ -74,6 +81,10 @@ class WebARKitManager {
      */
     bool initialiseBase(webarkit::TRACKER_TYPE trackerType);
 
+    /**
+     * Return the current tracker object.
+     * @return  the WebARKitTracker object.
+     */
     std::shared_ptr<webarkit::WebARKitTracker> getTracker() { return m_tracker; };
 
     bool initTracker(uchar* refData, size_t refCols, size_t refRows);
@@ -82,7 +93,7 @@ class WebARKitManager {
 
     void setLogLevel(int logLevel);
 
-    bool shutdown() {};
+    bool shutdown();
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
 
