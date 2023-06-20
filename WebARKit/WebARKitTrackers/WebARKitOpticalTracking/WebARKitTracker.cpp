@@ -7,15 +7,20 @@ class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
-          _nn_match_ratio(0.7f){};
+          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f){};
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType) {
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
+        }
+        else if(trackerType == webarkit::AKAZE_TRACKER) {
+            _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
+            minNumMatches = 40;
         } else {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
+            minNumMatches = 15;
         }
     }
 
@@ -102,7 +107,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
             WEBARKIT_LOG("Num Matches: %zu\n", framePts.size());
 
-            if (framePts.size() >= MIN_NUM_MATCHES) {
+            if (framePts.size() >= minNumMatches) {
                 m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
                 if ((valid = homographyValid(m_H))) {
                     _isDetected = true;
@@ -277,6 +282,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     int numMatches;
 
+    int minNumMatches;
+
     std::vector<cv::Point2f> framePts;
 
     bool initialized;
@@ -313,7 +320,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
             this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
         } else if (trackerType == webarkit::TRACKER_TYPE::FREAK_TRACKER) {
-            this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
+            this->_featureDetector = cv::ORB::create(10000);
+            //this->_featureDetector = cv::xfeatures2d::StarDetector::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::FREAK::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::TEBLID_TRACKER) {
             this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
