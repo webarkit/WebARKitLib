@@ -4,10 +4,20 @@ project(WebARKitLib)
 
 set(CMAKE_CXX_STANDARD 14)
 
-message(STATUS "CMAKE_CURRENT_LIST_DIR: ${CMAKE_CURRENT_LIST_DIR}")
-message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
-
 include(FetchContent)
+
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_opencv_dnn OFF)
+set(BUILD_opencv_highgui OFF)
+set(BUILD_opencv_ml OFF)
+set(BUILD_opencv_objdetect OFF)
+set(BUILD_opencv_gapi OFF)
+set(BUILD_opencv_photo OFF)
+set(BUILD_opencv_stitching OFF)
+set(BUILD_opencv_ts OFF)
+set(BUILD_opencv_videoio OFF)
+set(BUILD_opencv_python2 OFF)
+set(BUILD_opencv_python3 OFF)
 
 FetchContent_Declare(
   opencv
@@ -16,9 +26,6 @@ FetchContent_Declare(
   GIT_SHALLOW TRUE
   GIT_PROGRESS TRUE
 )
-
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" INTERNAL)
-message("BUILD_SHARED_LIBS: ${BUILD_SHARED_LIBS}")
 
 FetchContent_MakeAvailable(opencv)
 
@@ -55,9 +62,6 @@ target_include_directories(WebARKitLib PRIVATE "${PARENT_DIR}/WebARKitTrackers/W
 target_include_directories(WebARKitLib PRIVATE "${OPENCV_CONTRIB_DIR}/modules/xfeatures2d/include")
 target_include_directories(WebARKitLib PRIVATE "${OPENCV_JS_DIR}")
 
-message(STATUS "OPENCV_CONFIG_FILE_INCLUDE_DIR: ${OPENCV_CONFIG_FILE_INCLUDE_DIR}")
-message(STATUS "OPENCV_INCLUDE_DIR: ${OPENCV_INCLUDE_DIR}")
-
 target_include_directories(WebARKitLib PRIVATE
         ${OPENCV_CONFIG_FILE_INCLUDE_DIR}
         ${OPENCV_INCLUDE_DIR}
@@ -70,15 +74,4 @@ target_include_directories(WebARKitLib PRIVATE
         ${OPENCV_MODULE_opencv_video_LOCATION}/include
         )
 
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/calib3d/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/core/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/features2d/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/flann/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/imgproc/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/imgcodecs/include")
-#target_include_directories(WebARKitLib PRIVATE "${OPENCV_DIR}/modules/video/include")
-
 target_link_libraries(WebARKitLib STATIC opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video)
-
-#target_link_libraries(WebARKitLib "${OPENCV_JS_DIR}/lib/*.a")
