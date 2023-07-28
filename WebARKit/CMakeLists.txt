@@ -19,6 +19,38 @@ set(BUILD_opencv_videoio OFF)
 set(BUILD_opencv_python2 OFF)
 set(BUILD_opencv_python3 OFF)
 
+set(BUILD_opencv_dnn_plugins OFF)
+set(BUILD_opencv_highgui_plugins OFF)
+set(BUILD_opencv_videoio_plugins OFF)
+set(BUILD_opencv_intensity_transform OFF)
+set(BUILD_opencv_phase_unwrapping OFF)
+set(BUILD_opencv_plot OFF)
+set(BUILD_opencv_reg OFF)
+set(BUILD_opencv_surface_matching OFF)
+set(BUILD_opencv_bioinspired OFF)
+set(BUILD_opencv_fuzzy OFF)
+set(BUILD_opencv_hfs OFF)
+set(BUILD_opencv_img_hash OFF)
+set(BUILD_opencv_line_descriptor OFF)
+set(BUILD_opencv_saliency OFF)
+set(BUILD_opencv_rapid OFF)
+set(BUILD_opencv_rgbd OFF)
+set(BUILD_opencv_shape OFF)
+set(BUILD_opencv_rapid OFF)
+set(BUILD_opencv_structured_light OFF)
+
+set(BUILD_opencv_xfeatures2d ON)
+
+set(BUILD_opencv_ximgproc OFF)
+set(BUILD_opencv_bgsegm OFF)
+set(BUILD_opencv_optflow OFF)
+set(BUILD_opencv_opencv_superres OFF)
+set(BUILD_opencv_tracking OFF)
+set(BUILD_opencv_stereo OFF)
+set(BUILD_opencv_version OFF)
+
+set(OPENCV_EXTRA_MODULES_PATH ../opencv_contrib-src/modules/)
+
 FetchContent_Declare(
   opencv
   GIT_REPOSITORY https://github.com/webarkit/opencv.git
@@ -27,7 +59,15 @@ FetchContent_Declare(
   GIT_PROGRESS TRUE
 )
 
-FetchContent_MakeAvailable(opencv)
+FetchContent_Declare(
+  opencv_contrib
+  GIT_REPOSITORY https://github.com/webarkit/opencv_contrib.git
+  GIT_TAG 5438f53d81e1c1137258e18308ebf3f4daa2f2ff
+  GIT_SHALLOW TRUE
+  GIT_PROGRESS TRUE
+)
+
+FetchContent_MakeAvailable(opencv opencv_contrib)
 
 get_filename_component(PARENT_DIR ./ ABSOLUTE)
 get_filename_component(OPENCV_DIR ../../../opencv/ ABSOLUTE)
@@ -59,7 +99,6 @@ add_library(
 
 target_include_directories(WebARKitLib PRIVATE "${PARENT_DIR}/include")
 target_include_directories(WebARKitLib PRIVATE "${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include")
-target_include_directories(WebARKitLib PRIVATE "${OPENCV_CONTRIB_DIR}/modules/xfeatures2d/include")
 target_include_directories(WebARKitLib PRIVATE "${OPENCV_JS_DIR}")
 
 target_include_directories(WebARKitLib PRIVATE
@@ -72,6 +111,7 @@ target_include_directories(WebARKitLib PRIVATE
         ${OPENCV_MODULE_opencv_imgproc_LOCATION}/include
         ${OPENCV_MODULE_opencv_imgcodecs_LOCATION}/include
         ${OPENCV_MODULE_opencv_video_LOCATION}/include
+        ${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
         )
 
-target_link_libraries(WebARKitLib STATIC opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video)
+target_link_libraries(WebARKitLib STATIC opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video opencv_xfeatures2d)
