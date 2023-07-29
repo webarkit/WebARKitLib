@@ -16,6 +16,8 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
+add_subdirectory(../WebARKit ../WebARKit/build)
+
 add_executable(
   hello_test
   hello_test.cc
@@ -42,41 +44,13 @@ target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/imgproc/inc
 target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/imgcodecs/include")
 target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/video/include")
 
-set(WEBARKIT_HEADERS
-${PARENT_DIR}/WebARKit/include/WebARKitManager.h)
-
-set(SOURCE 
+set(hello_test 
 ${PARENT_DIR}/WebARKit/WebARKitManager.cpp
-)
-
-add_library(
-  WEBARKIT STATIC
-  ${WEBARKIT_HEADERS}
-  ${SOURCE}
-)
-
-target_include_directories(WEBARKIT PRIVATE "${PARENT_DIR}/WebARKit/include")
-target_include_directories(WEBARKIT PRIVATE "${PARENT_DIR}/WebARKit/WebARKitTrackers/WebARKitOpticalTracking/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_CONTRIB_DIR}/modules/xfeatures2d/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_JS_DIR}")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/calib3d/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/core/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/features2d/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/flann/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/imgproc/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/imgcodecs/include")
-target_include_directories(WEBARKIT PRIVATE "${OPENCV_DIR}/modules/video/include")
-
-
-target_link_libraries(WEBARKIT
-    INTERFACE
 )
 
 target_link_libraries(
   hello_test
-  ${WEBARKIT}
-  libWEBARKIT
+  WebARKitLib
   GTest::gtest_main
 )
 
