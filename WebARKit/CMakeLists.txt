@@ -114,4 +114,4 @@ target_include_directories(WebARKitLib PRIVATE
         ${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
         )
 
-target_link_libraries(WebARKitLib STATIC opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video opencv_xfeatures2d)
+target_link_libraries(WebARKitLib opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video opencv_xfeatures2d)
