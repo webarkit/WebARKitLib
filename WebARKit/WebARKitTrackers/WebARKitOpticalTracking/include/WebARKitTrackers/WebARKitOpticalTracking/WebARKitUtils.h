@@ -60,11 +60,15 @@ static cv::Mat grayscale(uchar data[], size_t cols, size_t rows, ColorSpace colo
     return cv::Mat(cols, rows, CV_8UC1, gray.data());
 }
 
+std::string inline webarkitGetVersion() {
+    return WEBARKIT_HEADER_VERSION_STRING;
+}
+
 unsigned int inline webarkitGetVersion(char** versionStringRef) {
     std::string version = WEBARKIT_HEADER_VERSION_STRING;
 
     if (versionStringRef) {
-        *versionStringRef = (char*)version.data();
+        *versionStringRef = const_cast<char*>(version.data());
     }
 
     // Represent full version number (major, minor, tiny, build) in
