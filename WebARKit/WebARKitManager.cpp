@@ -2,18 +2,19 @@
 
 namespace webarkit {
 
-WebARKitManager::WebARKitManager() : state(NOTHING_INITIALISED), versionString(NULL) {}
+WebARKitManager::WebARKitManager() : state(NOTHING_INITIALISED), versionString("?"), m_trackerType(webarkit::AKAZE_TRACKER) {}
 
 WebARKitManager::~WebARKitManager() {
-    if (versionString) {
-        free(versionString);
-        versionString = NULL;
+    if (!versionString.empty()) {
+        versionString.clear();
     }
 }
 
-const char* WebARKitManager::getWebARKitVersion() {
-    if (!versionString)
-        webarkit::webarkitGetVersion(&versionString);
+std::string WebARKitManager::getWebARKitVersion() {
+    if (versionString.empty()) {
+        versionString = webarkitGetVersion();
+        WEBARKIT_LOGi("Webarkit C++ lib version: %s.\n", versionString);
+    }
     return versionString;
 }
 
@@ -26,14 +27,12 @@ bool WebARKitManager::initialiseBase(webarkit::TRACKER_TYPE trackerType) {
         }
     }
 
-    char* versionString = NULL;
-    webarkitGetVersion(&versionString);
-    WEBARKIT_LOGi("Webarkit C++ lib v%s initalised.\n", versionString);
-    free(versionString);
+    versionString = webarkitGetVersion();
+    WEBARKIT_LOGi("Webarkit C++ lib v%s initalised.\n", versionString.c_str());
 
     m_trackerType = trackerType;
 
-    m_tracker = std::shared_ptr<webarkit::WebARKitTracker>(new webarkit::WebARKitTracker);
+    m_tracker = std::make_shared<webarkit::WebARKitTracker>();
     m_tracker->initialize(m_trackerType);
 
     state = BASE_INITIALISED;
