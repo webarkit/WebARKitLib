@@ -33,16 +33,18 @@ get_filename_component(OPENCV_CONTRIB_DIR ../../../opencv_contrib/ ABSOLUTE)
 
 target_include_directories(hello_test PRIVATE "${PARENT_DIR}/WebARKit/include")
 target_include_directories(hello_test PRIVATE "${PARENT_DIR}/WebARKit/WebARKitTrackers/WebARKitOpticalTracking/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_CONTRIB_DIR}/modules/xfeatures2d/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_JS_DIR}")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/calib3d/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/core/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/features2d/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/flann/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/imgproc/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/imgcodecs/include")
-target_include_directories(hello_test PRIVATE "${OPENCV_DIR}/modules/video/include")
+target_include_directories(hello_test PRIVATE
+        ${OPENCV_CONFIG_FILE_INCLUDE_DIR}
+        ${OPENCV_INCLUDE_DIR}
+        ${OPENCV_MODULE_opencv_calib3d_LOCATION}/include
+        ${OPENCV_MODULE_opencv_core_LOCATION}/include
+        ${OPENCV_MODULE_opencv_features2d_LOCATION}/include
+        ${OPENCV_MODULE_opencv_flann_LOCATION}/include
+        ${OPENCV_MODULE_opencv_imgproc_LOCATION}/include
+        ${OPENCV_MODULE_opencv_imgcodecs_LOCATION}/include
+        ${OPENCV_MODULE_opencv_video_LOCATION}/include
+        ${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
+        )
 
 set(hello_test 
 ${PARENT_DIR}/WebARKit/WebARKitManager.cpp
