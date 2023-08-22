@@ -68,7 +68,7 @@ inline void webarkitLogv(const char *tag, const int logLevel, const char *format
   }
 
   std::vsnprintf(buf.data() + logLevelStringLen, len + 1, format, ap);
-  va_end(ap);
+  //va_end(ap);
   len += logLevelStringLen;
 
   std::fprintf(stderr, "%s\n", buf.data());
