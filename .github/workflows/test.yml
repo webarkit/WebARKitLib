@@ -11,8 +11,10 @@ jobs:
           with:
             node-version: '16.x'
         - name: create and enter in the build directory
-          run: cd tests && mkdir build && cd build
+          run: |
+              cd tests && mkdir build && cd build
         - name: Build
           run: cmake ..
         - name: Test
-          run: cd bin/Debug && ./webarkit_test.exe
+          run: |
+              cd bin/Debug && ./webarkit_test.exe
