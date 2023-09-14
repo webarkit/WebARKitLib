@@ -69,11 +69,11 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(opencv opencv_contrib)
 
-get_filename_component(PARENT_DIR ./ ABSOLUTE)
-get_filename_component(OPENCV_DIR ../../../opencv/ ABSOLUTE)
-get_filename_component(OPENCV_JS_DIR ../../../opencv_js/ ABSOLUTE)
-get_filename_component(OPENCV_CONTRIB_DIR ../../../opencv_contrib/ ABSOLUTE)
+set(OPENCV_EXTRA_MODULES_PATH ../${opencv_contrib_SOURCE_DIR}/modules/)
 
+set(BUILD_opencv_xfeatures2d ON)
+
+get_filename_component(PARENT_DIR ./ ABSOLUTE)
 
 set(WEBARKIT_HEADERS
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h
@@ -99,7 +99,6 @@ add_library(
 
 target_include_directories(WebARKitLib PRIVATE "${PARENT_DIR}/include")
 target_include_directories(WebARKitLib PRIVATE "${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include")
-target_include_directories(WebARKitLib PRIVATE "${OPENCV_JS_DIR}")
 
 target_include_directories(WebARKitLib PRIVATE
         ${OPENCV_CONFIG_FILE_INCLUDE_DIR}
