@@ -49,7 +49,7 @@ set(BUILD_opencv_tracking OFF)
 set(BUILD_opencv_stereo OFF)
 set(BUILD_opencv_version OFF)
 
-set(OPENCV_EXTRA_MODULES_PATH ../${opencv_contrib_SOURCE_DIR}/modules/)
+set(OPENCV_EXTRA_MODULES_PATH ${opencv_contrib_SOURCE_DIR}/modules/)
 
 FetchContent_Declare(
   opencv
@@ -69,7 +69,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(opencv opencv_contrib)
 
-set(OPENCV_EXTRA_MODULES_PATH ../${opencv_contrib_SOURCE_DIR}/modules/)
+set(OPENCV_EXTRA_MODULES_PATH ${opencv_contrib_SOURCE_DIR}/modules/)
 
 set(BUILD_opencv_xfeatures2d ON)
 
