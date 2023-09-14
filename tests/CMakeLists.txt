@@ -23,13 +23,7 @@ add_executable(
   webarkit_test.cc
 )
 
-message(STATUS "CMAKE_CURRENT_LIST_DIR: ${CMAKE_CURRENT_LIST_DIR}")
-message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
-
 get_filename_component(PARENT_DIR ../ ABSOLUTE)
-get_filename_component(OPENCV_DIR ../../../opencv/ ABSOLUTE)
-get_filename_component(OPENCV_JS_DIR ../../../opencv_js/ ABSOLUTE)
-get_filename_component(OPENCV_CONTRIB_DIR ../../../opencv_contrib/ ABSOLUTE)
 
 target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/include")
 target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/WebARKitTrackers/WebARKitOpticalTracking/include")
