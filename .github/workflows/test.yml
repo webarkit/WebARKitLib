@@ -1,0 +1,18 @@
+name: WebARKitLib test
+
+on: push
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v3
+        - name: Setup Node.js
+          uses: actions/setup-node@v3
+          with:
+            node-version: '16.x'
+        - name: enter in the build directotry
+          run: cd tests/build
+        - name: Build
+          run: cmake ..
+        - name: Test
+          run: cd build/bin/Debug && ./webarkit_test.exe
