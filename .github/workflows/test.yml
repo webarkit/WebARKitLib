@@ -10,9 +10,9 @@ jobs:
           uses: actions/setup-node@v3
           with:
             node-version: '16.x'
-        - name: enter in the build directotry
-          run: cd tests/build
+        - name: create and enter in the build directory
+          run: cd tests && mkdir build && cd build
         - name: Build
           run: cmake ..
         - name: Test
-          run: cd build/bin/Debug && ./webarkit_test.exe
+          run: cd bin/Debug && ./webarkit_test.exe
