@@ -24,6 +24,7 @@ add_executable(
 )
 
 get_filename_component(PARENT_DIR ../ ABSOLUTE)
+message("opencv contrib source dir: ${PARENT_DIR}/WebARKit/build/_deps/opencv_contrib-src/modules/xfeatures2d/include")
 
 target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/include")
 target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/WebARKitTrackers/WebARKitOpticalTracking/include")
@@ -38,7 +39,7 @@ target_include_directories(webarkit_test PRIVATE
         ${OPENCV_MODULE_opencv_imgcodecs_LOCATION}/include
         ${OPENCV_MODULE_opencv_video_LOCATION}/include
         ${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
-        ${opencv_contrib_SOURCE_DIR}/modules/xfeatures2d/include
+        ${PARENT_DIR}/WebARKit/build/_deps/opencv_contrib-src/modules/xfeatures2d/include
         )
 
 set(webarkit_test 
