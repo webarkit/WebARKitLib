@@ -40,9 +40,9 @@ set(BUILD_opencv_rapid OFF)
 set(BUILD_opencv_structured_light OFF)
 set(BUILD_opencv_java OFF)
 
-set(BUILD_opencv_xfeatures2d ON)
-set(BUILD_opencv_contrib ON)
-set(OPENCV_ENABLE_NONFREE ON)
+#set(BUILD_opencv_xfeatures2d ON)
+#set(BUILD_opencv_contrib ON)
+#set(OPENCV_ENABLE_NONFREE ON)
 
 set(BUILD_opencv_ximgproc OFF)
 set(BUILD_opencv_bgsegm OFF)
@@ -52,7 +52,7 @@ set(BUILD_opencv_tracking OFF)
 set(BUILD_opencv_stereo OFF)
 set(BUILD_opencv_version OFF)
 
-set(OPENCV_EXTRA_MODULES_PATH ${opencv_contrib_SOURCE_DIR}/modules/)
+set(OPENCV_EXTRA_MODULES_PATH ${opencv_contrib_SOURCE_DIR}/modules)
 
 FetchContent_Declare(
   opencv
@@ -71,8 +71,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(opencv opencv_contrib)
-
-#set(OPENCV_EXTRA_MODULES_PATH ${opencv_contrib_SOURCE_DIR}/modules/)
+set(OPENCV_EXTRA_MODULES_PATH ${opencv_contrib_SOURCE_DIR}/modules)
 
 #set(BUILD_opencv_xfeatures2d ON)
 
@@ -113,8 +112,8 @@ target_include_directories(WebARKitLib PRIVATE
         ${OPENCV_MODULE_opencv_imgproc_LOCATION}/include
         ${OPENCV_MODULE_opencv_imgcodecs_LOCATION}/include
         ${OPENCV_MODULE_opencv_video_LOCATION}/include
-        ${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
+        #${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
         ${opencv_contrib_SOURCE_DIR}/modules/xfeatures2d/include
         )
 
-target_link_libraries(WebARKitLib opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video opencv_xfeatures2d)
+target_link_libraries(WebARKitLib opencv_calib3d opencv_core opencv_features2d opencv_flann opencv_imgproc opencv_imgcodecs opencv_video)
