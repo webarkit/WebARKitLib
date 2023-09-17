@@ -39,7 +39,7 @@ target_include_directories(webarkit_test PRIVATE
         ${OPENCV_MODULE_opencv_imgproc_LOCATION}/include
         ${OPENCV_MODULE_opencv_imgcodecs_LOCATION}/include
         ${OPENCV_MODULE_opencv_video_LOCATION}/include
-        ${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
+        #${OPENCV_MODULE_opencv_xfeatures2d_LOCATION}/include
         ${PARENT_DIR}/tests/build/_deps/opencv_contrib-src/modules/xfeatures2d/include
         )
 
