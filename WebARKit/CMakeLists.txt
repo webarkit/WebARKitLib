@@ -4,6 +4,8 @@ project(WebARKitLib)
 
 set(CMAKE_CXX_STANDARD 14)
 
+cmake_policy(SET CMP0135 NEW)
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -14,8 +16,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(build_opencv)
 
 get_filename_component(PARENT_DIR ./ ABSOLUTE)
-
-#set( BUILD_WASM build_wasm )
 
 set(WEBARKIT_HEADERS
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h
