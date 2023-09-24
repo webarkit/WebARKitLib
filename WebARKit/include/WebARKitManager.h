@@ -54,7 +54,7 @@ class WebARKitManager {
     } WebARKitState;
 
     WebARKitState state; ///< Current state of operation, progress through initialisation
-    char* versionString;
+    std::string versionString;
     std::shared_ptr<WebARKitTracker> m_tracker;
     webarkit::TRACKER_TYPE m_trackerType;
 
@@ -71,9 +71,9 @@ class WebARKitManager {
 
     /**
      * Returns a string containing the WebARKit version, such as "1.0.0".
-     * @return		The WebARKit version
+     * @return		The WebARKit version as a std::string
      */
-    const char* getWebARKitVersion();
+    std::string getWebARKitVersion();
 
     /**
      * Start trackable management so trackables can be added and removed.

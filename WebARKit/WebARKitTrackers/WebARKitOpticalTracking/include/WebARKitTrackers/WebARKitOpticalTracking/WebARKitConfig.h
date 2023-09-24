@@ -6,7 +6,7 @@
 #include <opencv2/core/types_c.h>
 #include <opencv2/features2d.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/opencv.hpp>
+#include <opencv2/video/tracking.hpp>
 
 extern const double DEFAULT_NN_MATCH_RATIO;
 extern const double TEBLID_NN_MATCH_RATIO;

@@ -3,7 +3,7 @@
 
 #include "WebARKitEnums.h"
 #include <WebARKitLog.h>
-#include <opencv2/Xfeatures2d.hpp>
+#include <opencv2/xfeatures2d.hpp>
 
 namespace webarkit {
 
