@@ -4,6 +4,8 @@ project(Webarkit_tests)
 # GoogleTest requires at least C++14
 set(CMAKE_CXX_STANDARD 14)
 
+cmake_policy(SET CMP0135 NEW)
+
 # Fetch googletest v1.13.0  commit b796f7d44681514f58a683a3a71ff17c94edb0c1
 include(FetchContent)
 FetchContent_Declare(
@@ -30,7 +32,6 @@ add_executable(
 )
 
 get_filename_component(PARENT_DIR ../ ABSOLUTE)
-get_filename_component(TEST_DIR ./ ABSOLUTE)
 
 target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/include")
 target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/WebARKitTrackers/WebARKitOpticalTracking/include")
@@ -62,11 +63,8 @@ target_link_libraries(
   "${build_opencv_SOURCE_DIR}/lib/libopencv_video.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_xfeatures2d.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_imgproc.a"
-  #"${build_opencv_SOURCE_DIR}/lib/libopencv_video.a"
-  #"${build_opencv_SOURCE_DIR}/3rdparty/lib/libzlib.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_core.a"
   "${build_opencv_SOURCE_DIR}/3rdparty/lib/libzlib.a"
-  #"${build_opencv_SOURCE_DIR}/lib/libopencv_xfeatures2d.a"
   GTest::gtest_main
 )
 
