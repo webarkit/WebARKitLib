@@ -12,4 +12,4 @@ jobs:
             node-version: '16.x'
         - name: Build and test WebARKitLib
           run: |
-              cd tests && mkdir build && cd build && cmake .. && make && cd bin/Debug && ./webarkit_test.exe
+              cd tests && mkdir build && cd build && cmake .. && make && ./webarkit_test
