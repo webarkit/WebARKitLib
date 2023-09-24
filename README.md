@@ -1,3 +1,7 @@
+
+![github releases](https://flat.badgen.net/github/release/webarkit/WebARKitLib)
+![github stars](https://flat.badgen.net/github/stars/webarkit/WebARKitLib)
+![github forks](https://flat.badgen.net/github/forks/webarkit/WebARKitLib)[![Test](https://github.com/webarkit/WebARKitLib/actions/workflows/test.yml/badge.svg)](https://github.com/webarkit/WebARKitLib/actions/workflows/test.yml)
 # WebARKitLib
 
 The C/C++ source code of WebARKit, from Artoolkit5 and extended.
