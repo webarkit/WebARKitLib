@@ -4,14 +4,25 @@ project(WebARKitLib)
 
 set(CMAKE_CXX_STANDARD 14)
 
-cmake_policy(SET CMP0135 NEW)
+if(VERSION GREATER 3.24)
+  cmake_policy(SET CMP0135 NEW)
+endif()
 
 include(FetchContent)
 
-FetchContent_Declare(
-  build_opencv
-  URL https://github.com/webarkit/opencv-em/releases/download/0.1.0/opencv-4.7.0.zip
-)
+if(${EMSCRIPTEN_COMP} EQUAL 1)
+  message("Fetching opencv for emscripten compilation from webarkit/opencv-em ...")
+  FetchContent_Declare(
+    build_opencv
+    URL https://github.com/webarkit/opencv-em/releases/download/0.1.0/opencv-js-4.7.0-emcc-3.1.26.zip
+  )
+else()
+  message("Fetching opencv from webarkit/opencv-em ...")
+  FetchContent_Declare(
+    build_opencv
+    URL https://github.com/webarkit/opencv-em/releases/download/0.1.0/opencv-4.7.0.zip
+  )
+endif()
 
 FetchContent_MakeAvailable(build_opencv)
 
