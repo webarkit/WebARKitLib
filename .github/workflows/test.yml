@@ -18,6 +18,6 @@ jobs:
              cd ..
              ls
              docker run -dit --name emscripten-webarkit-testing -v $(pwd):/src emscripten/emsdk:3.1.26 bash
-             docker exec emscripten-webarkit-testing emcmake cmake -B WebARKit/build -S WebARKit -DEMSCRIPTEN_COMP=1 ..
-             docker exec emscripten-webarkit-testing emmake make -C WebARKit/build
+             docker exec emscripten-webarkit-testing emcmake cmake -B WebARKitLib/WebARKit/build -S WebARKitLib/WebARKit -DEMSCRIPTEN_COMP=1 ..
+             docker exec emscripten-webarkit-testing emmake make -C WebARKitLib/WebARKit/build
               
