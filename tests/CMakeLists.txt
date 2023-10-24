@@ -43,6 +43,7 @@ target_include_directories(webarkit_test PRIVATE
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/core/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/features2d/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/flann/include"
+        "${build_opencv_SOURCE_DIR}/libs/opencv/modules/imgcodecs/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/imgproc/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/video/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv_contrib/modules/xfeatures2d/include"
@@ -60,10 +61,12 @@ target_link_libraries(
   "${build_opencv_SOURCE_DIR}/lib/libopencv_calib3d.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_features2d.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_flann.a"
+  "${build_opencv_SOURCE_DIR}/lib/libopencv_imgcodecs.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_video.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_xfeatures2d.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_imgproc.a"
   "${build_opencv_SOURCE_DIR}/lib/libopencv_core.a"
+  "${build_opencv_SOURCE_DIR}/3rdparty/lib/liblibopenjp2.a"
   "${build_opencv_SOURCE_DIR}/3rdparty/lib/libzlib.a"
   GTest::gtest_main
 )
