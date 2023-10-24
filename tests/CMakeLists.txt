@@ -17,7 +17,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   build_opencv
-  URL https://github.com/webarkit/opencv-em/releases/download/0.1.0/opencv-4.7.0.zip
+  URL https://github.com/webarkit/opencv-em/releases/download/0.1.1/opencv-4.7.0.zip
 )
 
 FetchContent_MakeAvailable(googletest build_opencv)
