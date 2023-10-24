@@ -25,6 +25,40 @@ INSTANTIATE_TEST_SUITE_P(WebARKitEnumTestSuite, WebARKitEnumTest,
                                           testing::ValuesIn({webarkit::ColorSpace::RGB,
                                                              webarkit::ColorSpace::RGBA,
                                                              webarkit::ColorSpace::GRAY})));
+                                                          
+TEST(WebARKitConfigTest, TestConfigValues) {
+  EXPECT_EQ(DEFAULT_NN_MATCH_RATIO, 0.7f);
+  EXPECT_EQ(TEBLID_NN_MATCH_RATIO, 0.8f);
+  EXPECT_EQ(DEFAULT_MAX_FEATURES, 8000);
+  EXPECT_EQ(TEBLID_MAX_FEATURES, 10000);
+  EXPECT_EQ(N, 10);
+  EXPECT_EQ(MIN_NUM_MATCHES, 50);
+  EXPECT_EQ(maxLevel, 3);
+  EXPECT_EQ(featureDetectPyramidLevel, 1.05f);
+  EXPECT_EQ(featureBorder, 8);
+  EXPECT_EQ(WEBARKIT_HEADER_VERSION_STRING, "1.0.0");
+}
+
+TEST(WebARKitConfigTest, TestWinSize) {
+  cv::Size expected_size(31, 31);
+  EXPECT_EQ(expected_size.width, winSize.width);
+  EXPECT_EQ(expected_size.height, winSize.height);
+}
+
+TEST(WebARKitConfigTest, TestTermCriteria) {
+  int expected_type = cv::TermCriteria::COUNT | cv::TermCriteria::EPS;
+  int expected_max_count = 20;
+  double expected_epsilon = 0.03;
+  EXPECT_EQ(expected_type, termcrit.type);
+  EXPECT_EQ(expected_max_count, termcrit.maxCount);
+  EXPECT_EQ(expected_epsilon, termcrit.epsilon);
+}
+
+TEST(WebARKitConfigTest, TestBlurSize) {
+  cv::Size expected_blur_size(3, 3);
+  EXPECT_EQ(expected_blur_size.width, blurSize.width);
+  EXPECT_EQ(expected_blur_size.height, blurSize.height);
+}
 
 // Check WebARKitManager initialisation.
 TEST(WebARKitTest, InitialiseBaseTest) {

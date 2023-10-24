@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 project(Webarkit_tests)
 
 # GoogleTest requires at least C++14
 set(CMAKE_CXX_STANDARD 14)
 
-#cmake_policy(SET CMP0135 NEW)
+cmake_policy(SET CMP0135 NEW)
 
 # Fetch googletest v1.13.0  commit b796f7d44681514f58a683a3a71ff17c94edb0c1
 include(FetchContent)
