@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <WebARKitManager.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
+#include <opencv2/imgcodecs.hpp>
 
 class WebARKitEnumTest : public testing::TestWithParam<std::tuple<webarkit::TRACKER_TYPE, webarkit::ColorSpace>> {};
 
@@ -76,4 +77,31 @@ TEST(WebARKitTest, CheckWebARKitVersion) {
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER);
   // Check if the WebARKit version is correct
   EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "1.0.0");
+}
+
+TEST(WebARKitTest, InitTrackerTest) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Init the manager with the Akaze tracker
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER);
+  // Load the test image
+  cv::Mat image = cv::imread("pinball.jpg");
+
+  if(image.data == NULL) {
+    std::cout << "Something wrong while reading the image!" << std::endl;
+  }
+  
+  if(image.empty()) {
+    image = cv::Mat(2048, 1637, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+  }
+
+  ASSERT_FALSE(image.empty());
+
+  int width = image.cols;
+  int height = image.rows;
+  unsigned char* data = image.data;
+  EXPECT_EQ(image.cols, 1637);
+  EXPECT_EQ(image.rows, 2048);
+  // Check if initTracker returns sucessfully
+  EXPECT_TRUE(manager.initTracker(data, width, height));
 }
