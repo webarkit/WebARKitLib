@@ -1,5 +1,21 @@
 #include <gtest/gtest.h>
 #include <WebARKitManager.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
+
+class WebARKitEnumTest : public testing::TestWithParam<webarkit::TRACKER_TYPE> {};
+
+TEST_P(WebARKitEnumTest, TestEnumValues) {
+  webarkit::TRACKER_TYPE value = GetParam();
+  EXPECT_TRUE(value == webarkit::TRACKER_TYPE::AKAZE_TRACKER ||
+              value == webarkit::TRACKER_TYPE::ORB_TRACKER ||
+              value == webarkit::TRACKER_TYPE::FREAK_TRACKER);
+}
+
+INSTANTIATE_TEST_SUITE_P(WebARKitEnumTestSuite, WebARKitEnumTest,
+                         testing::ValuesIn({webarkit::TRACKER_TYPE::AKAZE_TRACKER,
+                                            webarkit::TRACKER_TYPE::ORB_TRACKER,
+                                            webarkit::TRACKER_TYPE::FREAK_TRACKER}));
+
 
 // Check WebARKitManager initialisation.
 TEST(WebARKitTest, InitialiseBaseTest) {
