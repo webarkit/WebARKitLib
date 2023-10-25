@@ -62,11 +62,35 @@ TEST(WebARKitConfigTest, TestBlurSize) {
 }
 
 // Check WebARKitManager initialisation.
-TEST(WebARKitTest, InitialiseBaseTest) {
+TEST(WebARKitTest, InitialiseBaseAkazeTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Check if the WebARKitManager initialisation is successful
   EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER));
+}
+
+// Check WebARKitManager initialisation.
+TEST(WebARKitTest, InitialiseBaseFreakTest) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Check if the WebARKitManager initialisation is successful
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::FREAK_TRACKER));
+}
+
+// Check WebARKitManager initialisation.
+TEST(WebARKitTest, InitialiseBaseOrbTest) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Check if the WebARKitManager initialisation is successful
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::ORB_TRACKER));
+}
+
+// Check WebARKitManager initialisation.
+TEST(WebARKitTest, InitialiseBaseTeblidTest) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Check if the WebARKitManager initialisation is successful
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::TEBLID_TRACKER));
 }
 
 // Check WebARKit version
@@ -104,4 +128,14 @@ TEST(WebARKitTest, InitTrackerTest) {
   EXPECT_EQ(image.rows, 2048);
   // Check if initTracker returns sucessfully
   EXPECT_TRUE(manager.initTracker(data, width, height));
+}
+
+// Check WebARKit version
+TEST(WebARKitTest, CheckShutDown) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Init the manager with the Akaze tracker
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER);
+  // Check if the WebARKit went down successfully
+  EXPECT_TRUE(manager.shutdown());
 }
