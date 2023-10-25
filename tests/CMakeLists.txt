@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 project(Webarkit_tests)
 
 # GoogleTest requires at least C++14
@@ -19,8 +19,15 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   build_opencv
-  URL https://github.com/webarkit/opencv-em/releases/download/0.1.1/opencv-4.7.0.zip
+  URL https://github.com/webarkit/opencv-em/releases/download/0.1.3/opencv-4.7.0.zip
 )
+
+
+#[[FetchContent_Declare(
+  build_opencv
+  URL /home/kalwalt/kalwalt-github/opencv-em/packaging/opencv-4.7.0.zip
+)
+]]#
 
 FetchContent_MakeAvailable(googletest build_opencv)
 
@@ -40,6 +47,7 @@ target_include_directories(webarkit_test PRIVATE "${PARENT_DIR}/WebARKit/WebARKi
 
 target_include_directories(webarkit_test PRIVATE
         "${build_opencv_SOURCE_DIR}"
+        "${build_opencv_SOURCE_DIR}/3rdparty/include/libjpeg"
         "${build_opencv_SOURCE_DIR}/libs/opencv/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/calib3d/include"
         "${build_opencv_SOURCE_DIR}/libs/opencv/modules/core/include"
