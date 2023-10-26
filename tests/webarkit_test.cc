@@ -66,7 +66,7 @@ TEST(WebARKitTest, InitialiseBaseAkazeTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Check if the WebARKitManager initialisation is successful
-  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER));
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480));
 }
 
 // Check WebARKitManager initialisation.
@@ -74,7 +74,7 @@ TEST(WebARKitTest, InitialiseBaseFreakTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Check if the WebARKitManager initialisation is successful
-  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::FREAK_TRACKER));
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::FREAK_TRACKER, 640, 480));
 }
 
 // Check WebARKitManager initialisation.
@@ -82,7 +82,7 @@ TEST(WebARKitTest, InitialiseBaseOrbTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Check if the WebARKitManager initialisation is successful
-  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::ORB_TRACKER));
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::ORB_TRACKER, 640, 480));
 }
 
 // Check WebARKitManager initialisation.
@@ -90,7 +90,7 @@ TEST(WebARKitTest, InitialiseBaseTeblidTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Check if the WebARKitManager initialisation is successful
-  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::TEBLID_TRACKER));
+  EXPECT_TRUE(manager.initialiseBase(webarkit::TRACKER_TYPE::TEBLID_TRACKER, 640, 480));
 }
 
 // Check WebARKit version
@@ -98,7 +98,7 @@ TEST(WebARKitTest, CheckWebARKitVersion) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Init the manager with the Akaze tracker
-  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER);
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Check if the WebARKit version is correct
   EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "1.0.0");
 }
@@ -107,7 +107,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Init the manager with the Akaze tracker
-  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER);
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Load the test image
   cv::Mat image = cv::imread("pinball.jpg");
 
@@ -135,7 +135,7 @@ TEST(WebARKitTest, CheckShutDown) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;
   // Init the manager with the Akaze tracker
-  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER);
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Check if the WebARKit went down successfully
   EXPECT_TRUE(manager.shutdown());
 }

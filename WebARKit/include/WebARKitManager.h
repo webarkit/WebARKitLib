@@ -79,7 +79,7 @@ class WebARKitManager {
      * Start trackable management so trackables can be added and removed.
      * @return       true if initialisation was OK, false if an error occured.
      */
-    bool initialiseBase(webarkit::TRACKER_TYPE trackerType);
+    bool initialiseBase(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight);
 
     /**
      * Return the current tracker object.

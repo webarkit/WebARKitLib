@@ -1,27 +1,27 @@
 #ifndef WEBARKITCAMERA_H
 #define WEBARKITCAMERA_H
 
-#include <opencv2/core.hpp>
+#include <array>
 
 namespace webarkit {
-    class WebARKitCamera {
-        public:
-            WebARKitCamera();
-            ~WebARKitCamera();
+class WebARKitCamera {
+  public:
+    WebARKitCamera();
+    ~WebARKitCamera();
 
-            bool setup();
+    bool setupCamera(int width, int height);
+    void printSettings();
 
-            int xsize, ysize;
-            cv::Mat cmat(3, 3, CV_64FC1);
-            float kc[6];
-        private:
-            float focal_length;
-            float diagonal_image_size;
-            float diagonal_fov_degrees;
-            float diagonal_fov_radians;
+    int xsize, ysize;
+    std::array<double, 9> cmat;
+    std::array<double, 6> kc;
 
-    };
-}
-
+  private:
+    double focal_length;
+    double diagonal_image_size;
+    double diagonal_fov_degrees;
+    double diagonal_fov_radians;
+};
+} // namespace webarkit
 
 #endif // WEBARKITCAMERA_H
