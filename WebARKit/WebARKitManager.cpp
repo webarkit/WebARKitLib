@@ -18,7 +18,7 @@ std::string WebARKitManager::getWebARKitVersion() {
     return versionString;
 }
 
-bool WebARKitManager::initialiseBase(webarkit::TRACKER_TYPE trackerType) {
+bool WebARKitManager::initialiseBase(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
     WEBARKIT_LOGd("WebARKItManager::initialiseBase(...)\n");
     if (state != NOTHING_INITIALISED) {
         WEBARKIT_LOGe("Initialise called while already initialised. Will finish first.\n");
@@ -33,7 +33,7 @@ bool WebARKitManager::initialiseBase(webarkit::TRACKER_TYPE trackerType) {
     m_trackerType = trackerType;
 
     m_tracker = std::make_shared<webarkit::WebARKitTracker>();
-    m_tracker->initialize(m_trackerType);
+    m_tracker->initialize(m_trackerType, frameWidth, frameHeight);
 
     state = BASE_INITIALISED;
 

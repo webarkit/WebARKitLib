@@ -3,6 +3,7 @@
 
 #include "WebARKitEnums.h"
 #include <WebARKitLog.h>
+#include <WebARKitCamera.h>
 #include <opencv2/xfeatures2d.hpp>
 
 namespace webarkit {
@@ -17,7 +18,7 @@ class WebARKitTracker {
 
     WebARKitTracker& operator=(WebARKitTracker&&);
 
-    void initialize(webarkit::TRACKER_TYPE trackerType);
+    void initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight);
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows);
 

@@ -10,7 +10,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
           minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f){};
     ~WebARKitTrackerImpl() = default;
 
-    void initialize(webarkit::TRACKER_TYPE trackerType) {
+    void initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
@@ -22,6 +22,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 15;
         }
+        _camera->setupCamera(frameWidth, frameHeight);
+        _camera->printSettings();
     }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
@@ -288,6 +290,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     bool initialized;
 
+    WebARKitCamera* _camera = new WebARKitCamera();
+
   private:
     std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
 
@@ -339,7 +343,7 @@ WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; // copy construct
 
 WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // move assignment operator
 
-void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType) { _trackerImpl->initialize(trackerType); }
+void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) { _trackerImpl->initialize(trackerType, frameWidth, frameHeight); }
 
 void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows) {
     _trackerImpl->initTracker(refData, refCols, refRows);
