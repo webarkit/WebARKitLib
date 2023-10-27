@@ -7,7 +7,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
-          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f){};
+          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f){
+            m_camMatrix = cv::Mat();
+            m_distortionCoeff = cv::Mat();
+          };
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
@@ -24,6 +27,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
+        m_camMatrix = cv::Mat(3,3, CV_64FC1, _camera->getCameraData().data());
+        m_distortionCoeff = cv::Mat(6, 1, CV_64FC1, _camera->getDistortionCoefficients().data());
     }
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows) {
@@ -291,6 +296,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
     bool initialized;
 
     WebARKitCamera* _camera = new WebARKitCamera();
+
+    cv::Mat m_camMatrix;
+    cv::Mat m_distortionCoeff;
 
   private:
     std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
