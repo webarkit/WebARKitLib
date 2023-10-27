@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <WebARKitManager.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
+#include <WebARKitCamera.h>
 #include <opencv2/imgcodecs.hpp>
 
 class WebARKitEnumTest : public testing::TestWithParam<std::tuple<webarkit::TRACKER_TYPE, webarkit::ColorSpace>> {};
@@ -59,6 +60,25 @@ TEST(WebARKitConfigTest, TestBlurSize) {
   cv::Size expected_blur_size(3, 3);
   EXPECT_EQ(expected_blur_size.width, blurSize.width);
   EXPECT_EQ(expected_blur_size.height, blurSize.height);
+}
+
+TEST(WebARKitConfigTest, TestPIConstant) {
+  double internal_m_pi = 3.14159265358979323846;
+  EXPECT_EQ(internal_m_pi, m_pi);
+}
+
+TEST(WebARKitCameraTest, TestCamera) {
+  int width = 640;
+  int height = 480;
+  webarkit::WebARKitCamera camera;
+  EXPECT_TRUE(camera.setupCamera(width, height));
+  std::array<double, 9> camera_mat = camera.getCameraData();
+  EXPECT_EQ(camera_mat[0], 571.25920269684582);
+  EXPECT_EQ(camera_mat[2], 320.0);
+  EXPECT_EQ(camera_mat[4], 571.25920269684582);
+  EXPECT_EQ(camera_mat[5], 240.0);
+  EXPECT_EQ(camera_mat[8], 1.0);
+  camera.printSettings();
 }
 
 // Check WebARKitManager initialisation.
