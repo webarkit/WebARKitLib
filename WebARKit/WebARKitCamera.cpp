@@ -33,4 +33,12 @@ void WebARKitCamera::printSettings() {
     printf("                          [%.2f  %.2f %.2f]\n", cmat[6], cmat[7], cmat[8]);
     printf("WebARKit: kc = [%.4f %.4f %.4f %.4f %.4f %.4f]\n", kc[0], kc[1], kc[2], kc[3], kc[4], kc[5]);
 };
+
+std::array<double, 9> WebARKitCamera::getCameraData() const {
+    return cmat;
+}
+
+std::array<double, 6> WebARKitCamera::getDistortionCoefficients() const {
+   return kc;
+}
 } // namespace webarkit
