@@ -1,4 +1,5 @@
 #include <WebARKitCamera.h>
+#include <WebARKitLog.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 
 namespace webarkit {
@@ -27,11 +28,11 @@ bool WebARKitCamera::setupCamera(int width, int height) {
 };
 
 void WebARKitCamera::printSettings() {
-    printf("WebARKit: Camera Size %d , %d\n", xsize, ysize);
-    printf("WebARKit: camera matrix = [%.2f  %.2f %.2f]\n", cmat[0], cmat[1], cmat[2]);
-    printf("                          [%.2f  %.2f %.2f]\n", cmat[3], cmat[4], cmat[5]);
-    printf("                          [%.2f  %.2f %.2f]\n", cmat[6], cmat[7], cmat[8]);
-    printf("WebARKit: kc = [%.4f %.4f %.4f %.4f %.4f %.4f]\n", kc[0], kc[1], kc[2], kc[3], kc[4], kc[5]);
+    WEBARKIT_LOGi("WebARKit: Camera Size %d , %d\n", xsize, ysize);
+    WEBARKIT_LOGi("WebARKit: camera matrix = [%.2f  %.2f %.2f]\n", cmat[0], cmat[1], cmat[2]);
+    WEBARKIT_LOGi("                          [%.2f  %.2f %.2f]\n", cmat[3], cmat[4], cmat[5]);
+    WEBARKIT_LOGi("                          [%.2f  %.2f %.2f]\n", cmat[6], cmat[7], cmat[8]);
+    WEBARKIT_LOGi("WebARKit: kc = [%.4f %.4f %.4f %.4f %.4f %.4f]\n", kc[0], kc[1], kc[2], kc[3], kc[4], kc[5]);
 };
 
 std::array<double, 9> WebARKitCamera::getCameraData() const {
