@@ -17,14 +17,16 @@ class WebARKitCamera {
 
     std::array<double, 6> getDistortionCoefficients() const;
 
+    double getFocalLength() const { return focal_length; }
+
   private:
     int xsize, ysize;
     std::array<double, 9> cmat;
     std::array<double, 6> kc;
     double focal_length;
-    double diagonal_image_size;
     double diagonal_fov_degrees;
-    double diagonal_fov_radians;
+
+    void setFocalLength(int width, int height);
 };
 } // namespace webarkit
 
