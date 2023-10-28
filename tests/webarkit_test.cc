@@ -78,6 +78,7 @@ TEST(WebARKitCameraTest, TestCamera) {
   EXPECT_EQ(camera_mat[4], 571.25920269684582);
   EXPECT_EQ(camera_mat[5], 240.0);
   EXPECT_EQ(camera_mat[8], 1.0);
+  EXPECT_EQ(camera.getFocalLength(), 571.25920269684582);
   camera.printSettings();
 }
 

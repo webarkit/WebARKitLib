@@ -13,10 +13,8 @@ bool WebARKitCamera::setupCamera(int width, int height) {
     }
     xsize = width;
     ysize = height;
-    // simple routine to calculate focal length from diagonal field of view, and convert to camera matrix.
-    diagonal_image_size = std::pow(std::pow(xsize, 2.0) + std::pow(ysize, 2.0), 0.5);
-    diagonal_fov_radians = diagonal_fov_degrees * m_pi / 180.0;
-    focal_length = 0.5 * diagonal_image_size / std::tan(0.5 * diagonal_fov_radians);
+
+    setFocalLength(xsize, ysize);
 
     cmat.at(0) = focal_length;
     cmat.at(2) = 0.5 * xsize;
@@ -41,5 +39,14 @@ std::array<double, 9> WebARKitCamera::getCameraData() const {
 
 std::array<double, 6> WebARKitCamera::getDistortionCoefficients() const {
    return kc;
+}
+
+void WebARKitCamera::setFocalLength(int width, int height) {
+    double diagonal_image_size;
+    double diagonal_fov_radians;
+     // simple routine to calculate focal length from diagonal field of view, and convert to camera matrix.
+    diagonal_image_size = std::pow(std::pow(width, 2.0) + std::pow(height, 2.0), 0.5);
+    diagonal_fov_radians = diagonal_fov_degrees * m_pi / 180.0;
+    focal_length = 0.5 * diagonal_image_size / std::tan(0.5 * diagonal_fov_radians);
 }
 } // namespace webarkit
