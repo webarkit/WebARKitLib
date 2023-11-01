@@ -36,6 +36,7 @@ ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/
 ${PARENT_DIR}/include/WebARKitCamera.h
 ${PARENT_DIR}/include/WebARKitLog.h
 ${PARENT_DIR}/include/WebARKitManager.h
+${PARENT_DIR}/include/WebARKitPattern.h
 )
 
 set(SOURCE 
@@ -44,6 +45,7 @@ ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.cpp
 ${PARENT_DIR}/WebARKitCamera.cpp
 ${PARENT_DIR}/WebARKitLog.cpp
 ${PARENT_DIR}/WebARKitManager.cpp
+${PARENT_DIR}/WebARKitPattern.cpp
 )
 
 add_library(

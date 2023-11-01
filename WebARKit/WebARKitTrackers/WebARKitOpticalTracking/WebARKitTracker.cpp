@@ -48,15 +48,21 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         _pattern.size = cv::Size(refCols, refRows);
 
-        _pattern.points2d[0] = cv::Point2f(0, 0);
-        _pattern.points2d[1] = cv::Point2f(refCols, 0);
-        _pattern.points2d[2] = cv::Point2f(refCols, refRows);
-        _pattern.points2d[3] = cv::Point2f(0, refRows);
+        WEBARKIT_LOGd("WebARKitPattern size ready!\n");
 
-        _pattern.points3d[0] = cv::Point3f(-unitW, -unitH, 0);
-        _pattern.points3d[1] = cv::Point3f(unitW, -unitH, 0);
-        _pattern.points3d[2] = cv::Point3f(unitW, unitH, 0);
-        _pattern.points3d[3] = cv::Point3f(-unitW, unitH, 0);
+        _pattern.points2d.push_back(cv::Point2f(0, 0));
+        _pattern.points2d.push_back(cv::Point2f(refCols, 0));
+        _pattern.points2d.push_back(cv::Point2f(refCols, refRows));
+        _pattern.points2d.push_back(cv::Point2f(0, refRows));
+
+        WEBARKIT_LOGd("WebARKitPattern points2d ready!\n");
+
+        _pattern.points3d.push_back(cv::Point3f(-unitW, -unitH, 0));
+        _pattern.points3d.push_back(cv::Point3f(unitW, -unitH, 0));
+        _pattern.points3d.push_back(cv::Point3f(unitW, unitH, 0));
+        _pattern.points3d.push_back(cv::Point3f(-unitW, unitH, 0));
+
+        WEBARKIT_LOGd("WebARKitPattern points3d ready!\n");
 
         corners[0] = cvPoint(0, 0);
         corners[1] = cvPoint(refCols, 0);
