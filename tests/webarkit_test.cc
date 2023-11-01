@@ -137,7 +137,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   }
   
   if(image.empty()) {
-    image = cv::Mat(2048, 1637, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+    image = cv::Mat::zeros(2048, 1637,  CV_8UC4);
   }
 
   ASSERT_FALSE(image.empty());
