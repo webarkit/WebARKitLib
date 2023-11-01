@@ -7,18 +7,18 @@ class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
-          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f){
-            m_camMatrix = cv::Mat();
-            m_distortionCoeff = cv::Mat();
-          };
+          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f) {
+        m_camMatrix = cv::Mat();
+        m_distortionCoeff = cv::Mat();
+    };
+
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
-        }
-        else if(trackerType == webarkit::AKAZE_TRACKER) {
+        } else if (trackerType == webarkit::AKAZE_TRACKER) {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 40;
         } else {
@@ -27,7 +27,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
-        m_camMatrix = cv::Mat(3,3, CV_64FC1, _camera->getCameraData().data());
+        m_camMatrix = cv::Mat(3, 3, CV_64FC1, _camera->getCameraData().data());
         m_distortionCoeff = cv::Mat(6, 1, CV_64FC1, _camera->getDistortionCoefficients().data());
     }
 
@@ -40,6 +40,23 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         this->_featureDetector->detect(refGray, refKeyPts, trackerFeatureMask);
         this->_featureDescriptor->compute(refGray, refKeyPts, refDescr);
+
+        // Normalized dimensions : 
+        const float maxSize = std::max(refCols, refRows);
+        const float unitW = refCols / maxSize;
+        const float unitH = refRows / maxSize;
+
+        _pattern.size = cv::Size(refCols, refRows);
+
+        _pattern.points2d[0] = cv::Point2f(0, 0);
+        _pattern.points2d[1] = cv::Point2f(refCols, 0);
+        _pattern.points2d[2] = cv::Point2f(refCols, refRows);
+        _pattern.points2d[3] = cv::Point2f(0, refRows);
+
+        _pattern.points3d[0] = cv::Point3f(-unitW, -unitH, 0);
+        _pattern.points3d[1] = cv::Point3f(unitW, -unitH, 0);
+        _pattern.points3d[2] = cv::Point3f(unitW, unitH, 0);
+        _pattern.points3d[3] = cv::Point3f(-unitW, unitH, 0);
 
         corners[0] = cvPoint(0, 0);
         corners[1] = cvPoint(refCols, 0);
@@ -297,6 +314,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     WebARKitCamera* _camera = new WebARKitCamera();
 
+    WebARKitPattern _pattern;
+
     cv::Mat m_camMatrix;
     cv::Mat m_distortionCoeff;
 
@@ -333,7 +352,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
         } else if (trackerType == webarkit::TRACKER_TYPE::FREAK_TRACKER) {
             this->_featureDetector = cv::ORB::create(10000);
-            //this->_featureDetector = cv::xfeatures2d::StarDetector::create(DEFAULT_MAX_FEATURES);
+            // this->_featureDetector = cv::xfeatures2d::StarDetector::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::FREAK::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::TEBLID_TRACKER) {
             this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
@@ -351,7 +370,9 @@ WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; // copy construct
 
 WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // move assignment operator
 
-void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) { _trackerImpl->initialize(trackerType, frameWidth, frameHeight); }
+void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
+    _trackerImpl->initialize(trackerType, frameWidth, frameHeight);
+}
 
 void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows) {
     _trackerImpl->initTracker(refData, refCols, refRows);

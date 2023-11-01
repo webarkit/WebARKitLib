@@ -4,6 +4,7 @@
 #include "WebARKitEnums.h"
 #include <WebARKitLog.h>
 #include <WebARKitCamera.h>
+#include <WebARKitPattern..h>
 #include <opencv2/xfeatures2d.hpp>
 
 namespace webarkit {
