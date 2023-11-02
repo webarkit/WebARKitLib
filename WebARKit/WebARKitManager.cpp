@@ -85,6 +85,10 @@ std::vector<double> WebARKitManager::getOutputData() {
     return m_tracker->getOutputData();
 };
 
+cv::Mat WebARKitManager::getPoseMatrix() {
+    return m_tracker->getPoseMatrix();
+}
+
 bool WebARKitManager::isValid() {
   return m_tracker->isValid();
 }

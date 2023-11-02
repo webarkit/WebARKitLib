@@ -1,18 +1,17 @@
 #include <WebARKitPattern.h>
+#include <iostream>
 #include <opencv2/calib3d.hpp>
 
-void WebARKitPatternTrackingInfo::computePose(const WebARKitPattern& pattern, cv::Mat caMatrix, cv::Mat distCoeffs)
-{
-    cv::Mat Rvec;
-    cv::Mat_<float> Tvec;
-    cv::Mat raux, taux;
+void WebARKitPatternTrackingInfo::computePose(const WebARKitPattern& pattern, std::vector<cv::Point2f>& imgPoints,
+                                              cv::Mat& caMatrix, cv::Mat& distCoeffs) {
+    cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
+    cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
 
-    cv::solvePnPRansac(pattern.points3d, points2d, caMatrix, distCoeffs, raux, taux);
-    raux.convertTo(Rvec, CV_32F);
-    taux.convertTo(Tvec, CV_32F);
+    cv::solvePnPRansac(pattern.points3d, imgPoints, caMatrix, distCoeffs, rvec, tvec);
 
-    cv::Mat_<float> rotMat(3, 3);
-    cv::Rodrigues(Rvec, rotMat);
+    cv::Mat rMat;
+    cv::Rodrigues(rvec, rMat);
+    cv::hconcat(rMat, tvec, pose3d);
 
-    cv::hconcat(rotMat, Tvec, pose3d);
+    std::cout << "pose3d: " << pose3d.rows << "x" << pose3d.cols << std::endl;
 }

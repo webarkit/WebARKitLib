@@ -27,7 +27,7 @@ struct WebARKitPatternTrackingInfo
   /**
    * Compute pattern pose using PnP algorithm
    */
-  void computePose(const WebARKitPattern& pattern, cv::Mat caMatrix, cv::Mat distCoeffs);
+  void computePose(const WebARKitPattern& pattern, std::vector<cv::Point2f>& imgPoints, cv::Mat& caMatrix, cv::Mat& distCoeffs);
 };
 
 #endif // WEBARKITPATTERN_H

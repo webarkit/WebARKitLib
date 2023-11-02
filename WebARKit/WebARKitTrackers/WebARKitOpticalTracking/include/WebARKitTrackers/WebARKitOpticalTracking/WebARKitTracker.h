@@ -27,6 +27,8 @@ class WebARKitTracker {
 
     std::vector<double> getOutputData();
 
+    cv::Mat getPoseMatrix();
+
     bool isValid();
 
   private:
