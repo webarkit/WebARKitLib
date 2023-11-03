@@ -31,6 +31,27 @@ class WebARKitTracker::WebARKitTrackerImpl {
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
         m_camMatrix = cv::Mat(3, 3, CV_64FC1, _camera->getCameraData().data());
+        /*m_camMatrix = cv::Mat(3, 3, CV_64FC1);
+        std::array<double, 9> camData = _camera->getCameraData();
+        for(auto i = 0; i < 3; i++) {
+            for(auto j = 0; j < 3; j++) {
+                //WEBARKIT_LOGi("Camera Matrix: %d\n", camData[i*3+j]);
+                m_camMatrix.at<double>(i, j) = camData[i*3+j];
+            }
+        }*/
+
+        for(auto i = 0; i < 3; i++) {
+            for(auto j = 0; j < 3; j++) {
+                WEBARKIT_LOGi("Camera Matrix: %.2f\n", m_camMatrix.at<double>(i, j));
+            }
+        }
+
+        for(auto i = 0; i < 6; i++) {
+            for(auto j = 0; j < 1; j++) {
+                WEBARKIT_LOGi("Distortion coefficients: %.2f\n", m_distortionCoeff.at<double>(i, j));
+            }
+        }
+
         //m_distortionCoeff = cv::Mat(6, 1, CV_64FC1, _camera->getDistortionCoefficients().data());
         //m_distortionCoeff = cv::Mat::zeros(6, 1, CV_64FC1);
     }
@@ -215,10 +236,17 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // set old points to new points
             framePts = goodPtsCurr;
             std::vector<cv::Point2f> warpedCorners;
+            //std::vector<cv::Point3f> treeDPoints;
             if ((valid = homographyValid(m_H))) {
                 fill_output(m_H);
                 warpedCorners = getSelectedFeaturesWarped(m_H);
-                _patternTrackingInfo.computePose(_pattern, warpedCorners, m_camMatrix, m_distortionCoeff);
+                //treeDPoints = getSelectedFeatures3D(m_H);
+                if(m_camMatrix.empty()) {
+                    WEBARKIT_LOGi("Camera Matrix is empty!\n");
+                }else {
+                    WEBARKIT_LOGi("Camera Matrix: %d\n", m_camMatrix.at<double>(0, 0));
+                    }    
+                _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
                 _isDetected = true;
             } else {
                 _isDetected = false;
@@ -322,6 +350,21 @@ class WebARKitTracker::WebARKitTrackerImpl {
     perspectiveTransform(_pattern.points2d, warpedPoints, H);
     return warpedPoints;
 }
+
+/*
+std::vector<cv::Point3f> getSelectedFeatures3D(cv::Mat& H)
+{
+    std::vector<cv::Point3f> treeDPoints;
+    //std::vector<cv::Point2f> selectedPoints;
+    /*for(std::vector<TrackedPoint>::iterator it = _selectedPts.begin(); it != _selectedPts.end(); ++it) {
+        if(it->IsTracking()) {
+            selectedPoints.push_back(it->pt);
+        }
+    }*/
+    //perspectiveTransform(selectedPoints, warpedPoints, homography);
+    //perspectiveTransform(_pattern.points3d, treeDPoints, H);
+    //return treeDPoints;
+//}*/
 
     bool _valid;
 
