@@ -8,7 +8,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
           minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f) {
-        m_camMatrix = cv::Mat();
+        m_camMatrix = cv::Mat(3,3, cv::DataType<double>::type);
         //m_distortionCoeff = cv::Mat();
         //_patternTrackingInfo.pose3d = cv::Mat::zeros(3, 4, CV_64FC1);
         //m_distortionCoeff = cv::Mat::zeros(6, 1, CV_64FC1);
@@ -30,7 +30,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
-        m_camMatrix = cv::Mat(3, 3, CV_64FC1, _camera->getCameraData().data());
+        //m_camMatrix = cv::Mat(3, 3, CV_64FC1, _camera->getCameraData().data());
         /*m_camMatrix = cv::Mat(3, 3, CV_64FC1);
         std::array<double, 9> camData = _camera->getCameraData();
         for(auto i = 0; i < 3; i++) {
@@ -39,6 +39,17 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 m_camMatrix.at<double>(i, j) = camData[i*3+j];
             }
         }*/
+
+        m_camMatrix.at<double>(0,0) = 833.63;
+        m_camMatrix.at<double>(0,1) = 0.0;
+        m_camMatrix.at<double>(0,2) = 353.50;
+        m_camMatrix.at<double>(1,0) = 0.0;
+        m_camMatrix.at<double>(1,1) = 833.63;
+        m_camMatrix.at<double>(1,2) = 464.50;
+        m_camMatrix.at<double>(2,0) = 0.0;
+        m_camMatrix.at<double>(2,1) = 0.0;
+        m_camMatrix.at<double>(2,2) = 1.0;
+
 
         for(auto i = 0; i < 3; i++) {
             for(auto j = 0; j < 3; j++) {
