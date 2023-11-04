@@ -6,10 +6,10 @@
 struct WebARKitPattern {
     cv::Size size;
 
-    //cv::Mat grayImg;
+    // cv::Mat grayImg;
 
-    //std::vector<cv::KeyPoint> keypoints;
-    //cv::Mat descriptors;
+    // std::vector<cv::KeyPoint> keypoints;
+    // cv::Mat descriptors;
 
     std::vector<cv::Point2f> points2d;
     std::vector<cv::Point3f> points3d;
@@ -18,16 +18,27 @@ struct WebARKitPattern {
 /**
  * Intermediate pattern tracking info structure
  */
-struct WebARKitPatternTrackingInfo
-{
-  cv::Mat                   homography;
-  std::vector<cv::Point2f>  points2d;
-  cv::Mat                   pose3d;
+class WebARKitPatternTrackingInfo {
+  public:
+    WebARKitPatternTrackingInfo();
 
-  /**
-   * Compute pattern pose using PnP algorithm
-   */
-  void computePose(std::vector<cv::Point3f>& treeDPoints, std::vector<cv::Point2f>& imgPoints, cv::Mat& caMatrix, cv::Mat& distCoeffs);
+    cv::Mat homography;
+    std::vector<cv::Point2f> points2d;
+    cv::Mat pose3d;
+
+    void setScale(const float scale) { m_scale = scale; }
+
+    float getScale() { return m_scale; }
+
+    /**
+     * Compute pattern pose using PnP algorithm
+     */
+    void computePose(std::vector<cv::Point3f>& treeDPoints, std::vector<cv::Point2f>& imgPoints, cv::Mat& caMatrix,
+                     cv::Mat& distCoeffs);
+
+  private:
+    float m_scale;
+    void invertPose();
 };
 
 #endif // WEBARKITPATTERN_H
