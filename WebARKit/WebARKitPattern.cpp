@@ -13,5 +13,5 @@ void WebARKitPatternTrackingInfo::computePose(std::vector<cv::Point3f>& treeDPoi
     cv::Rodrigues(rvec, rMat);
     cv::hconcat(rMat, tvec, pose3d);
 
-    std::cout << "pose3d: " << pose3d.rows << "x" << pose3d.cols << std::endl;
+    std::cout << "pose3d: " << pose3d.rows << " x " << pose3d.cols << std::endl;
 }
