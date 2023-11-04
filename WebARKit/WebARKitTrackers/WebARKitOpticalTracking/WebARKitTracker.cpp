@@ -340,31 +340,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
     std::vector<cv::Point2f> getSelectedFeaturesWarped(cv::Mat& H)
 {
     std::vector<cv::Point2f> warpedPoints;
-    //std::vector<cv::Point2f> selectedPoints;
-    /*for(std::vector<TrackedPoint>::iterator it = _selectedPts.begin(); it != _selectedPts.end(); ++it) {
-        if(it->IsTracking()) {
-            selectedPoints.push_back(it->pt);
-        }
-    }*/
-    //perspectiveTransform(selectedPoints, warpedPoints, homography);
     perspectiveTransform(_pattern.points2d, warpedPoints, H);
+    WEBARKIT_LOGi("warpedPoint(0,0): %.2f, %.2f\n", warpedPoints[0].x, warpedPoints[0].y);
     return warpedPoints;
 }
-
-/*
-std::vector<cv::Point3f> getSelectedFeatures3D(cv::Mat& H)
-{
-    std::vector<cv::Point3f> treeDPoints;
-    //std::vector<cv::Point2f> selectedPoints;
-    /*for(std::vector<TrackedPoint>::iterator it = _selectedPts.begin(); it != _selectedPts.end(); ++it) {
-        if(it->IsTracking()) {
-            selectedPoints.push_back(it->pt);
-        }
-    }*/
-    //perspectiveTransform(selectedPoints, warpedPoints, homography);
-    //perspectiveTransform(_pattern.points3d, treeDPoints, H);
-    //return treeDPoints;
-//}*/
 
     bool _valid;
 
