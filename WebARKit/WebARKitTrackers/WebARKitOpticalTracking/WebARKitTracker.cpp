@@ -31,16 +31,16 @@ class WebARKitTracker::WebARKitTrackerImpl {
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
         //m_camMatrix = cv::Mat(3, 3, CV_64FC1, _camera->getCameraData().data());
-        /*m_camMatrix = cv::Mat(3, 3, CV_64FC1);
+        //m_camMatrix = cv::Mat(3, 3, CV_64FC1);
         std::array<double, 9> camData = _camera->getCameraData();
         for(auto i = 0; i < 3; i++) {
             for(auto j = 0; j < 3; j++) {
                 //WEBARKIT_LOGi("Camera Matrix: %d\n", camData[i*3+j]);
                 m_camMatrix.at<double>(i, j) = camData[i*3+j];
             }
-        }*/
+        }
 
-        m_camMatrix.at<double>(0,0) = 833.63;
+        /*m_camMatrix.at<double>(0,0) = 833.63;
         m_camMatrix.at<double>(0,1) = 0.0;
         m_camMatrix.at<double>(0,2) = 353.50;
         m_camMatrix.at<double>(1,0) = 0.0;
@@ -48,7 +48,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         m_camMatrix.at<double>(1,2) = 464.50;
         m_camMatrix.at<double>(2,0) = 0.0;
         m_camMatrix.at<double>(2,1) = 0.0;
-        m_camMatrix.at<double>(2,2) = 1.0;
+        m_camMatrix.at<double>(2,2) = 1.0;*/
 
 
         for(auto i = 0; i < 3; i++) {
