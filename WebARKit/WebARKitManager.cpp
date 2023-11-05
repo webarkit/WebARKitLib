@@ -89,6 +89,12 @@ cv::Mat WebARKitManager::getPoseMatrix() {
     return m_tracker->getPoseMatrix();
 }
 
+std::array<float, 16> WebARKitManager::getTransformationMatrix() {
+    std::array<float, 16> transformationMatrix;
+    arglCameraViewRHf(m_tracker->getPoseMatrix(), transformationMatrix, 1.0f);
+    return transformationMatrix;
+}
+
 bool WebARKitManager::isValid() {
   return m_tracker->isValid();
 }

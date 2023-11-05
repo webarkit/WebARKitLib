@@ -39,6 +39,7 @@
 #define WEBARKIT_MANAGER_H
 
 #include <WebARKitLog.h>
+#include <WebARKitGL.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 
@@ -100,6 +101,8 @@ class WebARKitManager {
     std::vector<double> getOutputData();
 
     cv::Mat getPoseMatrix();
+
+    std::array<float, 16> getTransformationMatrix();
 
     bool isValid();
 };
