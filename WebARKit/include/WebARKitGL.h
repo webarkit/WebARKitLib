@@ -1,7 +1,7 @@
 #ifndef WEBARKITGL_H
 #define WEBARKITGL_H
 
-#include <opencv2/core.h>
+#include <opencv2/core.hpp>
 
 void arglCameraViewRHf(float para[3][4], float m_modelview[16], const float scale) {
     m_modelview[0 + 0 * 4] = para[0][0]; // R1C1
