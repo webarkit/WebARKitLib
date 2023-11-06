@@ -49,4 +49,33 @@ void arglCameraViewRHf(cv::Mat para, std::array<double, 16>& m_modelview, const 
         m_modelview[14] *= scale;
     }
 }
+
+void cameraProjectionMatrix(const std::array<double, 9>& calibration, double nearPlane, double farPlane, int screenWidth, int screenHeight, std::array<double, 16>& projectionMatrix)
+{
+  // Camera parameters
+  double f_x = calibration.at(0); // Focal length in x axis
+  double f_y = calibration.at(4); // Focal length in y axis (usually the same?)
+  double c_x = calibration.at(2); // Camera primary point x
+  double c_y = calibration.at(5); // Camera primary point y
+
+  projectionMatrix[0] = -2.0f * f_x / screenWidth;
+  projectionMatrix[1] = 0.0f;
+  projectionMatrix[2] = 0.0f;
+  projectionMatrix[3] = 0.0f;
+
+  projectionMatrix[4] = 0.0f;
+  projectionMatrix[5] = 2.0f * f_y / screenHeight;
+  projectionMatrix[6] = 0.0f;
+  projectionMatrix[7] = 0.0f;
+
+  projectionMatrix[8] = 2.0f * c_x / screenWidth - 1.0f;
+  projectionMatrix[9] = 2.0f * c_y / screenHeight - 1.0f;    
+  projectionMatrix[10] = -( farPlane + nearPlane) / ( farPlane - nearPlane );
+  projectionMatrix[11] = -1.0f;
+
+  projectionMatrix[12] = 0.0f;
+  projectionMatrix[13] = 0.0f;
+  projectionMatrix[14] = -2.0f * farPlane * nearPlane / ( farPlane - nearPlane );        
+  projectionMatrix[15] = 0.0f;
+}
 } // namespace webarkit

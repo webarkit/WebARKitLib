@@ -2,6 +2,7 @@
 #include <WebARKitManager.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
 #include <WebARKitCamera.h>
+//#include <WebARKitGL.h>
 #include <opencv2/imgcodecs.hpp>
 
 class WebARKitEnumTest : public testing::TestWithParam<std::tuple<webarkit::TRACKER_TYPE, webarkit::ColorSpace>> {};
@@ -80,6 +81,24 @@ TEST(WebARKitCameraTest, TestCamera) {
   EXPECT_EQ(camera_mat[8], 1.0);
   EXPECT_EQ(camera.getFocalLength(), 571.25920269684582);
   camera.printSettings();
+}
+
+TEST(WebARKitGLTest, TestCameraProjectionMatrix) {
+  int width = 640;
+  int height = 480;
+  webarkit::WebARKitCamera camera;
+  camera.setupCamera(width, height);
+  std::array<double, 9> camera_mat = camera.getCameraData();
+  std::array<double, 16> projectionMatrix = {0.0};
+  webarkit::cameraProjectionMatrix(camera_mat, 0.01, 100.0, width, height, projectionMatrix);
+  /*for(auto i : projectionMatrix) {
+    std::cout << "proj Matrix: " << (double)i << std::endl;
+  }*/
+  EXPECT_EQ(projectionMatrix[0], -1.7851850084276433);
+  EXPECT_EQ(projectionMatrix[5], 2.3802466779035241);
+  EXPECT_EQ(projectionMatrix[10], -1.0002000200020003);
+  EXPECT_EQ(projectionMatrix[11], -1.0);
+  EXPECT_EQ(projectionMatrix[14], -0.020002000200020003);
 }
 
 // Check WebARKitManager initialisation.
