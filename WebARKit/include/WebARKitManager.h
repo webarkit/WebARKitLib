@@ -102,7 +102,7 @@ class WebARKitManager {
 
     cv::Mat getPoseMatrix();
 
-    std::array<float, 16> getTransformationMatrix();
+    std::array<double, 16> getTransformationMatrix();
 
     bool isValid();
 };
