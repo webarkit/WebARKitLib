@@ -95,6 +95,10 @@ std::array<double, 16> WebARKitManager::getTransformationMatrix() {
     return transformationMatrix;
 }
 
+std::array<double, 16> WebARKitManager::getCameraProjectionMatrix() {
+    return m_tracker->getCameraProjectionMatrix();
+}
+
 bool WebARKitManager::isValid() {
   return m_tracker->isValid();
 }

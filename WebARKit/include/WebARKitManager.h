@@ -104,6 +104,8 @@ class WebARKitManager {
 
     std::array<double, 16> getTransformationMatrix();
 
+    std::array<double, 16> getCameraProjectionMatrix();
+
     bool isValid();
 };
 
