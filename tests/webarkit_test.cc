@@ -143,6 +143,21 @@ TEST(WebARKitTest, CheckWebARKitVersion) {
   EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "1.0.0");
 }
 
+// Check cameraProjectionMatrix from manager
+TEST(WebARKitTest, CheckCameraProjectionMatrix) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Init the manager with the Akaze tracker
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
+  // Check if the cameraProjectionMatrix is correct
+  std::array<double, 16> camProjectionMatrix = manager.getCameraProjectionMatrix();
+  EXPECT_EQ(camProjectionMatrix[0], -1.7851850084276433);
+  EXPECT_EQ(camProjectionMatrix[5], 2.3802466779035241);
+  EXPECT_EQ(camProjectionMatrix[10], -1.0002000200020003);
+  EXPECT_EQ(camProjectionMatrix[11], -1.0);
+  EXPECT_EQ(camProjectionMatrix[14], -0.20002000200020004);
+}
+
 TEST(WebARKitTest, InitTrackerTest) {
   // Create a WebARKitManager object
   webarkit::WebARKitManager manager;

@@ -4,6 +4,7 @@
 #include "WebARKitEnums.h"
 #include <WebARKitLog.h>
 #include <WebARKitCamera.h>
+#include <WebARKitGL.h>
 #include <WebARKitPattern.h>
 #include <opencv2/xfeatures2d.hpp>
 
@@ -28,6 +29,8 @@ class WebARKitTracker {
     std::vector<double> getOutputData();
 
     cv::Mat getPoseMatrix();
+
+    std::array<double, 16> getCameraProjectionMatrix();
 
     bool isValid();
 
