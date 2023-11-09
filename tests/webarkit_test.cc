@@ -2,7 +2,6 @@
 #include <WebARKitManager.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
 #include <WebARKitCamera.h>
-//#include <WebARKitGL.h>
 #include <opencv2/imgcodecs.hpp>
 
 class WebARKitEnumTest : public testing::TestWithParam<std::tuple<webarkit::TRACKER_TYPE, webarkit::ColorSpace>> {};
@@ -91,9 +90,6 @@ TEST(WebARKitGLTest, TestCameraProjectionMatrix) {
   std::array<double, 9> camera_mat = camera.getCameraData();
   std::array<double, 16> projectionMatrix = {0.0};
   webarkit::cameraProjectionMatrix(camera_mat, 0.01, 100.0, width, height, projectionMatrix);
-  /*for(auto i : projectionMatrix) {
-    std::cout << "proj Matrix: " << (double)i << std::endl;
-  }*/
   EXPECT_EQ(projectionMatrix[0], -1.7851850084276433);
   EXPECT_EQ(projectionMatrix[5], 2.3802466779035241);
   EXPECT_EQ(projectionMatrix[10], -1.0002000200020003);
@@ -164,7 +160,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   // Init the manager with the Akaze tracker
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Load the test image
-  cv::Mat image = cv::imread("pinball.jpg");
+  cv::Mat image = cv::imread("../pinball.jpg");
 
   if(image.data == NULL) {
     std::cout << "Something wrong while reading the image!" << std::endl;
