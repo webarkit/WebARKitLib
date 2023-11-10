@@ -41,13 +41,13 @@ bool WebARKitManager::initialiseBase(webarkit::TRACKER_TYPE trackerType, int fra
     return true;
 }
 
-bool WebARKitManager::initTracker(uchar* refData, size_t refCols, size_t refRows) {
+bool WebARKitManager::initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
     WEBARKIT_LOGd("WebARKitManager::initTracker(...)\n");
     if (!refData || refCols <= 0 || refRows <= 0) {
         WEBARKIT_LOGe("Error initialising tracker.\n");
         return false;
     }
-    m_tracker->initTracker(refData, refCols, refRows);
+    m_tracker->initTracker(refData, refCols, refRows, colorSpace);
     state = WAITING_FOR_VIDEO;
     WEBARKIT_LOGd("WebARKitManager::initTracker() done.\n");
     return true;
