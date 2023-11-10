@@ -58,9 +58,15 @@ class WebARKitTracker::WebARKitTrackerImpl {
             cv::Mat colorFrame(refRows, refCols, CV_8UC4, refData);
             refGray.create(refRows, refCols, CV_8UC1);
             cv::cvtColor(colorFrame, refGray, cv::COLOR_RGBA2GRAY);
+        } else if (colorSpace == ColorSpace::RGB ) {
+            cv::Mat colorFrame(refRows, refCols, CV_8UC3, refData);
+            refGray.create(refRows, refCols, CV_8UC1);
+            cv::cvtColor(colorFrame, refGray, cv::COLOR_RGB2GRAY);
         } else if (colorSpace == ColorSpace::GRAY) {
             refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
         }
+
+        WEBARKIT_LOGi("Gray data ok!\n");
 
         //cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
 

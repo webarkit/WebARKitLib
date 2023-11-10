@@ -160,7 +160,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   // Init the manager with the Akaze tracker
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Load the test image
-  cv::Mat image = cv::imread("../pinball.jpg");
+  cv::Mat image = cv::imread("../pinball.jpg", cv::IMREAD_UNCHANGED);
 
   if(image.data == NULL) {
     std::cout << "Something wrong while reading the image!" << std::endl;
@@ -178,7 +178,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   EXPECT_EQ(image.cols, 1637);
   EXPECT_EQ(image.rows, 2048);
   // Check if initTracker returns sucessfully
-  EXPECT_TRUE(manager.initTracker(data, width, height, webarkit::ColorSpace::RGBA));
+  EXPECT_TRUE(manager.initTracker(data, width, height, webarkit::ColorSpace::RGB));
 }
 
 // Check WebARKit version
