@@ -50,10 +50,19 @@ class WebARKitTracker::WebARKitTrackerImpl {
         webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, frameWidth, frameHeight, m_cameraProjectionMatrix);
     }
 
-    void initTracker(uchar* refData, size_t refCols, size_t refRows) {
+    void initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
         WEBARKIT_LOGi("Init Tracker!\n");
 
-        cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
+        cv::Mat refGray;
+        if (colorSpace == ColorSpace::RGBA) {
+            cv::Mat colorFrame(refRows, refCols, CV_8UC4, refData);
+            refGray.create(refRows, refCols, CV_8UC1);
+            cv::cvtColor(colorFrame, refGray, cv::COLOR_RGBA2GRAY);
+        } else if (colorSpace == ColorSpace::GRAY) {
+            refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
+        }
+
+        //cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
 
         cv::Mat trackerFeatureMask = createTrackerFeatureMask(refGray);
 
@@ -420,8 +429,8 @@ void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWi
     _trackerImpl->initialize(trackerType, frameWidth, frameHeight);
 }
 
-void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows) {
-    _trackerImpl->initTracker(refData, refCols, refRows);
+void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    _trackerImpl->initTracker(refData, refCols, refRows, colorSpace);
 }
 
 void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {

@@ -178,7 +178,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   EXPECT_EQ(image.cols, 1637);
   EXPECT_EQ(image.rows, 2048);
   // Check if initTracker returns sucessfully
-  EXPECT_TRUE(manager.initTracker(data, width, height));
+  EXPECT_TRUE(manager.initTracker(data, width, height, webarkit::ColorSpace::RGBA));
 }
 
 // Check WebARKit version

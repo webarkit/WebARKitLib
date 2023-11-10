@@ -88,7 +88,7 @@ class WebARKitManager {
      */
     std::shared_ptr<webarkit::WebARKitTracker> getTracker() { return m_tracker; };
 
-    bool initTracker(uchar* refData, size_t refCols, size_t refRows);
+    bool initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace);
 
     bool update();
 
