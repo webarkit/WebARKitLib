@@ -1,8 +1,8 @@
 #ifndef WEBARKIT_UTILS_H
 #define WEBARKIT_UTILS_H
 
-#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
 #include <iostream>
 
 namespace webarkit {
@@ -27,6 +27,31 @@ namespace webarkit {
 
     return cv::Mat(rows, cols, CV_8UC1, gray);
 }*/
+
+static auto convert2Grayscale(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    cv::Mat refGray;
+
+    switch (colorSpace) {
+    case ColorSpace::RGBA: {
+        cv::Mat colorFrame(refRows, refCols, CV_8UC4, refData);
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(colorFrame, refGray, cv::COLOR_RGBA2GRAY);
+    } break;
+    case ColorSpace::RGB: {
+        cv::Mat colorFrame(refRows, refCols, CV_8UC3, refData);
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(colorFrame, refGray, cv::COLOR_RGB2GRAY);
+    } break;
+    case ColorSpace::GRAY: {
+        refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
+    } break;
+    default: {
+        refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
+    }
+    }
+
+    return refGray;
+}
 
 static cv::Mat grayscale(uchar data[], size_t cols, size_t rows, ColorSpace colorType) {
     int cn;
@@ -60,9 +85,7 @@ static cv::Mat grayscale(uchar data[], size_t cols, size_t rows, ColorSpace colo
     return cv::Mat(cols, rows, CV_8UC1, gray.data());
 }
 
-std::string inline webarkitGetVersion() {
-    return WEBARKIT_HEADER_VERSION_STRING;
-}
+std::string inline webarkitGetVersion() { return WEBARKIT_HEADER_VERSION_STRING; }
 
 unsigned int inline webarkitGetVersion(char** versionStringRef) {
     std::string version = WEBARKIT_HEADER_VERSION_STRING;
