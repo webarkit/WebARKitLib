@@ -6,6 +6,7 @@
 #include <WebARKitCamera.h>
 #include <WebARKitGL.h>
 #include <WebARKitPattern.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 #include <opencv2/xfeatures2d.hpp>
 
 namespace webarkit {
