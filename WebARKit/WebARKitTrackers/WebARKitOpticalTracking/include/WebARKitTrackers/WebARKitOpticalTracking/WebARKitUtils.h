@@ -28,6 +28,29 @@ namespace webarkit {
     return cv::Mat(rows, cols, CV_8UC1, gray);
 }*/
 
+static auto convert2Grayscale(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    cv::Mat refGray;
+
+    switch (colorSpace) {
+    case ColorSpace::RGBA: {
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(refData, refGray, cv::COLOR_RGBA2GRAY);
+    } break;
+    case ColorSpace::RGB: {
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(refData, refGray, cv::COLOR_RGB2GRAY);
+    } break;
+    case ColorSpace::GRAY: {
+        refGray = refData;
+    } break;
+    default: {
+        refGray = refData;
+    }
+    }
+
+    return refGray;
+}
+
 static auto convert2Grayscale(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
     cv::Mat refGray;
 

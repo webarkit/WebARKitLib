@@ -160,7 +160,7 @@ TEST(WebARKitTest, InitTrackerTest) {
   // Init the manager with the Akaze tracker
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Load the test image
-  cv::Mat image = cv::imread("../pinball.jpg", cv::IMREAD_UNCHANGED);
+  cv::Mat image = cv::imread("../pinball.jpg", cv::IMREAD_GRAYSCALE);
 
   if(image.data == NULL) {
     std::cout << "Something wrong while reading the image!" << std::endl;
@@ -178,8 +178,36 @@ TEST(WebARKitTest, InitTrackerTest) {
   EXPECT_EQ(image.cols, 1637);
   EXPECT_EQ(image.rows, 2048);
   // Check if initTracker returns sucessfully
-  EXPECT_TRUE(manager.initTracker(data, width, height, webarkit::ColorSpace::RGB));
+  EXPECT_TRUE(manager.initTracker(data, width, height, webarkit::ColorSpace::GRAY));
 }
+
+TEST(WebARKitTest, InitTrackerTest2) {
+  // Create a WebARKitManager object
+  webarkit::WebARKitManager manager;
+  // Init the manager with the Akaze tracker
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
+  // Load the test image
+  cv::Mat image = cv::imread("../pinball.jpg", cv::IMREAD_GRAYSCALE);
+
+  if(image.data == NULL) {
+    std::cout << "Something wrong while reading the image!" << std::endl;
+  }
+
+  if(image.empty()) {
+    image = cv::Mat::zeros(2048, 1637,  CV_8UC4);
+  }
+
+  ASSERT_FALSE(image.empty());
+
+  int width = image.cols;
+  int height = image.rows;
+  //unsigned char* data = image.data;
+  EXPECT_EQ(image.cols, 1637);
+  EXPECT_EQ(image.rows, 2048);
+  // Check if initTracker returns sucessfully
+  EXPECT_TRUE(manager.initTracker(image, width, height, webarkit::ColorSpace::GRAY));
+}
+
 
 // Check WebARKit version
 TEST(WebARKitTest, CheckShutDown) {
