@@ -173,6 +173,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         clear_output();
 
+        _isDetected = false;
+
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
         bool valid;
@@ -336,7 +338,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     void clear_output() {
         output = std::vector<double>(17, 0.0);
-        _isDetected = false;
     };
 
     void buildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
