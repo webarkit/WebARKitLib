@@ -101,6 +101,10 @@ cv::Mat WebARKitManager::getPoseMatrix() {
     return m_tracker->getPoseMatrix();
 }
 
+cv::Mat WebARKitManager::getGLViewMatrix() {
+    return m_tracker->getGLViewMatrix();
+}
+
 std::array<double, 16> WebARKitManager::getTransformationMatrix() {
     std::array<double, 16> transformationMatrix;
     webarkit::arglCameraViewRHf(m_tracker->getPoseMatrix(), transformationMatrix, 1.0f);

@@ -33,6 +33,8 @@ class WebARKitTracker {
 
     cv::Mat getPoseMatrix();
 
+    cv::Mat getGLViewMatrix();
+
     std::array<double, 16> getCameraProjectionMatrix();
 
     bool isValid();
