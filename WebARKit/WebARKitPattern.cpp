@@ -8,10 +8,11 @@ WebARKitPatternTrackingInfo::WebARKitPatternTrackingInfo() {
 }
 
 void WebARKitPatternTrackingInfo::computePose(std::vector<cv::Point3f>& treeDPoints,
-                                              std::vector<cv::Point2f>& imgPoints, cv::Mat& caMatrix,
-                                              cv::Mat& distCoeffs) {
-    cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
-    cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
+                                              std::vector<cv::Point2f>& imgPoints, const cv::Matx33f& caMatrix,
+                                              const cv::Mat& distCoeffs) {
+    //cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
+    //cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
+    cv::Mat rvec, tvec;
 
     cv::solvePnPRansac(treeDPoints, imgPoints, caMatrix, distCoeffs, rvec, tvec);
 
@@ -50,7 +51,7 @@ void WebARKitPatternTrackingInfo::invertPose() {
     cvToGl.at<double>(1, 1) = -1.0f; // Invert the y axis
     cvToGl.at<double>(2, 2) = -1.0f; // invert the z axis
     cvToGl.at<double>(3, 3) = 1.0f;
-    // viewMatrix = cvToGl * viewMatrix;
+
     pose3d = cvToGl * pose3d;
 
     // pose3d = invertPose;

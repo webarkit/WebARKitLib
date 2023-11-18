@@ -34,8 +34,8 @@ class WebARKitPatternTrackingInfo {
     /**
      * Compute pattern pose using PnP algorithm
      */
-    void computePose(std::vector<cv::Point3f>& treeDPoints, std::vector<cv::Point2f>& imgPoints, cv::Mat& caMatrix,
-                     cv::Mat& distCoeffs);
+    void computePose(std::vector<cv::Point3f>& treeDPoints, std::vector<cv::Point2f>& imgPoints, const cv::Matx33f& caMatrix,
+                     const cv::Mat& distCoeffs);
 
     void computeGLviewMatrix();
 

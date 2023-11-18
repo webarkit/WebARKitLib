@@ -42,9 +42,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
 
         for (auto i = 0; i < 4; i++) {
-            for (auto j = 0; j < 1; j++) {
-                WEBARKIT_LOGi("Distortion coefficients: %.2f\n", m_distortionCoeff.at<double>(i, j));
-            }
+            WEBARKIT_LOGi("Distortion coefficients: %.2f\n", m_distortionCoeff.at<double>(i, 0));
         }
 
         webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, frameWidth, frameHeight, m_cameraProjectionMatrix);
@@ -157,6 +155,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
     std::vector<double> getOutputData() { return output; };
 
     cv::Mat getPoseMatrix() { return _patternTrackingInfo.pose3d; };
+
+    cv::Mat getGLViewMatrix() { return _patternTrackingInfo.glViewMatrix; };
 
     std::array<double, 16> getCameraProjectionMatrix() { return m_cameraProjectionMatrix; };
 
@@ -278,8 +278,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 fill_output(m_H);
 
                 warpedCorners = getSelectedFeaturesWarped(m_H);
-                auto camM = cv::Mat(m_camMatrix);
-                _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, camM, m_distortionCoeff);
+
+                _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
+
+                _patternTrackingInfo.computeGLviewMatrix();
 
                 _isDetected = true;
             } else {
@@ -476,6 +478,8 @@ void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
 
 cv::Mat WebARKitTracker::getPoseMatrix() { return _trackerImpl->getPoseMatrix(); }
+
+cv::Mat WebARKitTracker::getGLViewMatrix() { return _trackerImpl->getGLViewMatrix(); }
 
 std::array<double, 16> WebARKitTracker::getCameraProjectionMatrix() {
     return _trackerImpl->getCameraProjectionMatrix();
