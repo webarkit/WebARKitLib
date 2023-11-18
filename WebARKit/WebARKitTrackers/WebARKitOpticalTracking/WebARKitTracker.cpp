@@ -48,7 +48,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, frameWidth, frameHeight, m_cameraProjectionMatrix);
     }
 
-    void initTracker(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    template<typename T>
+    void initTracker(T refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
         WEBARKIT_LOGi("Init Tracker!\n");
 
         cv::Mat refGray = convert2Grayscale(refData, refCols, refRows, colorSpace);
@@ -95,54 +96,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         WEBARKIT_LOGi("Tracker ready!\n");
     }
-
-    void initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
-        WEBARKIT_LOGi("Init Tracker!\n");
-
-        cv::Mat refGray = convert2Grayscale(refData, refCols, refRows, colorSpace);
-
-        cv::Mat trackerFeatureMask = createTrackerFeatureMask(refGray);
-
-        this->_featureDetector->detect(refGray, refKeyPts, trackerFeatureMask);
-        this->_featureDescriptor->compute(refGray, refKeyPts, refDescr);
-
-        // Normalized dimensions :
-        const float maxSize = std::max(refCols, refRows);
-        const float unitW = refCols / maxSize;
-        const float unitH = refRows / maxSize;
-
-        _pattern.size = cv::Size(refCols, refRows);
-
-        WEBARKIT_LOGd("WebARKitPattern size ready!\n");
-
-        _pattern.points2d.push_back(cv::Point2f(0, 0));
-        _pattern.points2d.push_back(cv::Point2f(refCols, 0));
-        _pattern.points2d.push_back(cv::Point2f(refCols, refRows));
-        _pattern.points2d.push_back(cv::Point2f(0, refRows));
-
-        WEBARKIT_LOGd("WebARKitPattern points2d ready!\n");
-
-        _pattern.points3d.push_back(cv::Point3f(-unitW, -unitH, 0));
-        _pattern.points3d.push_back(cv::Point3f(unitW, -unitH, 0));
-        _pattern.points3d.push_back(cv::Point3f(unitW, unitH, 0));
-        _pattern.points3d.push_back(cv::Point3f(-unitW, unitH, 0));
-
-        WEBARKIT_LOGd("WebARKitPattern points3d ready!\n");
-
-        corners[0] = cvPoint(0, 0);
-        corners[1] = cvPoint(refCols, 0);
-        corners[2] = cvPoint(refCols, refRows);
-        corners[3] = cvPoint(0, refRows);
-
-        _bBox.push_back(cv::Point2f(0, 0));
-        _bBox.push_back(cv::Point2f(refCols, 0));
-        _bBox.push_back(cv::Point2f(refCols, refRows));
-        _bBox.push_back(cv::Point2f(0, refRows));
-
-        initialized = true;
-
-        WEBARKIT_LOGi("Tracker ready!\n");
-    };
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
         cv::Mat grayFrame = convert2Grayscale(frameData, frameCols, frameRows, colorSpace);
@@ -465,11 +418,11 @@ void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWi
 }
 
 void WebARKitTracker::initTracker(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
-    _trackerImpl->initTracker(refData, refCols, refRows, colorSpace);
+    _trackerImpl->initTracker<cv::Mat>(refData, refCols, refRows, colorSpace);
 }
 
 void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
-    _trackerImpl->initTracker(refData, refCols, refRows, colorSpace);
+    _trackerImpl->initTracker<uchar*>(refData, refCols, refRows, colorSpace);
 }
 
 void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
