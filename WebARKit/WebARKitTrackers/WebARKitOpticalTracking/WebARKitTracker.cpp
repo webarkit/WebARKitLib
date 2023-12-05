@@ -162,7 +162,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
                     _isDetected = true;
                     numMatches = framePts.size();
                     perspectiveTransform(_bBox, _bBoxTransformed, m_H);
-                    swapImagePyramid();
                 }
             }
         }
@@ -173,11 +172,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
     bool track() {
         if (!initialized) {
             WEBARKIT_LOGe("Reference image not found. AR is unintialized!\n");
-            return NULL;
-        }
-
-        if (_prevPyramid.empty()) {
-            WEBARKIT_LOGe("Tracking is uninitialized!\n");
             return NULL;
         }
 
@@ -244,7 +238,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             }
         }
 
-        swapImagePyramid();
+        //swapImagePyramid();
 
         return valid;
     };
@@ -255,6 +249,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         } else {
             this->_valid = track();
         }
+        swapImagePyramid();
     };
 
     bool homographyValid(cv::Mat& H) {
@@ -293,11 +288,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
         output = std::vector<double>(17, 0.0);
     };
 
-    void buildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
+    void buildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
 
-    cv::Mat createTrackerFeatureMask(cv::Mat frame) {
+    cv::Mat createTrackerFeatureMask(cv::Mat& frame) {
         cv::Mat featureMask;
         if (featureMask.empty()) {
             // Only create mask if we have something to draw in it.
@@ -310,7 +305,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return featureMask;
     }
 
-    cv::Mat createFeatureMask(cv::Mat frame) {
+    cv::Mat createFeatureMask(cv::Mat& frame) {
         cv::Mat featureMask;
         if (_isDetected) {
             if (featureMask.empty()) {
