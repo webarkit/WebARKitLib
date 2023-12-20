@@ -201,7 +201,16 @@ void arLogv(const char *tag, const int logLevel, const char *format, va_list ap)
             os_log_with_type(OS_LOG_DEFAULT, type, "%{public}s", buf);
         }
 #else
+
+#ifdef __EMSCRIPTEN__
+        if(logLevel == AR_LOG_LEVEL_ERROR)
+            fprintf(stderr, "%s", buf);
+        else
+            fprintf(stdout, "%s", buf);
+#else
         fprintf(stderr, "%s", buf);
+#endif
+
 #endif
     }
     free(buf);
