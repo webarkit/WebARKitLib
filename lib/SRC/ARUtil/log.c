@@ -47,6 +47,10 @@
 #  define snprintf _snprintf
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/console.h>
+#endif
+
 //
 // Global required for logging functions.
 //
@@ -204,9 +208,9 @@ void arLogv(const char *tag, const int logLevel, const char *format, va_list ap)
 
 #ifdef __EMSCRIPTEN__
         if(logLevel == AR_LOG_LEVEL_ERROR)
-            fprintf(stderr, "%s", buf);
+            emscripten_console_error(buf);
         else
-            fprintf(stdout, "%s", buf);
+            emscripten_console_warn(buf);
 #else
         fprintf(stderr, "%s", buf);
 #endif
