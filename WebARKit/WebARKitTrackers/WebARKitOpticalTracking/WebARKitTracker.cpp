@@ -25,6 +25,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 15;
         }
+        WEBARKIT_LOGi("Min Num Matches: %d\n", minNumMatches);
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
 
