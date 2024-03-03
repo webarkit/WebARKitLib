@@ -28,7 +28,7 @@ namespace webarkit {
     return cv::Mat(rows, cols, CV_8UC1, gray);
 }*/
 
-static auto convert2Grayscale(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+static auto convert2Grayscale(cv::Mat& refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
     cv::Mat refGray;
 
     switch (colorSpace) {
