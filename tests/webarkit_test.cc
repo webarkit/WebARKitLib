@@ -34,7 +34,7 @@ TEST(WebARKitConfigTest, TestConfigValues) {
   EXPECT_EQ(DEFAULT_MAX_FEATURES, 8000);
   EXPECT_EQ(TEBLID_MAX_FEATURES, 10000);
   EXPECT_EQ(N, 10);
-  EXPECT_EQ(MIN_NUM_MATCHES, 50);
+  EXPECT_EQ(MIN_NUM_MATCHES, 8);
   EXPECT_EQ(maxLevel, 3);
   EXPECT_EQ(featureDetectPyramidLevel, 1.05f);
   EXPECT_EQ(featureBorder, 8);
