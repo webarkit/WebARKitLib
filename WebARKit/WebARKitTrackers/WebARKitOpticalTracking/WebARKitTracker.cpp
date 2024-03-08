@@ -138,8 +138,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
         this->_featureDetector->detect(currIm, frameKeyPts, featureMask);
         this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
 
-        WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
-
         if (!_isDetected) {
             std::vector<std::vector<cv::DMatch>> knnMatches;
             _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
@@ -250,6 +248,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         } else {
             this->_valid = track();
         }
+        WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
         swapImagePyramid();
     };
 
