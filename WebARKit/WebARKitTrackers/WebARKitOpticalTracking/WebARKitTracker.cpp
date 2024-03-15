@@ -57,8 +57,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         cv::Mat trackerFeatureMask = createTrackerFeatureMask(refGray);
 
-        this->_featureDetector->detect(refGray, refKeyPts, trackerFeatureMask);
-        this->_featureDescriptor->compute(refGray, refKeyPts, refDescr);
+        if(!extractFeatures(refGray, trackerFeatureMask, refKeyPts, refDescr)) {
+            WEBARKIT_LOGe("No features detected!\n");
+            return;
+        };
 
         // Normalized dimensions :
         const float maxSize = std::max(refCols, refRows);
@@ -98,6 +100,23 @@ class WebARKitTracker::WebARKitTrackerImpl {
         WEBARKIT_LOGi("Tracker ready!\n");
     }
 
+    bool extractFeatures(const cv::Mat& grayImage,  cv::Mat& featureMask, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors) const {
+        assert(!grayImage.empty());
+        assert(grayImage.channels() == 1);
+
+        this->_featureDetector->detect(grayImage, keypoints, featureMask);
+        if (keypoints.empty()){
+            WEBARKIT_LOGe("No keypoints detected!\n");
+            return false;
+        }
+        this->_featureDescriptor->compute(grayImage, keypoints, descriptors);
+        if (descriptors.empty()) {
+            WEBARKIT_LOGe("No descriptors computed!\n");
+            return false;
+        }
+        return true;
+   }
+
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
         cv::Mat grayFrame = convert2Grayscale(frameData, frameCols, frameRows, colorSpace);
         cv::blur(grayFrame, grayFrame, blurSize);
@@ -135,8 +154,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         cv::Mat featureMask = createFeatureMask(currIm);
 
-        this->_featureDetector->detect(currIm, frameKeyPts, featureMask);
-        this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
+        if(!extractFeatures(currIm, featureMask, frameKeyPts, frameDescr)) {
+            WEBARKIT_LOGe("No features detected in resetTracking!\n");
+            return false;
+        };
 
         if (!_isDetected) {
             std::vector<std::vector<cv::DMatch>> knnMatches;
