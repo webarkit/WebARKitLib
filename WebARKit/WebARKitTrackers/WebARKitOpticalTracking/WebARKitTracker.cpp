@@ -117,9 +117,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return true;
    }
 
-    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
+    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur) {
         cv::Mat grayFrame = convert2Grayscale(frameData, frameCols, frameRows, colorSpace);
-        cv::blur(grayFrame, grayFrame, blurSize);
+        if (enableBlur) {
+            cv::blur(grayFrame, grayFrame, blurSize);
+        }  
         buildImagePyramid(grayFrame);
         processFrame(grayFrame);
         grayFrame.release();
@@ -441,8 +443,8 @@ void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows
     _trackerImpl->initTracker<uchar*>(refData, refCols, refRows, colorSpace);
 }
 
-void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
-    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace);
+void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur) {
+    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace, enableBlur);
 }
 
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }

@@ -98,7 +98,7 @@ class WebARKitManager {
 
     bool shutdown();
 
-    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
+    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur);
 
     std::vector<double> getOutputData();
 
