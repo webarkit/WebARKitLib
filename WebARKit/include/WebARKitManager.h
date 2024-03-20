@@ -39,6 +39,7 @@
 #define WEBARKIT_MANAGER_H
 
 #include <WebARKitLog.h>
+#include <WebARKitGL.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 
@@ -87,7 +88,9 @@ class WebARKitManager {
      */
     std::shared_ptr<webarkit::WebARKitTracker> getTracker() { return m_tracker; };
 
-    bool initTracker(uchar* refData, size_t refCols, size_t refRows);
+    bool initTracker(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace);
+
+    bool initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace);
 
     bool update();
 
@@ -95,9 +98,17 @@ class WebARKitManager {
 
     bool shutdown();
 
-    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace);
+    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur);
 
     std::vector<double> getOutputData();
+
+    cv::Mat getPoseMatrix();
+
+    cv::Mat getGLViewMatrix();
+
+    std::array<double, 16> getTransformationMatrix();
+
+    std::array<double, 16> getCameraProjectionMatrix();
 
     bool isValid();
 };

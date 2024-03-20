@@ -7,39 +7,83 @@ class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
-          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f){
-            m_camMatrix = cv::Mat();
-            m_distortionCoeff = cv::Mat();
-          };
+          minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f) {
+        m_camMatrix = cv::Matx33d::zeros();
+        m_distortionCoeff = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
+    };
+
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
-        }
-        else if(trackerType == webarkit::AKAZE_TRACKER) {
+        } else if (trackerType == webarkit::AKAZE_TRACKER) {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 40;
         } else {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 15;
         }
+        WEBARKIT_LOGi("Min Num Matches: %d\n", minNumMatches);
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
-        m_camMatrix = cv::Mat(3,3, CV_64FC1, _camera->getCameraData().data());
-        m_distortionCoeff = cv::Mat(6, 1, CV_64FC1, _camera->getDistortionCoefficients().data());
+
+        std::array<double, 9> camData = _camera->getCameraData();
+        for (auto i = 0; i < 3; i++) {
+            for (auto j = 0; j < 3; j++) {
+                m_camMatrix(i, j) = camData[i * 3 + j];
+            }
+        }
+
+        for (auto i = 0; i < 3; i++) {
+            for (auto j = 0; j < 3; j++) {
+                WEBARKIT_LOGi("Camera Matrix: %.2f\n", m_camMatrix(i, j));
+            }
+        }
+
+        for (auto i = 0; i < 4; i++) {
+            WEBARKIT_LOGi("Distortion coefficients: %.2f\n", m_distortionCoeff.at<double>(i, 0));
+        }
+
+        webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, frameWidth, frameHeight, m_cameraProjectionMatrix);
     }
 
-    void initTracker(uchar* refData, size_t refCols, size_t refRows) {
+    template<typename T>
+    void initTracker(T refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
         WEBARKIT_LOGi("Init Tracker!\n");
 
-        cv::Mat refGray(refRows, refCols, CV_8UC1, refData);
+        cv::Mat refGray = convert2Grayscale(refData, refCols, refRows, colorSpace);
 
         cv::Mat trackerFeatureMask = createTrackerFeatureMask(refGray);
 
-        this->_featureDetector->detect(refGray, refKeyPts, trackerFeatureMask);
-        this->_featureDescriptor->compute(refGray, refKeyPts, refDescr);
+        if(!extractFeatures(refGray, trackerFeatureMask, refKeyPts, refDescr)) {
+            WEBARKIT_LOGe("No features detected!\n");
+            return;
+        };
+
+        // Normalized dimensions :
+        const float maxSize = std::max(refCols, refRows);
+        const float unitW = refCols / maxSize;
+        const float unitH = refRows / maxSize;
+
+        _pattern.size = cv::Size(refCols, refRows);
+
+        WEBARKIT_LOGd("WebARKitPattern size ready!\n");
+
+        _pattern.points2d.push_back(cv::Point2f(0, 0));
+        _pattern.points2d.push_back(cv::Point2f(refCols, 0));
+        _pattern.points2d.push_back(cv::Point2f(refCols, refRows));
+        _pattern.points2d.push_back(cv::Point2f(0, refRows));
+
+        WEBARKIT_LOGd("WebARKitPattern points2d ready!\n");
+
+        _pattern.points3d.push_back(cv::Point3f(-unitW, -unitH, 0));
+        _pattern.points3d.push_back(cv::Point3f(unitW, -unitH, 0));
+        _pattern.points3d.push_back(cv::Point3f(unitW, unitH, 0));
+        _pattern.points3d.push_back(cv::Point3f(-unitW, unitH, 0));
+
+        WEBARKIT_LOGd("WebARKitPattern points3d ready!\n");
 
         corners[0] = cvPoint(0, 0);
         corners[1] = cvPoint(refCols, 0);
@@ -54,24 +98,42 @@ class WebARKitTracker::WebARKitTrackerImpl {
         initialized = true;
 
         WEBARKIT_LOGi("Tracker ready!\n");
-    };
+    }
 
-    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
-        cv::Mat grayFrame;
-        if (colorSpace == ColorSpace::RGBA) {
-            cv::Mat colorFrame(frameRows, frameCols, CV_8UC4, frameData);
-            grayFrame.create(frameRows, frameCols, CV_8UC1);
-            cv::cvtColor(colorFrame, grayFrame, cv::COLOR_RGBA2GRAY);
-        } else if (colorSpace == ColorSpace::GRAY) {
-            grayFrame = cv::Mat(frameRows, frameCols, CV_8UC1, frameData);
+    bool extractFeatures(const cv::Mat& grayImage,  cv::Mat& featureMask, std::vector<cv::KeyPoint>& keypoints, cv::Mat& descriptors) const {
+        assert(!grayImage.empty());
+        assert(grayImage.channels() == 1);
+
+        this->_featureDetector->detect(grayImage, keypoints, featureMask);
+        if (keypoints.empty()){
+            WEBARKIT_LOGe("No keypoints detected!\n");
+            return false;
         }
-        cv::blur(grayFrame, grayFrame, blurSize);
+        this->_featureDescriptor->compute(grayImage, keypoints, descriptors);
+        if (descriptors.empty()) {
+            WEBARKIT_LOGe("No descriptors computed!\n");
+            return false;
+        }
+        return true;
+   }
+
+    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur) {
+        cv::Mat grayFrame = convert2Grayscale(frameData, frameCols, frameRows, colorSpace);
+        if (enableBlur) {
+            cv::blur(grayFrame, grayFrame, blurSize);
+        }  
         buildImagePyramid(grayFrame);
         processFrame(grayFrame);
         grayFrame.release();
     };
 
     std::vector<double> getOutputData() { return output; };
+
+    cv::Mat getPoseMatrix() { return _patternTrackingInfo.pose3d; };
+
+    cv::Mat getGLViewMatrix() { return _patternTrackingInfo.glViewMatrix; };
+
+    std::array<double, 16> getCameraProjectionMatrix() { return m_cameraProjectionMatrix; };
 
     bool isValid() { return _valid; };
 
@@ -86,16 +148,18 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         clear_output();
 
+        _isDetected = false;
+
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
         bool valid;
 
         cv::Mat featureMask = createFeatureMask(currIm);
 
-        this->_featureDetector->detect(currIm, frameKeyPts, featureMask);
-        this->_featureDescriptor->compute(currIm, frameKeyPts, frameDescr);
-
-        WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
+        if(!extractFeatures(currIm, featureMask, frameKeyPts, frameDescr)) {
+            WEBARKIT_LOGe("No features detected in resetTracking!\n");
+            return false;
+        };
 
         if (!_isDetected) {
             std::vector<std::vector<cv::DMatch>> knnMatches;
@@ -120,7 +184,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
                     _isDetected = true;
                     numMatches = framePts.size();
                     perspectiveTransform(_bBox, _bBoxTransformed, m_H);
-                    swapImagePyramid();
                 }
             }
         }
@@ -131,11 +194,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
     bool track() {
         if (!initialized) {
             WEBARKIT_LOGe("Reference image not found. AR is unintialized!\n");
-            return NULL;
-        }
-
-        if (_prevPyramid.empty()) {
-            WEBARKIT_LOGe("Tracking is uninitialized!\n");
             return NULL;
         }
 
@@ -185,15 +243,24 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
             // set old points to new points
             framePts = goodPtsCurr;
+            std::vector<cv::Point2f> warpedCorners;
+
             if ((valid = homographyValid(m_H))) {
                 fill_output(m_H);
+
+                warpedCorners = getSelectedFeaturesWarped(m_H);
+
+                _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
+
+                _patternTrackingInfo.computeGLviewMatrix();
+
                 _isDetected = true;
             } else {
                 _isDetected = false;
             }
         }
 
-        swapImagePyramid();
+        //swapImagePyramid();
 
         return valid;
     };
@@ -204,6 +271,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         } else {
             this->_valid = track();
         }
+        WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
+        swapImagePyramid();
     };
 
     bool homographyValid(cv::Mat& H) {
@@ -240,14 +309,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     void clear_output() {
         output = std::vector<double>(17, 0.0);
-        _isDetected = false;
     };
 
-    void buildImagePyramid(cv::Mat frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
+    void buildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
 
-    cv::Mat createTrackerFeatureMask(cv::Mat frame) {
+    cv::Mat createTrackerFeatureMask(cv::Mat& frame) {
         cv::Mat featureMask;
         if (featureMask.empty()) {
             // Only create mask if we have something to draw in it.
@@ -260,7 +328,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return featureMask;
     }
 
-    cv::Mat createFeatureMask(cv::Mat frame) {
+    cv::Mat createFeatureMask(cv::Mat& frame) {
         cv::Mat featureMask;
         if (_isDetected) {
             if (featureMask.empty()) {
@@ -275,6 +343,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
             drawContours(featureMask, contours, 0, cv::Scalar(0), -1, 8);
         }
         return featureMask;
+    }
+
+    std::vector<cv::Point2f> getSelectedFeaturesWarped(cv::Mat& H) {
+        std::vector<cv::Point2f> warpedPoints;
+        perspectiveTransform(_pattern.points2d, warpedPoints, H);
+        return warpedPoints;
     }
 
     bool _valid;
@@ -297,8 +371,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     WebARKitCamera* _camera = new WebARKitCamera();
 
-    cv::Mat m_camMatrix;
+    WebARKitPattern _pattern;
+
+    WebARKitPatternTrackingInfo _patternTrackingInfo;
+
+    cv::Matx33d m_camMatrix;
     cv::Mat m_distortionCoeff;
+
+    std::array<double, 16> m_cameraProjectionMatrix;
 
   private:
     std::vector<double> output; // 9 from homography matrix, 8 from warped corners*/
@@ -333,7 +413,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
         } else if (trackerType == webarkit::TRACKER_TYPE::FREAK_TRACKER) {
             this->_featureDetector = cv::ORB::create(10000);
-            //this->_featureDetector = cv::xfeatures2d::StarDetector::create(DEFAULT_MAX_FEATURES);
+            // this->_featureDetector = cv::xfeatures2d::StarDetector::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::FREAK::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::TEBLID_TRACKER) {
             this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
@@ -351,17 +431,31 @@ WebARKitTracker::WebARKitTracker(WebARKitTracker&&) = default; // copy construct
 
 WebARKitTracker& WebARKitTracker::operator=(WebARKitTracker&&) = default; // move assignment operator
 
-void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) { _trackerImpl->initialize(trackerType, frameWidth, frameHeight); }
-
-void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows) {
-    _trackerImpl->initTracker(refData, refCols, refRows);
+void WebARKitTracker::initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
+    _trackerImpl->initialize(trackerType, frameWidth, frameHeight);
 }
 
-void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
-    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace);
+void WebARKitTracker::initTracker(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    _trackerImpl->initTracker<cv::Mat>(refData, refCols, refRows, colorSpace);
+}
+
+void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    _trackerImpl->initTracker<uchar*>(refData, refCols, refRows, colorSpace);
+}
+
+void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur) {
+    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace, enableBlur);
 }
 
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
+
+cv::Mat WebARKitTracker::getPoseMatrix() { return _trackerImpl->getPoseMatrix(); }
+
+cv::Mat WebARKitTracker::getGLViewMatrix() { return _trackerImpl->getGLViewMatrix(); }
+
+std::array<double, 16> WebARKitTracker::getCameraProjectionMatrix() {
+    return _trackerImpl->getCameraProjectionMatrix();
+}
 
 bool WebARKitTracker::isValid() { return _trackerImpl->isValid(); }
 

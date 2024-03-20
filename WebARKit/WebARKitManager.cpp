@@ -41,13 +41,25 @@ bool WebARKitManager::initialiseBase(webarkit::TRACKER_TYPE trackerType, int fra
     return true;
 }
 
-bool WebARKitManager::initTracker(uchar* refData, size_t refCols, size_t refRows) {
+bool WebARKitManager::initTracker(cv::Mat refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
+    WEBARKIT_LOGd("WebARKitManager::initTracker(...)\n");
+    if (refData.empty() || refCols <= 0 || refRows <= 0) {
+        WEBARKIT_LOGe("Error initialising tracker.\n");
+        return false;
+    }
+    m_tracker->initTracker(refData, refCols, refRows, colorSpace);
+    state = WAITING_FOR_VIDEO;
+    WEBARKIT_LOGd("WebARKitManager::initTracker() done.\n");
+    return true;
+}
+
+bool WebARKitManager::initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
     WEBARKIT_LOGd("WebARKitManager::initTracker(...)\n");
     if (!refData || refCols <= 0 || refRows <= 0) {
         WEBARKIT_LOGe("Error initialising tracker.\n");
         return false;
     }
-    m_tracker->initTracker(refData, refCols, refRows);
+    m_tracker->initTracker(refData, refCols, refRows, colorSpace);
     state = WAITING_FOR_VIDEO;
     WEBARKIT_LOGd("WebARKitManager::initTracker() done.\n");
     return true;
@@ -67,7 +79,7 @@ bool WebARKitManager::shutdown() {
     return true;
 };
 
-void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace) {
+void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur) {
     WEBARKIT_LOGd("WebARKitManager::processFrameData(...)\n");
     if (state < WAITING_FOR_VIDEO) {
         WEBARKIT_LOGe("processFrameData called without init the tracker. Call first initTracker.\n");
@@ -76,7 +88,7 @@ void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_
         WEBARKIT_LOGe("Error initialising processFrameData.\n");
         //return false;
     }
-  m_tracker->processFrameData(frameData, frameCols, frameRows, colorSpace);
+  m_tracker->processFrameData(frameData, frameCols, frameRows, colorSpace, enableBlur);
   state = DETECTION_RUNNING;
   WEBARKIT_LOGd("WebARKitManager::processFrameData() done\n");
 }
@@ -84,6 +96,24 @@ void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_
 std::vector<double> WebARKitManager::getOutputData() {
     return m_tracker->getOutputData();
 };
+
+cv::Mat WebARKitManager::getPoseMatrix() {
+    return m_tracker->getPoseMatrix();
+}
+
+cv::Mat WebARKitManager::getGLViewMatrix() {
+    return m_tracker->getGLViewMatrix();
+}
+
+std::array<double, 16> WebARKitManager::getTransformationMatrix() {
+    std::array<double, 16> transformationMatrix;
+    webarkit::arglCameraViewRHf(m_tracker->getPoseMatrix(), transformationMatrix, 1.0f);
+    return transformationMatrix;
+}
+
+std::array<double, 16> WebARKitManager::getCameraProjectionMatrix() {
+    return m_tracker->getCameraProjectionMatrix();
+}
 
 bool WebARKitManager::isValid() {
   return m_tracker->isValid();
