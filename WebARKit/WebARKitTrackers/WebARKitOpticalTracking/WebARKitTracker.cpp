@@ -162,19 +162,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
         };
 
         if (!_isDetected) {
-            std::vector<std::vector<cv::DMatch>> knnMatches;
-            _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
-
-            framePts.clear();
             std::vector<cv::Point2f> refPts;
 
-            // find the best matches
-            for (size_t i = 0; i < knnMatches.size(); ++i) {
-                if (knnMatches[i][0].distance < _nn_match_ratio * knnMatches[i][1].distance) {
-                    framePts.push_back(frameKeyPts[knnMatches[i][0].queryIdx].pt);
-                    refPts.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
-                }
-            }
+            getMatches(frameDescr, frameKeyPts, refPts, framePts);
 
             WEBARKIT_LOG("Num Matches: %zu\n", framePts.size());
 
@@ -314,6 +304,22 @@ class WebARKitTracker::WebARKitTrackerImpl {
     void buildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
+
+    void getMatches(const cv::Mat& frameDescr, std::vector<cv::KeyPoint>& frameKeyPts, std::vector<cv::Point2f>& refPoints, std::vector<cv::Point2f>& framePoints) {
+        std::vector<std::vector<cv::DMatch>> knnMatches;
+        _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
+
+        framePts.clear();
+        std::vector<cv::Point2f> refPts;
+
+        // find the best matches
+        for (size_t i = 0; i < knnMatches.size(); ++i) {
+            if (knnMatches[i][0].distance < _nn_match_ratio * knnMatches[i][1].distance) {
+                framePts.push_back(frameKeyPts[knnMatches[i][0].queryIdx].pt);
+                refPts.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
+            }
+        }
+    }
 
     cv::Mat createTrackerFeatureMask(cv::Mat& frame) {
         cv::Mat featureMask;
