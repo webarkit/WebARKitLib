@@ -165,14 +165,15 @@ class WebARKitTracker::WebARKitTrackerImpl {
             std::vector<cv::Point2f> refPts;
 
             getMatches(frameDescr, frameKeyPts, refPts, framePts);
+            numMatches = framePts.size();
 
-            WEBARKIT_LOG("Num Matches: %zu\n", framePts.size());
+            WEBARKIT_LOG("Num Matches: %zu\n", numMatches);
 
-            if (framePts.size() >= minNumMatches) {
+            if (numMatches >= minNumMatches) {
                 m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
                 if ((valid = homographyValid(m_H))) {
                     _isDetected = true;
-                    numMatches = framePts.size();
+                    //numMatches = framePts.size();
                     perspectiveTransform(_bBox, _bBoxTransformed, m_H);
                 }
             }
