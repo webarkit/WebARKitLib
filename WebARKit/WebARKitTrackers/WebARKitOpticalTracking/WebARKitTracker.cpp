@@ -167,7 +167,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             getMatches(frameDescr, frameKeyPts, refPts, framePts);
             numMatches = framePts.size();
 
-            WEBARKIT_LOG("Num Matches: %zu\n", numMatches);
+            WEBARKIT_LOG("Num Matches: %d\n", numMatches);
 
             if (numMatches >= minNumMatches) {
                 m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
