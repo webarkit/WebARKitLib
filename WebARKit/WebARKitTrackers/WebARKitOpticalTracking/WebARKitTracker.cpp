@@ -173,7 +173,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
                 if ((valid = homographyValid(m_H))) {
                     _isDetected = true;
-                    //numMatches = framePts.size();
                     perspectiveTransform(_bBox, _bBoxTransformed, m_H);
                 }
             }
@@ -198,7 +197,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         bool valid;
         calcOpticalFlowPyrLK(_prevPyramid, _pyramid, framePts, currPts, status, err, winSize, maxLevel, termcrit, 0,
                              0.001);
-
+        calcOpticalFlowPyrLK(_pyramid, _prevPyramid, currPts, framePts, status, err, winSize, maxLevel, termcrit, 0,
+                             0.001);
         // calculate average variance
         double mean, avg_variance = 0.0;
         double sum = 0.0;
@@ -251,8 +251,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
             }
         }
 
-        //swapImagePyramid();
-
         return valid;
     };
 
@@ -302,7 +300,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
         output = std::vector<double>(17, 0.0);
     };
 
-    void buildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
+    void buildImagePyramid(cv::Mat& frame) { 
+        cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); 
+        }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
 
@@ -419,7 +419,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
             this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
         } else if (trackerType == webarkit::TRACKER_TYPE::FREAK_TRACKER) {
             this->_featureDetector = cv::ORB::create(10000);
-            // this->_featureDetector = cv::xfeatures2d::StarDetector::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::FREAK::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::TEBLID_TRACKER) {
             this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
