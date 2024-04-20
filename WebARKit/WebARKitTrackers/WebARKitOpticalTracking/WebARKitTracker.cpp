@@ -192,27 +192,34 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         // use optical flow to track keypoints
         std::vector<float> err;
-        std::vector<uchar> status;
+        //std::vector<uchar> status;
+        std::vector<uchar> statusFirstPass, statusSecondPass;
         std::vector<cv::Point2f> currPts, goodPtsCurr, goodPtsPrev;
         bool valid;
-        calcOpticalFlowPyrLK(_prevPyramid, _pyramid, framePts, currPts, status, err, winSize, maxLevel, termcrit, 0,
+        calcOpticalFlowPyrLK(_prevPyramid, _pyramid, framePts, currPts, statusFirstPass, err, winSize, maxLevel, termcrit, 0,
                              0.001);
-        calcOpticalFlowPyrLK(_pyramid, _prevPyramid, currPts, framePts, status, err, winSize, maxLevel, termcrit, 0,
+        calcOpticalFlowPyrLK(_pyramid, _prevPyramid, currPts, framePts, statusSecondPass, err, winSize, maxLevel, termcrit, 0,
                              0.001);
         // calculate average variance
         double mean, avg_variance = 0.0;
         double sum = 0.0;
         double diff;
         std::vector<double> diffs;
-        for (size_t i = 0; i < framePts.size(); ++i) {
-            if (status[i]) {
-                goodPtsCurr.push_back(currPts[i]);
-                goodPtsPrev.push_back(framePts[i]);
+        int killed1 = 0;
 
-                diff = sqrt(pow(currPts[i].x - framePts[i].x, 2.0) + pow(currPts[i].y - framePts[i].y, 2.0));
+        for (auto j = 0; j != currPts.size(); ++j) {
+            if (!statusFirstPass[j] || !statusSecondPass[j]) {
+                statusFirstPass[j] = (uchar)0;
+                killed1++;
+                continue;
+            }
+
+            goodPtsCurr.push_back(currPts[j]);
+            goodPtsPrev.push_back(framePts[j]);
+
+            diff = sqrt(pow(currPts[j].x - framePts[j].x, 2.0) + pow(currPts[j].y - framePts[j].y, 2.0));
                 sum += diff;
                 diffs.push_back(diff);
-            }
         }
 
         mean = sum / diffs.size();
