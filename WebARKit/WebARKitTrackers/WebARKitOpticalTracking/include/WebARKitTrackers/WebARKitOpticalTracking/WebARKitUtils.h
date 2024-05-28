@@ -1,11 +1,64 @@
 #ifndef WEBARKIT_UTILS_H
 #define WEBARKIT_UTILS_H
 
-#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
+//#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitHomographyInfo.h>
 #include <iostream>
 
 namespace webarkit {
+
+/// Method for calculating and validating a homography matrix from a set of corresponding points.
+/// pts1 and pts must have the same dimensionality.
+/// @returns An WebARKitHomographyInfo instance, with its status vector of the same dimensionality as the pts1 and pts2 vectors.
+static homography::WebARKitHomographyInfo getHomographyInliers(std::vector<cv::Point2f> pts1, std::vector<cv::Point2f> pts2)
+{
+    if (pts1.size() < 4) {
+        return homography::WebARKitHomographyInfo();
+    }
+    
+    cv::Mat inlier_mask, homography;
+    homography = findHomography(pts1, pts2, cv::RANSAC, ransac_thresh, inlier_mask);
+    if (homography.empty()) {
+        // Failed to find a homography.
+        return homography::WebARKitHomographyInfo();
+    }
+    
+    const double det = homography.at<double>(0, 0) * homography.at<double>(1, 1) - homography.at<double>(1, 0) * homography.at<double>(0, 1);
+    if (det < 0) {
+        return homography::WebARKitHomographyInfo();
+    }
+    
+    const double N1 = sqrt(homography.at<double>(0, 0) * homography.at<double>(0, 0) + homography.at<double>(1, 0) * homography.at<double>(1, 0));
+    if (N1 > 4 || N1 < 0.1) {
+        return homography::WebARKitHomographyInfo();
+    }
+    
+    const double N2 = sqrt(homography.at<double>(0, 1) * homography.at<double>(0, 1) + homography.at<double>(1, 1) * homography.at<double>(1, 1));
+    if (N2 > 4 || N2 < 0.1) {
+        return homography::WebARKitHomographyInfo();
+    }
+    
+    const double N3 = sqrt(homography.at<double>(2, 0) * homography.at<double>(2, 0) + homography.at<double>(2, 1) * homography.at<double>(2, 1));
+    if (N3 > 0.002) {
+        return homography::WebARKitHomographyInfo();
+    }
+
+    std::vector<uchar> status;
+    std::vector<cv::DMatch> inlier_matches;
+    int linliers = 0;
+    for (int i = 0; i < pts1.size(); i++) {
+        if ((int)inlier_mask.at<uchar>(i,0) == 1) {
+            status.push_back((uchar)1);
+            inlier_matches.push_back(cv::DMatch(i, i, 0));
+            linliers++;
+        } else {
+            status.push_back((uchar)0);
+        }
+    }
+    //Return homography and corresponding inlier point sets
+    return homography::WebARKitHomographyInfo(homography, status, inlier_matches);
+}
 
 /*static auto im_gray(uchar* data, size_t cols, size_t rows) {
     uint32_t idx;

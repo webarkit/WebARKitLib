@@ -1,5 +1,6 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitHomographyInfo.h>
 
 namespace webarkit {
 
@@ -170,10 +171,15 @@ class WebARKitTracker::WebARKitTrackerImpl {
             WEBARKIT_LOG("Num Matches: %d\n", numMatches);
 
             if (numMatches >= minNumMatches) {
-                m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
-                if ((valid = homographyValid(m_H))) {
+                //m_H = cv::findHomography(refPts, framePts, cv::RANSAC);
+                webarkit::homography::WebARKitHomographyInfo homographyInfo = getHomographyInliers(refPts, framePts);
+                valid = homographyInfo.validHomography;
+               
+                //if ((valid = homographyValid(m_H))) {
+                if (valid) {
+                    m_H = homographyInfo.homography;
                     _isDetected = true;
-                    perspectiveTransform(_bBox, _bBoxTransformed, m_H);
+                    perspectiveTransform(_bBox, _bBoxTransformed, homographyInfo.homography);
                 }
             }
         }
@@ -237,7 +243,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
             transform.push_back(row);
 
             // update homography matrix
-            m_H = transform * m_H;
+            if(!m_H.empty()) {
+                 m_H = transform * m_H;
+            }
+            //m_H = transform * m_H;
 
             // set old points to new points
             framePts = goodPtsCurr;
