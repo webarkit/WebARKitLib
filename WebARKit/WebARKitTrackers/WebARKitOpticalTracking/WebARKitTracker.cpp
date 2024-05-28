@@ -7,7 +7,7 @@ namespace webarkit {
 class WebARKitTracker::WebARKitTrackerImpl {
   public:
     WebARKitTrackerImpl()
-        : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), numMatches(0),
+        : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), _isTracking(false), numMatches(0),
           minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f) {
         m_camMatrix = cv::Matx33d::zeros();
         m_distortionCoeff = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
@@ -48,6 +48,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
 
         webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, frameWidth, frameHeight, m_cameraProjectionMatrix);
+
+        _pyramid.clear();
+        _prevPyramid.clear();
     }
 
     template<typename T>
@@ -270,11 +273,46 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return valid;
     };
 
+    bool track2() {
+        if (!initialized) {
+            WEBARKIT_LOGe("Reference image not found. AR is unintialized!\n");
+            return NULL;
+        }
+        int i = 0;
+
+        WEBARKIT_LOGi("Start tracking!\n");
+        clear_output();
+
+        std::cout << _prevPyramid.size() << std::endl;
+
+
+        if (_prevPyramid.size() > 0) {
+                        //std::cout << "Starting Optical Flow" << std::endl;
+                        std::vector<cv::Point2f> warpedPoints;
+                        perspectiveTransform(framePts, warpedPoints, m_H);
+                        //if (!runOpticalFlow(i, trackablePoints, trackablePointsWarped)) {
+                        if (!runOpticalFlow(i, framePts, warpedPoints)) {
+                            //std::cout << "Optical flow failed." << std::endl;
+                            return false;
+                        } else {
+                            //if (_trackVizActive) _trackViz.opticalFlowOK = true;
+                            // Refine optical flow with template match.
+                            /*if (!RunTemplateMatching(frame, i)) {
+                                //std::cout << "Template matching failed." << std::endl;
+                            }*/
+                            return true;
+                        }
+                    }
+
+    }
+
     void processFrame(cv::Mat& frame) {
         if (!this->_valid) {
             this->_valid = resetTracking(frame);
         } else {
-            this->_valid = track();
+            if(!track2()) {
+                
+            };
         }
         WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
         swapImagePyramid();
@@ -321,6 +359,71 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
+
+    bool runOpticalFlow(int trackableId, const std::vector<cv::Point2f>& trackablePoints, const std::vector<cv::Point2f>& trackablePointsWarped)
+    {
+        std::vector<cv::Point2f> flowResultPoints, trackablePointsWarpedResult;
+        std::vector<uchar> statusFirstPass, statusSecondPass;
+        std::vector<float> err;
+        cv::calcOpticalFlowPyrLK(_prevPyramid, _pyramid, trackablePointsWarped, flowResultPoints, statusFirstPass, err, winSize, maxLevel, termcrit, 0, 0.001);
+        // By using bi-directional optical flow, we improve quality of detected points.
+        cv::calcOpticalFlowPyrLK(_pyramid, _prevPyramid, flowResultPoints, trackablePointsWarpedResult, statusSecondPass, err, winSize, maxLevel, termcrit, 0, 0.001);
+        
+        // Keep only the points for which flow was found in both temporal directions.
+        int killed1 = 0;
+        std::vector<cv::Point2f> filteredTrackablePoints, filteredTrackedPoints;
+        for (auto j = 0; j != flowResultPoints.size(); ++j) {
+            if (!statusFirstPass[j] || !statusSecondPass[j]) {
+                statusFirstPass[j] = (uchar)0;
+                killed1++;
+                continue;
+            }
+            filteredTrackablePoints.push_back(trackablePoints[j]);
+            filteredTrackedPoints.push_back(flowResultPoints[j]);
+        }
+        /*if (_trackVizActive) {
+            _trackViz.opticalFlowTrackablePoints = filteredTrackablePoints;
+            _trackViz.opticalFlowTrackedPoints = filteredTrackedPoints;
+        }*/
+        //std::cout << "Optical flow discarded " << killed1 << " of " << flowResultPoints.size() << " points" << std::endl;
+
+        if (!updateTrackableHomography(trackableId, filteredTrackablePoints, filteredTrackedPoints)) {
+            _isDetected = false;
+            _isTracking = false;
+            //_currentlyTrackedMarkers--;
+            return false;
+        }
+
+        _isTracking = true;
+        return true;
+    }
+
+    bool updateTrackableHomography(int trackableId, const std::vector<cv::Point2f>& matchedPoints1, const std::vector<cv::Point2f>& matchedPoints2)
+    {
+        if (matchedPoints1.size() > 4) {
+            homography::WebARKitHomographyInfo homoInfo = getHomographyInliers(matchedPoints1, matchedPoints2);
+            if (homoInfo.validHomography) {
+                //_trackables[trackableId]._trackSelection.UpdatePointStatus(homoInfo.status);
+                //_trackables[trackableId]._trackSelection.SetHomography(homoInfo.homography);
+                m_H = homoInfo.homography;
+                this->_valid = homoInfo.validHomography;
+                // Update the bounding box.
+                //perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
+                fill_output(m_H);
+                /*if (_trackVizActive) {
+                    for (int i = 0; i < 4; i++) {
+                        _trackViz.bounds[i][0] = _trackables[trackableId]._bBoxTransformed[i].x;
+                        _trackViz.bounds[i][1] = _trackables[trackableId]._bBoxTransformed[i].y;
+                    }
+                }
+                if (_frameCount > 1) {
+                    _trackables[trackableId]._trackSelection.ResetSelection();
+                }*/
+                return true;
+            }
+        }
+        return false;
+    }
 
     void getMatches(const cv::Mat& frameDescr, std::vector<cv::KeyPoint>& frameKeyPts, std::vector<cv::Point2f>& refPoints, std::vector<cv::Point2f>& framePoints) {
         std::vector<std::vector<cv::DMatch>> knnMatches;
@@ -376,6 +479,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
     bool _valid;
 
     bool _isDetected;
+
+    bool _isTracking;
 
     std::vector<cv::Point2f> corners;
 
