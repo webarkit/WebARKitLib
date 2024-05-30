@@ -14,13 +14,15 @@ extern const int DEFAULT_MAX_FEATURES;
 extern const int TEBLID_MAX_FEATURES;
 extern const int N;
 extern const int MIN_NUM_MATCHES;
+extern const int markerTemplateWidth; ///< Width in pixels of image patches used in template matching.
 extern const int maxLevel;  ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size winSize;
 extern const cv::TermCriteria termcrit;
 extern const double featureDetectPyramidLevel; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
 extern const int featureBorder;
 extern const cv::Size blurSize;
-extern const double ransac_thresh; 
+extern const double ransac_thresh;
+extern cv::RNG rng;
 extern const double m_pi;
 extern const std::string WEBARKIT_HEADER_VERSION_STRING;
 extern const int WEBARKIT_HEADER_VERSION_MAJOR;

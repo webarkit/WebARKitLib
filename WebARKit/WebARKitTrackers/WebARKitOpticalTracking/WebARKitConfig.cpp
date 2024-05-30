@@ -6,6 +6,7 @@ extern const int DEFAULT_MAX_FEATURES = 8000;
 extern const int TEBLID_MAX_FEATURES = 10000;
 extern const int N = 10;
 extern const int MIN_NUM_MATCHES = 8;
+extern const int markerTemplateWidth = 15; ///< Width in pixels of image patches used in template matching.
 extern const int maxLevel = 3; ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size winSize(31, 31);
 extern const cv::TermCriteria termcrit(cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 20, 0.03);
@@ -14,6 +15,7 @@ extern const double featureDetectPyramidLevel =
 extern const int featureBorder = 8;
 extern const cv::Size blurSize(3, 3);
 extern const double ransac_thresh = 2.5f; 
+extern cv::RNG rng( 0xFFFFFFFF );
 extern const double m_pi = 3.14159265358979323846;
 extern const std::string WEBARKIT_HEADER_VERSION_STRING = "1.0.0";
 /*@

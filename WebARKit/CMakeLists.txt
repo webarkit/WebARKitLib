@@ -29,6 +29,8 @@ FetchContent_MakeAvailable(build_opencv)
 get_filename_component(PARENT_DIR ./ ABSOLUTE)
 
 set(WEBARKIT_HEADERS
+${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking/TrackedPoint.h
+${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking/TrackingPointSelector.h
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking//WebARKitEnums.h
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/include/WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.h
@@ -41,6 +43,8 @@ ${PARENT_DIR}/include/WebARKitPattern.h
 )
 
 set(SOURCE 
+${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/TrackedPoint.cpp
+${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/TrackingPointSelector.cpp
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.cpp
 ${PARENT_DIR}/WebARKitTrackers/WebARKitOpticalTracking/WebARKitTracker.cpp
 ${PARENT_DIR}/WebARKitCamera.cpp
