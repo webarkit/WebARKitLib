@@ -139,6 +139,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     cv::Mat getPoseMatrix() { return _patternTrackingInfo.pose3d; };
 
+    float* getPoseMatrix2() { return (float*)_patternTrackingInfo.transMat; }
+
     cv::Mat getGLViewMatrix() { return _patternTrackingInfo.glViewMatrix; };
 
     std::array<double, 16> getCameraProjectionMatrix() { return m_cameraProjectionMatrix; };
@@ -346,7 +348,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // return false;
         };
         if (!_isDetected) {
-            std::vector<cv::Point2f> refPts;
+            MatchFeatures(frameKeyPts, frameDescr);
+            /*std::vector<cv::Point2f> refPts;
 
             getMatches(frameDescr, frameKeyPts, refPts, framePts);
             numMatches = framePts.size();
@@ -366,7 +369,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
                     _trackSelection.SetHomography(homographyInfo.homography);
                     perspectiveTransform(_bBox, _bBoxTransformed, homographyInfo.homography);
                 }
-            }
+            }*/
         }
         int i = 0;
         if (_isDetected) {
@@ -396,7 +399,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         if (_isDetected || _isTracking) {
             // std::vector<cv::Point2f> warpedCorners = _trackSelection.GetTrackedFeaturesWarped();
+            cv::Mat _pose;
+            std::vector<cv::Point2f> imgPoints = _trackSelection.GetTrackedFeaturesWarped();
+            std::vector<cv::Point3f> objPoints = _trackSelection.GetTrackedFeatures3d();
+            _patternTrackingInfo.cameraPoseFromPoints(_pose, objPoints, imgPoints, m_camMatrix, m_distortionCoeff);
             // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
+            _patternTrackingInfo.getTrackablePose(_pose);
         }
 
         WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
@@ -435,11 +443,104 @@ class WebARKitTracker::WebARKitTrackerImpl {
         output[16] = warped[3].y;
     };
 
+    void fill_output2(cv::Mat& H) {
+        output[0] = H.at<double>(0, 0);
+        output[1] = H.at<double>(0, 1);
+        output[2] = H.at<double>(0, 2);
+        output[3] = H.at<double>(1, 0);
+        output[4] = H.at<double>(1, 1);
+        output[5] = H.at<double>(1, 2);
+        output[6] = H.at<double>(2, 0);
+        output[7] = H.at<double>(2, 1);
+        output[8] = H.at<double>(2, 2);
+
+        output[9] = _bBoxTransformed[0].x;
+        output[10] = _bBoxTransformed[0].y;
+        output[11] = _bBoxTransformed[1].x;
+        output[12] = _bBoxTransformed[1].y;
+        output[13] = _bBoxTransformed[2].x;
+        output[14] = _bBoxTransformed[2].y;
+        output[15] = _bBoxTransformed[3].x;
+        output[16] = _bBoxTransformed[3].y;
+    };
+
     void clear_output() { output = std::vector<double>(17, 0.0); };
 
     void buildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
+
+    void MatchFeatures(const std::vector<cv::KeyPoint>& newFrameFeatures, cv::Mat newFrameDescriptors)
+    {
+        int maxMatches = 0;
+        int bestMatchIndex = -1;
+        std::vector<cv::KeyPoint> finalMatched1, finalMatched2;
+        //for (int i = 0; i < _trackables.size(); i++) {
+            if (!_isDetected) {
+                std::vector< std::vector<cv::DMatch> >  matches = getMatches(newFrameDescriptors);
+                numMatches = matches.size();
+                WEBARKIT_LOG("Num Matches: %d\n", numMatches);
+
+                if (matches.size() > minRequiredDetectedFeatures) {
+                    std::vector<cv::KeyPoint> matched1, matched2;
+                    std::vector<uchar> status;
+                    int totalGoodMatches = 0;
+                    for (unsigned int j = 0; j < matches.size(); j++) {
+                        // Ratio Test for outlier removal, removes ambiguous matches.
+                        if (matches[j][0].distance < _nn_match_ratio * matches[j][1].distance) {
+                            matched1.push_back(newFrameFeatures[matches[j][0].queryIdx]);
+                            matched2.push_back(refKeyPts[matches[j][0].trainIdx]);
+                            status.push_back(1);
+                            totalGoodMatches++;
+                        } else {
+                            status.push_back(0);
+                        }
+                    }
+                    // Measure goodness of match by most number of matching features.
+                    // This allows for maximum of a single marker to match each time.
+                    // TODO: Would a better metric be percentage of marker features matching?
+                    if (totalGoodMatches > maxMatches) {
+                        finalMatched1 = matched1;
+                        finalMatched2 = matched2;
+                        maxMatches = totalGoodMatches;
+                        //bestMatchIndex = i;
+                    }
+                }
+            }
+        //} end for cycle
+        
+        if (maxMatches > 0) {
+            /*for (int i = 0; i < finalMatched1.size(); i++) {
+                finalMatched1[i].pt.x *= _featureDetectScaleFactor[0];
+                finalMatched1[i].pt.y *= _featureDetectScaleFactor[1];
+            }*/
+            
+            homography::WebARKitHomographyInfo homoInfo = getHomographyInliers(Points(finalMatched2), Points(finalMatched1));
+            if (homoInfo.validHomography) {
+                //std::cout << "New marker detected" << std::endl;
+                //_trackables[bestMatchIndex]._isDetected = true;
+                _isDetected = true;
+                // Since we've just detected the marker, make sure next invocation of
+                // GetInitialFeatures() for this marker makes a new selection.
+                //_trackables[bestMatchIndex]._trackSelection.ResetSelection();
+                _trackSelection.ResetSelection();
+                //_trackables[bestMatchIndex]._trackSelection.SetHomography(homoInfo.homography);
+                _trackSelection.SetHomography(homoInfo.homography);
+                
+                // Use the homography to form the initial estimate of the bounding box.
+                // This will be refined by the optical flow pass.
+                //perspectiveTransform(_trackables[bestMatchIndex]._bBox, _trackables[bestMatchIndex]._bBoxTransformed, homoInfo.homography);
+                perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
+                /*if (_trackVizActive) {
+                    for (int i = 0; i < 4; i++) {
+                        _trackViz.bounds[i][0] = _trackables[bestMatchIndex]._bBoxTransformed[i].x;
+                        _trackViz.bounds[i][1] = _trackables[bestMatchIndex]._bBoxTransformed[i].y;
+                    }
+                }*/
+                //_currentlyTrackedMarkers++;
+            }
+        }
+    }
 
     bool runOpticalFlow(int trackableId, const std::vector<cv::Point2f>& trackablePoints,
                         const std::vector<cv::Point2f>& trackablePointsWarped) {
@@ -493,8 +594,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 m_H = homoInfo.homography;
                 this->_valid = homoInfo.validHomography;
                 // Update the bounding box.
-                // perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
-                fill_output(m_H);
+                perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
+                fill_output2(m_H);
                 /*if (_trackVizActive) {
                     for (int i = 0; i < 4; i++) {
                         _trackViz.bounds[i][0] = _trackables[trackableId]._bBoxTransformed[i].x;
@@ -524,6 +625,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 refPoints.push_back(refKeyPts[knnMatches[i][0].trainIdx].pt);
             }
         }
+    }
+
+    std::vector< std::vector<cv::DMatch> > getMatches(const cv::Mat& frameDescr) {
+        std::vector<std::vector<cv::DMatch>> knnMatches;
+        _matcher->knnMatch(frameDescr, refDescr, knnMatches, 2);
+        return knnMatches;
     }
 
     cv::Mat createTrackerFeatureMask(cv::Mat& frame) {
@@ -665,6 +772,8 @@ void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
 
 cv::Mat WebARKitTracker::getPoseMatrix() { return _trackerImpl->getPoseMatrix(); }
+
+float* WebARKitTracker::getPoseMatrix2() { return _trackerImpl->getPoseMatrix2(); }
 
 cv::Mat WebARKitTracker::getGLViewMatrix() { return _trackerImpl->getGLViewMatrix(); }
 

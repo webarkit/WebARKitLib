@@ -14,6 +14,7 @@ extern const int DEFAULT_MAX_FEATURES;
 extern const int TEBLID_MAX_FEATURES;
 extern const int N;
 extern const int MIN_NUM_MATCHES;
+extern const int minRequiredDetectedFeatures; ///< Minimum number of detected features required to consider a target matched.
 extern const int markerTemplateWidth; ///< Width in pixels of image patches used in template matching.
 extern const int maxLevel;  ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size winSize;

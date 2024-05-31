@@ -101,6 +101,10 @@ cv::Mat WebARKitManager::getPoseMatrix() {
     return m_tracker->getPoseMatrix();
 }
 
+float* WebARKitManager::getPoseMatrix2() {
+    return m_tracker->getPoseMatrix2();
+}
+
 cv::Mat WebARKitManager::getGLViewMatrix() {
     return m_tracker->getGLViewMatrix();
 }

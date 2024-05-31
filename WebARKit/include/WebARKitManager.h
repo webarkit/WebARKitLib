@@ -104,6 +104,8 @@ class WebARKitManager {
 
     cv::Mat getPoseMatrix();
 
+    float* getPoseMatrix2();
+
     cv::Mat getGLViewMatrix();
 
     std::array<double, 16> getTransformationMatrix();
