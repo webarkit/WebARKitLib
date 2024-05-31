@@ -32,6 +32,8 @@ class WebARKitTracker {
     std::vector<double> getOutputData();
 
     cv::Mat getPoseMatrix();
+    
+    float* getPoseMatrix2();
 
     cv::Mat getGLViewMatrix();
 

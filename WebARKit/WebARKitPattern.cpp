@@ -7,18 +7,32 @@ WebARKitPatternTrackingInfo::WebARKitPatternTrackingInfo() {
     m_scale = 1.0f;
 }
 
+void WebARKitPatternTrackingInfo::cameraPoseFromPoints(cv::Mat& pose, const std::vector<cv::Point3f>& objPts,
+                                                       const std::vector<cv::Point2f>& imgPts, const cv::Matx33f& caMatrix,
+                                              const cv::Mat& distCoeffs) {
+    cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
+    cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
+
+    cv::solvePnPRansac(objPts, imgPts, caMatrix, distCoeffs, rvec, tvec);
+
+    // Assemble pose matrix from rotation and translation vectors.
+    cv::Mat rMat;
+    Rodrigues(rvec, rMat);
+    cv::hconcat(rMat, tvec, pose);
+};
+
 void WebARKitPatternTrackingInfo::computePose(std::vector<cv::Point3f>& treeDPoints,
                                               std::vector<cv::Point2f>& imgPoints, const cv::Matx33f& caMatrix,
                                               const cv::Mat& distCoeffs) {
-    //cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
-    //cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
+    // cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1); // output rotation vector
+    // cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1); // output translation vector
     cv::Mat rvec, tvec;
 
     cv::solvePnPRansac(treeDPoints, imgPoints, caMatrix, distCoeffs, rvec, tvec);
 
     cv::Mat rMat;
     cv::Rodrigues(rvec, rMat);
-    //cv::hconcat(rMat, tvec, pose3d);
+    // cv::hconcat(rMat, tvec, pose3d);
 
     for (unsigned int row = 0; row < 3; ++row) {
         for (unsigned int col = 0; col < 3; ++col) {
@@ -31,9 +45,15 @@ void WebARKitPatternTrackingInfo::computePose(std::vector<cv::Point3f>& treeDPoi
     invertPose();
 }
 
-void WebARKitPatternTrackingInfo::computeGLviewMatrix() {
-   cv::transpose(pose3d , glViewMatrix);
+void WebARKitPatternTrackingInfo::getTrackablePose(cv::Mat& pose) {
+    //float transMat [3][4];
+    cv::Mat poseOut;
+    pose.convertTo(poseOut, CV_32FC1);
+    //std::cout << "poseOut: " << poseOut << std::endl;
+    memcpy(transMat, poseOut.ptr<float>(0), 3*4*sizeof(float));
 }
+
+void WebARKitPatternTrackingInfo::computeGLviewMatrix() { cv::transpose(pose3d, glViewMatrix); }
 
 void WebARKitPatternTrackingInfo::invertPose() {
 
