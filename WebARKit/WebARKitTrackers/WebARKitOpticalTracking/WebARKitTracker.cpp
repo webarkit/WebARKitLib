@@ -611,6 +611,29 @@ class WebARKitTracker::WebARKitTrackerImpl {
         return false;
     }
 
+    cv::Mat MatchTemplateToImage(cv::Mat searchImage, cv::Mat warpedTemplate)
+    {
+        int result_cols =  searchImage.cols - warpedTemplate.cols + 1;
+        int result_rows = searchImage.rows - warpedTemplate.rows + 1;
+        if (result_cols > 0 && result_rows > 0) {
+            cv::Mat result;
+            result.create( result_rows, result_cols, CV_32FC1 );
+            
+            double minVal; double maxVal;
+            minMaxLoc(warpedTemplate, &minVal, &maxVal, 0, 0, cv::noArray());
+            
+            cv::Mat normSeatchROI;
+            normalize(searchImage, normSeatchROI, minVal, maxVal, cv::NORM_MINMAX, -1, cv::Mat());
+            /// Do the Matching and Normalize
+            matchTemplate(normSeatchROI, warpedTemplate, result, match_method);
+            return result;
+        }
+        else {
+            //std::cout << "Results image too small" << std::endl;
+            return cv::Mat();
+        }
+    }
+    
     void getMatches(const cv::Mat& frameDescr, std::vector<cv::KeyPoint>& frameKeyPts,
                     std::vector<cv::Point2f>& refPoints, std::vector<cv::Point2f>& framePoints) {
         std::vector<std::vector<cv::DMatch>> knnMatches;
