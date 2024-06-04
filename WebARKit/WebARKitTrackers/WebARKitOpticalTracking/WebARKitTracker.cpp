@@ -519,6 +519,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             _patternTrackingInfo.cameraPoseFromPoints(_pose, objPoints, imgPoints, m_camMatrix, m_distortionCoeff);
             // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
             _patternTrackingInfo.getTrackablePose(_pose);
+            fill_output2(m_H);
         }
 
         WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
@@ -579,7 +580,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         output[16] = _bBoxTransformed[3].y;
     };
 
-    void clear_output() { output = std::vector<double>(17, 0.0); };
+    void clear_output() { std::fill(output.begin(), output.end(), 0); };
 
     void buildImagePyramid(cv::Mat& frame) { cv::buildOpticalFlowPyramid(frame, _pyramid, winSize, maxLevel); }
 
@@ -712,7 +713,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 this->_valid = homoInfo.validHomography;
                 // Update the bounding box.
                 perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
-                fill_output2(m_H);
                 if (_trackVizActive) {
                     for (int i = 0; i < 4; i++) {
                         // _trackViz.bounds[i][0] = _trackables[trackableId]._bBoxTransformed[i].x;
@@ -943,13 +943,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
             this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
         } else if (trackerType == webarkit::TRACKER_TYPE::FREAK_TRACKER) {
-            this->_featureDetector = cv::ORB::create(10000);
+            this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::FREAK::create();
         } else if (trackerType == webarkit::TRACKER_TYPE::TEBLID_TRACKER) {
             this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::TEBLID::create(1.00f);
         }
-        _matcher = cv::BFMatcher::create();
+        _matcher = cv::BFMatcher::create(cv::NORM_HAMMING);
     };
 };
 
