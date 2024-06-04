@@ -19,6 +19,8 @@ extern const int markerTemplateWidth; ///< Width in pixels of image patches used
 extern const int maxLevel;  ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size winSize;
 extern const cv::TermCriteria termcrit;
+extern const int searchRadius;
+extern const int match_method;
 extern const double featureDetectPyramidLevel; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
 extern const int featureBorder;
 extern const cv::Size blurSize;
