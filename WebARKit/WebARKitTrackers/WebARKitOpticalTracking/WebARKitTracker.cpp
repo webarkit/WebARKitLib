@@ -12,7 +12,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
     TrackerVisualization _trackViz;
 
     WebARKitTrackerImpl()
-        : corners(4), initialized(false), output(17, 0.0), _valid(false), _isDetected(false), _isTracking(false),
+        : corners(4), initialized(false), output(17, 0.0), _valid(false), _currentlyTrackedMarkers(0),  _frameCount(0), _isDetected(false), _isTracking(false),
           numMatches(0), minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f),_trackVizActive(false), _trackViz(TrackerVisualization()) {
         m_camMatrix = cv::Matx33d::zeros();
         m_distortionCoeff = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
@@ -56,6 +56,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         _pyramid.clear();
         _prevPyramid.clear();
+         _currentlyTrackedMarkers = 0;
     }
 
     template <typename T> void initTracker(T refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
@@ -164,8 +165,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
         clear_output();
 
         _isDetected = false;
-
-        cv::Mat _image;
 
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
@@ -412,9 +411,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 if (_trackVizActive) _trackViz.templateMatching.failedBoundsTestCount++;
             }
         }
-        bool gotHomography = UpdateTrackableHomography(trackableId, finalTemplatePoints, finalTemplateMatchPoints);
+        bool gotHomography = updateTrackableHomography(trackableId, finalTemplatePoints, finalTemplateMatchPoints);
         if (!gotHomography) {
-            //_trackables[trackableId]._isTracking = false;
+            // _trackables[trackableId]._isTracking = false;
             // _trackables[trackableId]._isDetected = false;
             _isTracking = false;
             _isDetected = false;
@@ -488,7 +487,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         int i = 0;
         if (_isDetected) {
             WEBARKIT_LOGi("Start tracking!\n");
-            if (_prevPyramid.size() > 0) {
+            if (_frameCount > 0 && _prevPyramid.size() > 0) {
+            //if (_prevPyramid.size() > 0) {
                 // std::cout << "Starting Optical Flow" << std::endl;
                 //std::vector<cv::Point2f> warpedPoints;
                 // perspectiveTransform(framePts, warpedPoints, m_H);
@@ -523,6 +523,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         WEBARKIT_LOG("Marker detected : %s\n", _isDetected ? "true" : "false");
         swapImagePyramid();
+        _frameCount++;
     }
 
     bool homographyValid(cv::Mat& H) {
@@ -653,7 +654,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
                         _trackViz.bounds[i][1] = _bBoxTransformed[i].y;
                     }
                 }
-                //_currentlyTrackedMarkers++;
+                _currentlyTrackedMarkers++;
             }
         }
     }
@@ -692,7 +693,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         if (!updateTrackableHomography(trackableId, filteredTrackablePoints, filteredTrackedPoints)) {
             _isDetected = false;
             _isTracking = false;
-            //_currentlyTrackedMarkers--;
+            _currentlyTrackedMarkers--;
             return false;
         }
 
@@ -870,6 +871,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
         perspectiveTransform(_pattern.points2d, warpedPoints, H);
         return warpedPoints;
     }
+
+    cv::Mat _image;
+
+    int _currentlyTrackedMarkers;
+
+    int _frameCount;
 
     bool _valid;
 
