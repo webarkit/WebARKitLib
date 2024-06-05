@@ -13,6 +13,7 @@ extern const cv::Size winSize(31, 31);
 extern const cv::TermCriteria termcrit(cv::TermCriteria::COUNT | cv::TermCriteria::EPS, 20, 0.03);
 extern const int searchRadius = 15;
 extern const int match_method = cv::TM_SQDIFF_NORMED;
+extern const cv::Size featureImageMinSize(640, 480); ///< Minimum size when downscaling incoming images used for feature tracking.
 extern const double featureDetectPyramidLevel =
     1.05f; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
 extern const int featureBorder = 8;

@@ -14,9 +14,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     WebARKitTrackerImpl()
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _maxNumberOfMarkersToTrack(1),
-          _currentlyTrackedMarkers(0), _frameCount(0), _isDetected(false), _isTracking(false), numMatches(0),
+          _currentlyTrackedMarkers(0), _frameCount(0),  _frameSizeX(0),
+        _frameSizeY(0),
+        _featureDetectPyrLevel(0),
+        _featureDetectScaleFactor(cv::Vec2f(1.0f, 1.0f)),
+        _isDetected(false), _isTracking(false), numMatches(0),
           minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f), _trackVizActive(false),
-          _trackViz(TrackerVisualization()) {
+          _trackViz(TrackerVisualization()) { 
         m_camMatrix = cv::Matx33d::zeros();
         m_distortionCoeff = cv::Mat::zeros(4, 1, cv::DataType<double>::type);
     };
@@ -24,6 +28,23 @@ class WebARKitTracker::WebARKitTrackerImpl {
     ~WebARKitTrackerImpl() = default;
 
     void initialize(webarkit::TRACKER_TYPE trackerType, int frameWidth, int frameHeight) {
+        _frameSizeX = frameWidth;
+        _frameSizeY = frameHeight;
+
+        // Calculate image downsamping factor. 0 = no size change, 1 = half width and height, 2 = quarter width and height etc.
+        double xmin_log2 = std::log2(static_cast<double>(featureImageMinSize.width));
+        double ymin_log2 = std::log2(static_cast<double>(featureImageMinSize.height));
+        _featureDetectPyrLevel = std::min(std::floor(std::log2(static_cast<double>(_frameSizeX)) - xmin_log2), std::floor(std::log2(static_cast<double>(_frameSizeY)) - ymin_log2));
+        
+        // Calculate the exact scale factor using the same calculation pyrDown uses.
+        int xScaled = _frameSizeX;
+        int yScaled = _frameSizeY;
+        for (int i = 1; i <= _featureDetectPyrLevel; i++) {
+            xScaled = (xScaled + 1) / 2;
+            yScaled = (yScaled + 1) / 2;
+            _featureDetectScaleFactor = cv::Vec2f((float)_frameSizeX / (float)xScaled, (float)_frameSizeY / (float)yScaled);
+        }
+
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
@@ -34,7 +55,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 15;
         }
-        WEBARKIT_LOGi("Min Num Matches: %d\n", minNumMatches);
+        WEBARKIT_LOGd("Min Num Matches: %d\n", minNumMatches);
         _camera->setupCamera(frameWidth, frameHeight);
         _camera->printSettings();
 
@@ -430,10 +451,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
         // } // end for cycle
 
         if (maxMatches > 0) {
-            /*for (int i = 0; i < finalMatched1.size(); i++) {
+            for (int i = 0; i < finalMatched1.size(); i++) {
                 finalMatched1[i].pt.x *= _featureDetectScaleFactor[0];
                 finalMatched1[i].pt.y *= _featureDetectScaleFactor[1];
-            }*/
+            }
 
             homography::WebARKitHomographyInfo homoInfo =
                 getHomographyInliers(Points(finalMatched2), Points(finalMatched1));
@@ -642,9 +663,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
             }
             std::vector<std::vector<cv::Point>> contours(1);
             for (int j = 0; j < 4; j++) {
-                contours[0].push_back(cv::Point(_bBoxTransformed[j].x / featureDetectPyramidLevel,
-                                                _bBoxTransformed[j].y / featureDetectPyramidLevel));
-            }
+                    // contours[0].push_back(cv::Point(_trackables[i]._bBoxTransformed[j].x/_featureDetectScaleFactor[0],_trackables[i]._bBoxTransformed[j].y/_featureDetectScaleFactor[1]));
+                    contours[0].push_back(cv::Point(_bBoxTransformed[j].x/_featureDetectScaleFactor[0],_bBoxTransformed[j].y/_featureDetectScaleFactor[1]));
+                }
             drawContours(featureMask, contours, 0, cv::Scalar(0), -1, 8);
         }
         return featureMask;
@@ -655,6 +676,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
     int _currentlyTrackedMarkers;
 
     int _frameCount;
+
+    int _frameSizeX;
+    int _frameSizeY;
+    /// Pyramid level used in downsampling incoming image for feature matching. 0 = no size change, 1 = half width/height, 2 = quarter width/heigh etc.
+    int _featureDetectPyrLevel;
+    /// Scale factor applied to images used for feature matching. Will be 2^_featureDetectPyrLevel.
+    cv::Vec2f _featureDetectScaleFactor;
 
     bool _valid;
 
@@ -717,8 +745,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
         _trackerType = trackerType;
         if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
-            this->_featureDetector = cv::AKAZE::create();
-            this->_featureDescriptor = cv::AKAZE::create();
+            const double akaze_thresh = 3e-4; // AKAZE detection threshold set to locate about 1000 keypoints
+            cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
+            akaze->setThreshold(akaze_thresh);
+            this->_featureDetector = akaze;
+            this->_featureDescriptor = akaze;
         } else if (trackerType == webarkit::TRACKER_TYPE::ORB_TRACKER) {
             this->_featureDetector = cv::ORB::create(DEFAULT_MAX_FEATURES);
             this->_featureDescriptor = cv::ORB::create(DEFAULT_MAX_FEATURES);
@@ -729,7 +760,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
             this->_featureDetector = cv::ORB::create(TEBLID_MAX_FEATURES);
             this->_featureDescriptor = cv::xfeatures2d::TEBLID::create(1.00f);
         }
-        _matcher = cv::BFMatcher::create(cv::NORM_HAMMING);
+        if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
+            _matcher = cv::BFMatcher::create();
+        } else {
+            _matcher = cv::BFMatcher::create(cv::NORM_HAMMING);
+        }
     };
 };
 

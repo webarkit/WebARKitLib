@@ -21,6 +21,7 @@ extern const cv::Size winSize;
 extern const cv::TermCriteria termcrit;
 extern const int searchRadius;
 extern const int match_method;
+extern const cv::Size featureImageMinSize; ///< Minimum size when downscaling incoming images used for feature tracking.
 extern const double featureDetectPyramidLevel; ///> Scale factor applied to image pyramid to determine image to perform feature matching upon.
 extern const int featureBorder;
 extern const cv::Size blurSize;
