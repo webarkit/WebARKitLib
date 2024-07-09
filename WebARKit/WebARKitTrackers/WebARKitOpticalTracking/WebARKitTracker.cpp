@@ -168,7 +168,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     cv::Mat getPoseMatrix() { return _patternTrackingInfo.pose3d; };
 
-    float* getPoseMatrix2() { return (float*)_patternTrackingInfo.transMat; }
+    float* getPoseMatrix2() { return (float*)_patternTrackingInfo.trans; }
 
     cv::Mat getGLViewMatrix() { return _patternTrackingInfo.glViewMatrix; };
 
@@ -377,6 +377,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             _patternTrackingInfo.cameraPoseFromPoints(_pose, objPoints, imgPoints, m_camMatrix, m_distortionCoeff);
             // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
             _patternTrackingInfo.getTrackablePose(_pose);
+            _patternTrackingInfo.updateTrackable();
             fill_output(m_H);
             WEBARKIT_LOGi("Marker tracked ! Num. matches : %d\n", numMatches);
         }
