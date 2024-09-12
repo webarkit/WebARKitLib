@@ -79,7 +79,7 @@ bool WebARKitManager::shutdown() {
     return true;
 };
 
-void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, bool enableBlur) {
+void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, BLUR_TYPE blurType, bool enableBlur) {
     WEBARKIT_LOGd("WebARKitManager::processFrameData(...)\n");
     if (state < WAITING_FOR_VIDEO) {
         WEBARKIT_LOGe("processFrameData called without init the tracker. Call first initTracker.\n");
@@ -88,7 +88,7 @@ void WebARKitManager::processFrameData(uchar* frameData, size_t frameCols, size_
         WEBARKIT_LOGe("Error initialising processFrameData.\n");
         //return false;
     }
-  m_tracker->processFrameData(frameData, frameCols, frameRows, colorSpace, enableBlur);
+  m_tracker->processFrameData(frameData, frameCols, frameRows, colorSpace, blurType, enableBlur);
   state = DETECTION_RUNNING;
   WEBARKIT_LOGd("WebARKitManager::processFrameData() done\n");
 }
