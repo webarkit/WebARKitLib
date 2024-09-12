@@ -155,10 +155,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
     }
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace,
-                          bool enableBlur) {
+                          BLUR_TYPE blurType, bool enableBlur) {
         cv::Mat grayFrame = convert2Grayscale(frameData, frameCols, frameRows, colorSpace);
-        if (enableBlur) {
+        if (blurType == BLUR_TYPE::BOX_BLUR) {
             cv::blur(grayFrame, grayFrame, blurSize);
+        }
+        else if (blurType == BLUR_TYPE::MEDIAN_BLUR) {
+            cv::medianBlur(grayFrame, grayFrame, blurSize.width);
         }
         processFrame(grayFrame);
         grayFrame.release();
@@ -790,8 +793,8 @@ void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows
 }
 
 void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace,
-                                       bool enableBlur) {
-    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace, enableBlur);
+                                       BLUR_TYPE blurType,bool enableBlur) {
+    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace, blurType, enableBlur);
 }
 
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
