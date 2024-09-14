@@ -27,7 +27,7 @@ class WebARKitTracker {
 
     void initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace);
 
-    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, BLUR_TYPE blurType, bool enableBlur);
+    void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace, BLUR_TYPE blurType);
 
     std::vector<double> getOutputData();
 

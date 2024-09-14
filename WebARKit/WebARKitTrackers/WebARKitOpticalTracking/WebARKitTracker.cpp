@@ -142,11 +142,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
         assert(grayImage.channels() == 1);
 
         this->_featureDetector->detect(grayImage, keypoints, featureMask);
+        WEBARKIT_LOGd("keypoints size: %d\n", keypoints.size());
         if (keypoints.empty()) {
             WEBARKIT_LOGe("No keypoints detected!\n");
             return false;
         }
         this->_featureDescriptor->compute(grayImage, keypoints, descriptors);
+        WEBARKIT_LOGd("descriptors size: %d\n", descriptors.size());
         if (descriptors.empty()) {
             WEBARKIT_LOGe("No descriptors computed!\n");
             return false;
@@ -155,7 +157,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
     }
 
     void processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace,
-                          BLUR_TYPE blurType, bool enableBlur) {
+                          BLUR_TYPE blurType) {
         cv::Mat grayFrame = convert2Grayscale(frameData, frameCols, frameRows, colorSpace);
         if (blurType == BLUR_TYPE::BOX_BLUR) {
             cv::blur(grayFrame, grayFrame, blurSize);
@@ -347,7 +349,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 // return false;
             };
             //if (!_isDetected) {
-            WEBARKIT_LOGd("frameKeyPts.size() = %d\n", frameKeyPts.size());
+            WEBARKIT_LOGd("frame KeyPoints size: %d\n", frameKeyPts.size());
             if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
                 MatchFeatures(frameKeyPts, frameDescr);
             }
@@ -793,8 +795,8 @@ void WebARKitTracker::initTracker(uchar* refData, size_t refCols, size_t refRows
 }
 
 void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_t frameRows, ColorSpace colorSpace,
-                                       BLUR_TYPE blurType,bool enableBlur) {
-    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace, blurType, enableBlur);
+                                       BLUR_TYPE blurType) {
+    _trackerImpl->processFrameData(frameData, frameCols, frameRows, colorSpace, blurType);
 }
 
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
