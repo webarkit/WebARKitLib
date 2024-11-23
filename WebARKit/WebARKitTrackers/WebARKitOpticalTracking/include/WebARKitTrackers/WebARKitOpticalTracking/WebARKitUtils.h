@@ -125,17 +125,21 @@ static auto convert2Grayscale(uchar* refData, size_t refCols, size_t refRows, Co
         cv::Mat colorFrame(refRows, refCols, CV_8UC4, refData);
         refGray.create(refRows, refCols, CV_8UC1);
         cv::cvtColor(colorFrame, refGray, cv::COLOR_RGBA2GRAY);
+        WEBARKIT_LOGd("convert to GRAY from RGBA !!\n");
     } break;
     case ColorSpace::RGB: {
         cv::Mat colorFrame(refRows, refCols, CV_8UC3, refData);
         refGray.create(refRows, refCols, CV_8UC1);
         cv::cvtColor(colorFrame, refGray, cv::COLOR_RGB2GRAY);
+        WEBARKIT_LOGd("convert to GRAY from RGB !!\n");
     } break;
     case ColorSpace::GRAY: {
         refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
+        WEBARKIT_LOGd("no need to convert to GRAY!!\n");
     } break;
     default: {
         refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
+        WEBARKIT_LOGd("Default: no need to convert to GRAY!!\n");
     }
     }
 

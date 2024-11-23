@@ -53,6 +53,18 @@ void WebARKitPatternTrackingInfo::getTrackablePose(cv::Mat& pose) {
     memcpy(transMat, poseOut.ptr<float>(0), 3*4*sizeof(float));
 }
 
+void WebARKitPatternTrackingInfo::updateTrackable() {
+    if (transMat) {
+        //visible = true;
+        for (int j = 0; j < 3; j++) {
+            trans[j][0] =  transMat[j][0];
+            trans[j][1] = -transMat[j][1];
+            trans[j][2] = -transMat[j][2];
+            trans[j][3] = (transMat[j][3] * m_scale * 0.001f * 1.64f );
+        }
+    }
+}
+
 void WebARKitPatternTrackingInfo::computeGLviewMatrix() { cv::transpose(pose3d, glViewMatrix); }
 
 void WebARKitPatternTrackingInfo::invertPose() {

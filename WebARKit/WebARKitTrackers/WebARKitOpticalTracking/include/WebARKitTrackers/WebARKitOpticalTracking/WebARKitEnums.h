@@ -16,6 +16,12 @@ enum ColorSpace {
     GRAY = 2
 };
 
+enum BLUR_TYPE {
+    MEDIAN_BLUR = 0,
+    BOX_BLUR = 1,
+    NONE_BLUR = 2
+};
+
 } // namespace webarkit
 
 #endif

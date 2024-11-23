@@ -26,6 +26,7 @@ class WebARKitPatternTrackingInfo {
     std::vector<cv::Point2f> points2d;
     cv::Mat pose3d;
     float transMat [3][4];
+    float trans [3][4];
     cv::Mat glViewMatrix;
 
     void setScale(const float scale) { m_scale = scale; }
@@ -41,6 +42,8 @@ class WebARKitPatternTrackingInfo {
                      const cv::Mat& distCoeffs);
 
     void getTrackablePose(cv::Mat& pose);
+
+    void updateTrackable();
 
     void computeGLviewMatrix();
 
