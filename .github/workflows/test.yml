@@ -10,6 +10,9 @@ jobs:
           uses: actions/setup-node@v4
           with:
             node-version: '20.x'
+        - name: Update Ubuntu and install libjpeg-dev
+          run: |
+              sudo apt-get update && apt-get install libjpeg-dev
         - name: Build and test WebARKitLib
           run: |
               cd tests && mkdir build && cd build && cmake -DEMSCRIPTEN_COMP=0 .. && make && ./webarkit_test
