@@ -47,6 +47,8 @@ class WebARKitPatternTrackingInfo {
 
     void computeGLviewMatrix();
 
+    void computeGLviewMatrix(cv::Mat &pose);
+
   private:
     float m_scale;
     void invertPose();
