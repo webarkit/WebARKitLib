@@ -3,7 +3,7 @@
 
 WebARKitPatternTrackingInfo::WebARKitPatternTrackingInfo() {
     pose3d = cv::Mat::zeros(4, 4, CV_64FC1);
-    glViewMatrix = cv::Mat::zeros(4, 4, CV_64F);
+    glViewMatrix = cv::Mat::zeros(4, 4, CV_64FC1);
     m_scale = 1.0f;
 }
 
@@ -66,6 +66,8 @@ void WebARKitPatternTrackingInfo::updateTrackable() {
 }
 
 void WebARKitPatternTrackingInfo::computeGLviewMatrix() { cv::transpose(pose3d, glViewMatrix); }
+
+void WebARKitPatternTrackingInfo::computeGLviewMatrix(cv::Mat &pose) { cv::transpose(pose, glViewMatrix); }
 
 void WebARKitPatternTrackingInfo::invertPose() {
 

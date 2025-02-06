@@ -78,6 +78,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, frameWidth, frameHeight, m_cameraProjectionMatrix);
 
+        for (auto i = 0; i < 16; i++) {
+
+                WEBARKIT_LOGi("Camera Proj Matrix: %.2f\n", m_cameraProjectionMatrix[i]);
+
+        }
+
+        //1.9102363924347978, 0, 0, 0, 0, 2.5377457054523322, 0, 0, -0.013943280545895442, -0.005830389685211879, -1.0000002000000199, -1, 0, 0, -0.00020000002000000202, 0
+
         _pyramid.clear();
         _prevPyramid.clear();
         _currentlyTrackedMarkers = 0;
@@ -383,6 +391,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
             _patternTrackingInfo.getTrackablePose(_pose);
             _patternTrackingInfo.updateTrackable();
+            _patternTrackingInfo.computeGLviewMatrix(_pose);
             fill_output(m_H);
             WEBARKIT_LOGi("Marker tracked ! Num. matches : %d\n", numMatches);
         }
@@ -722,7 +731,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
     cv::Mat m_distortionCoeff;
 
     std::array<double, 16> m_cameraProjectionMatrix;
-
   private:
     int _maxNumberOfMarkersToTrack;
 
