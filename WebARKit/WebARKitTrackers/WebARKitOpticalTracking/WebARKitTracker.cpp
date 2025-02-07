@@ -183,6 +183,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     float* getPoseMatrix2() { return (float*)_patternTrackingInfo.trans; }
 
+    //float[3][4] getPoseMatrix3() { return _patternTrackingInfo.trans; }
+    //float (*getPoseMatrix3())[3][4] { return &_patternTrackingInfo.trans; }
+
     cv::Mat getGLViewMatrix() { return _patternTrackingInfo.glViewMatrix; };
 
     std::array<double, 16> getCameraProjectionMatrix() { return m_cameraProjectionMatrix; };
@@ -812,6 +815,9 @@ std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getO
 cv::Mat WebARKitTracker::getPoseMatrix() { return _trackerImpl->getPoseMatrix(); }
 
 float* WebARKitTracker::getPoseMatrix2() { return _trackerImpl->getPoseMatrix2(); }
+
+//float[3][4] WebARKitTracker::getPoseMatrix3() { return _trackerImpl->getPoseMatrix3(); }
+//float (*WebARKitTracker::getPoseMatrix3())[3][4]) { return &_trackerImpl->getPoseMatrix3(); }
 
 cv::Mat WebARKitTracker::getGLViewMatrix() { return _trackerImpl->getGLViewMatrix(); }
 

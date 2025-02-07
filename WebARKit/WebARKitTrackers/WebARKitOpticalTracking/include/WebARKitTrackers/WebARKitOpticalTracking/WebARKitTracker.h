@@ -35,6 +35,8 @@ class WebARKitTracker {
     
     float* getPoseMatrix2();
 
+    //float (*WebARKitTracker::getPoseMatrix3()[3][4]);
+
     cv::Mat getGLViewMatrix();
 
     std::array<double, 16> getCameraProjectionMatrix();
