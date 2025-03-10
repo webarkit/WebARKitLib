@@ -4,25 +4,24 @@
 namespace webarkit {
 
 ARVideoLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
-  ARVideoLumaInfo *vli;
+  ARVideoLumaInfo *vli = new ARVideoLumaInfo;
 
-  vli = (ARVideoLumaInfo *)calloc(1, sizeof(ARVideoLumaInfo));
   if (!vli) {
     printf("Out of memory!!\n");
-    return (NULL);
+    return nullptr;
   }
   vli->xsize = xsize;
   vli->ysize = ysize;
   vli->buffSize = xsize * ysize;
   vli->simd128 = simd128;
-  vli->buff = (uint8_t *)valloc(vli->buffSize);
+  vli->buff = std::make_unique<uint8_t[]>(vli->buffSize);
   if (!vli->buff) {
     printf("Out of memory!!\n");
-    free(vli);
-    return (NULL);
+    delete vli;
+    return nullptr;
   }
 
-  return (vli);
+  return vli;
 }
 
 uint8_t *__restrict arVideoLuma(ARVideoLumaInfo *vli,
@@ -33,31 +32,30 @@ uint8_t *__restrict arVideoLuma(ARVideoLumaInfo *vli,
     printf("With simd128!!!\n");
 #ifdef __EMSCRIPTEN_SIMD128__
     arVideoLumaRGBAtoL_Emscripten_simd128(
-        vli->buff, (unsigned char *__restrict)dataPtr, vli->buffSize);
-    return (vli->buff);
+        vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
+    return vli->buff.get();
 #else
     printf("SIMD128 not supported!!!\n");
-    arVideoLuma_default(vli->buff, (unsigned char *__restrict)dataPtr, vli->buffSize);
-    return (vli->buff);
+    arVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
+    return vli->buff.get();
 #endif
   } else {
     printf("Without simd128!!!\n");
-    arVideoLuma_default(vli->buff, (unsigned char *__restrict)dataPtr, vli->buffSize);
-    return (vli->buff);
+    arVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
+    return vli->buff.get();
   }
 }
 
 int arVideoLumaFinal(ARVideoLumaInfo **vli_p) {
   if (!vli_p)
-    return (-1);
+    return -1;
   if (!*vli_p)
-    return (0);
+    return 0;
 
-  free((*vli_p)->buff);
-  free(*vli_p);
-  *vli_p = NULL;
+  delete *vli_p;
+  *vli_p = nullptr;
 
-  return (0);
+  return 0;
 }
 
 static void arVideoLuma_default(uint8_t *__restrict dest,

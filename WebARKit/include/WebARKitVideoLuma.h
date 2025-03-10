@@ -4,6 +4,7 @@
 #include <stdint.h>  // For standard integer types like uint8_t, int32_t
 #include <stdbool.h> // For boolean type
 #include <stdlib.h>  // For memory allocation functions
+#include <memory>    // For std::unique_ptr
 
 #ifdef __EMSCRIPTEN_SIMD128__
 #include <wasm_simd128.h> // For SIMD operations
@@ -22,7 +23,7 @@ struct ARVideoLumaInfo {
   int ysize;
   int buffSize;
   bool simd128;
-  uint8_t *__restrict buff;
+  std::unique_ptr<uint8_t[]> buff;
 };
 
 #ifdef __EMSCRIPTEN_SIMD128__
