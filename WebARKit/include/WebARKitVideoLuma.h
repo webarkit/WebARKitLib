@@ -9,6 +9,8 @@
 #include <wasm_simd128.h> // For SIMD operations
 #endif
 
+namespace webarkit {
+
 // CCIR 601 recommended values. See
 // http://www.poynton.com/notes/colour_and_gamma/ColorFAQ.html#RTFToC11 .
 const uint8_t R8_CCIR601 = 77;
@@ -38,5 +40,7 @@ uint8_t *__restrict arVideoLuma(ARVideoLumaInfo *vli,
     const uint8_t *__restrict dataPtr);
 
 int arVideoLumaFinal(ARVideoLumaInfo **vli_p);
+
+} // namespace webarkit
 
 #endif // WEBARKITVIDEOLUMA_H
