@@ -3,8 +3,8 @@
 
 namespace webarkit {
 
-ARVideoLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
-  ARVideoLumaInfo *vli = new ARVideoLumaInfo;
+WebARKitLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
+  WebARKitLumaInfo *vli = new WebARKitLumaInfo;
 
   if (!vli) {
     printf("Out of memory!!\n");
@@ -24,7 +24,7 @@ ARVideoLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
   return vli;
 }
 
-uint8_t *__restrict arVideoLuma(ARVideoLumaInfo *vli,
+uint8_t *__restrict arVideoLuma(WebARKitLumaInfo *vli,
                                 const uint8_t *__restrict dataPtr) {
   unsigned int p, q;
 
@@ -46,7 +46,7 @@ uint8_t *__restrict arVideoLuma(ARVideoLumaInfo *vli,
   }
 }
 
-int arVideoLumaFinal(ARVideoLumaInfo **vli_p) {
+int arVideoLumaFinal(WebARKitLumaInfo **vli_p) {
   if (!vli_p)
     return -1;
   if (!*vli_p)

@@ -18,7 +18,7 @@ const uint8_t R8_CCIR601 = 77;
 const uint8_t G8_CCIR601 = 150;
 const uint8_t B8_CCIR601 = 29;
 
-struct ARVideoLumaInfo {
+struct WebARKitLumaInfo {
   int xsize;
   int ysize;
   int buffSize;
@@ -35,12 +35,12 @@ static void arVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
 static void arVideoLuma_default(uint8_t *__restrict dest, uint8_t *__restrict src,
     int32_t numPixels);
 
-ARVideoLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128);
+WebARKitLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128);
 
-uint8_t *__restrict arVideoLuma(ARVideoLumaInfo *vli,
+uint8_t *__restrict arVideoLuma(WebARKitLumaInfo *vli,
     const uint8_t *__restrict dataPtr);
 
-int arVideoLumaFinal(ARVideoLumaInfo **vli_p);
+int arVideoLumaFinal(WebARKitLumaInfo **vli_p);
 
 } // namespace webarkit
 
