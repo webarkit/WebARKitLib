@@ -29,8 +29,8 @@ uint8_t *__restrict webarkitVideoLuma(WebARKitLumaInfo *vli,
   unsigned int p, q;
 
   if (vli->simd128 == true) {
+#ifdef __wasm_simd128__
     printf("With simd128!!!\n");
-#ifdef __EMSCRIPTEN_SIMD128__
     webarkitVideoLumaRGBAtoL_Emscripten_simd128(
         vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
@@ -71,7 +71,7 @@ static void webarkitVideoLuma_default(uint8_t *__restrict dest,
   }
 }
 
-#ifdef __EMSCRIPTEN_SIMD128__
+#ifdef __wasm_simd128__
 static void webarkitVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
                                                        uint8_t *__restrict src,
                                                        int32_t numPixels) {

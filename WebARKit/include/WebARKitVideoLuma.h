@@ -5,7 +5,7 @@
 #include <cstdbool>
 #include <memory>
 
-#ifdef __EMSCRIPTEN_SIMD128__
+#ifdef __wasm_simd128__
 #include <wasm_simd128.h> // For SIMD operations
 #endif
 
@@ -25,7 +25,7 @@ struct WebARKitLumaInfo {
   std::unique_ptr<uint8_t[]> buff;
 };
 
-#ifdef __EMSCRIPTEN_SIMD128__
+#ifdef __wasm_simd128__
 static void webarkitVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
     uint8_t *__restrict src,
     int32_t numPixels);
