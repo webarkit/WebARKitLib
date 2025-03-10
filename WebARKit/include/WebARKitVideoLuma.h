@@ -1,10 +1,9 @@
 #ifndef WEBARKITVIDEOLUMA_H
 #define WEBARKITVIDEOLUMA_H
 
-#include <stdint.h>  // For standard integer types like uint8_t, int32_t
-#include <stdbool.h> // For boolean type
-#include <stdlib.h>  // For memory allocation functions
-#include <memory>    // For std::unique_ptr
+#include <cstdint>
+#include <cstdbool>
+#include <memory>
 
 #ifdef __EMSCRIPTEN_SIMD128__
 #include <wasm_simd128.h> // For SIMD operations
@@ -27,20 +26,20 @@ struct WebARKitLumaInfo {
 };
 
 #ifdef __EMSCRIPTEN_SIMD128__
-static void arVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
+static void webarkitVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
     uint8_t *__restrict src,
     int32_t numPixels);
 #endif
 
-static void arVideoLuma_default(uint8_t *__restrict dest, uint8_t *__restrict src,
+static void webarkitVideoLuma_default(uint8_t *__restrict dest, uint8_t *__restrict src,
     int32_t numPixels);
 
-WebARKitLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128);
+WebARKitLumaInfo *webarkitVideoLumaInit(int xsize, int ysize, bool simd128);
 
-uint8_t *__restrict arVideoLuma(WebARKitLumaInfo *vli,
+uint8_t *__restrict webarkitVideoLuma(WebARKitLumaInfo *vli,
     const uint8_t *__restrict dataPtr);
 
-int arVideoLumaFinal(WebARKitLumaInfo **vli_p);
+int webarkitVideoLumaFinal(WebARKitLumaInfo **vli_p);
 
 } // namespace webarkit
 
