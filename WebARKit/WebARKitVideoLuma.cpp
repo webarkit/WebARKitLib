@@ -1,6 +1,8 @@
 #include <WebARKitVideoLuma.h>
 #include <stdio.h> // Include this header for printf
 
+namespace webarkit {
+
 ARVideoLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
   ARVideoLumaInfo *vli;
 
@@ -118,3 +120,5 @@ static void arVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
   } while (numPixelsDiv8);
 }
 #endif
+
+} // namespace webarkit
