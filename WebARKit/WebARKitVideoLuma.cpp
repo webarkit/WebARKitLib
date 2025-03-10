@@ -1,9 +1,9 @@
 #include <WebARKitVideoLuma.h>
-#include <stdio.h> // Include this header for printf
+#include <cstdio>
 
 namespace webarkit {
 
-WebARKitLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
+WebARKitLumaInfo *webarkitVideoLumaInit(int xsize, int ysize, bool simd128) {
   WebARKitLumaInfo *vli = new WebARKitLumaInfo;
 
   if (!vli) {
@@ -24,29 +24,29 @@ WebARKitLumaInfo *arVideoLumaInit(int xsize, int ysize, bool simd128) {
   return vli;
 }
 
-uint8_t *__restrict arVideoLuma(WebARKitLumaInfo *vli,
+uint8_t *__restrict webarkitVideoLuma(WebARKitLumaInfo *vli,
                                 const uint8_t *__restrict dataPtr) {
   unsigned int p, q;
 
   if (vli->simd128 == true) {
     printf("With simd128!!!\n");
 #ifdef __EMSCRIPTEN_SIMD128__
-    arVideoLumaRGBAtoL_Emscripten_simd128(
+    webarkitVideoLumaRGBAtoL_Emscripten_simd128(
         vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
 #else
     printf("SIMD128 not supported!!!\n");
-    arVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
+    webarkitVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
 #endif
   } else {
     printf("Without simd128!!!\n");
-    arVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
+    webarkitVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
   }
 }
 
-int arVideoLumaFinal(WebARKitLumaInfo **vli_p) {
+int webarkitVideoLumaFinal(WebARKitLumaInfo **vli_p) {
   if (!vli_p)
     return -1;
   if (!*vli_p)
@@ -58,7 +58,7 @@ int arVideoLumaFinal(WebARKitLumaInfo **vli_p) {
   return 0;
 }
 
-static void arVideoLuma_default(uint8_t *__restrict dest,
+static void webarkitVideoLuma_default(uint8_t *__restrict dest,
                                  uint8_t *__restrict src, int32_t numPixels) {
   unsigned int p, q;
   printf("default luma conversion!!!\n");
@@ -72,11 +72,11 @@ static void arVideoLuma_default(uint8_t *__restrict dest,
 }
 
 #ifdef __EMSCRIPTEN_SIMD128__
-static void arVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
+static void webarkitVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
                                                        uint8_t *__restrict src,
                                                        int32_t numPixels) {
 
-  printf("using arVideoLumaRGBAtoL_Emscripten_simd128_fast !!!\n");
+  printf("using webarkitVideoLumaRGBAtoL_Emscripten_simd128_fast !!!\n");
 
   v128_t *pin = (v128_t *)src;
   int64_t *pout = (int64_t *)dest;
