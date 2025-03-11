@@ -1,5 +1,4 @@
 #include <WebARKitVideoLuma.h>
-#include <cstdio>
 
 namespace webarkit {
 
@@ -7,7 +6,7 @@ WebARKitLumaInfo *webarkitVideoLumaInit(int xsize, int ysize, bool simd128) {
   WebARKitLumaInfo *vli = new WebARKitLumaInfo;
 
   if (!vli) {
-    printf("Out of memory!!\n");
+    webarkitLOGe("Out of memory!!");
     return nullptr;
   }
   vli->xsize = xsize;
@@ -16,7 +15,7 @@ WebARKitLumaInfo *webarkitVideoLumaInit(int xsize, int ysize, bool simd128) {
   vli->simd128 = simd128;
   vli->buff = std::make_unique<uint8_t[]>(vli->buffSize);
   if (!vli->buff) {
-    printf("Out of memory!!\n");
+    webarkitLOGe("Out of memory!!\n");
     delete vli;
     return nullptr;
   }
@@ -26,21 +25,18 @@ WebARKitLumaInfo *webarkitVideoLumaInit(int xsize, int ysize, bool simd128) {
 
 uint8_t *__restrict webarkitVideoLuma(WebARKitLumaInfo *vli,
                                 const uint8_t *__restrict dataPtr) {
-  unsigned int p, q;
+  //unsigned int p, q;
 
   if (vli->simd128 == true) {
 #ifdef __wasm_simd128__
-    printf("With simd128!!!\n");
-    webarkitVideoLumaRGBAtoL_Emscripten_simd128(
+    webarkitVideoLumaRGBAtoLuma_Emscripten_simd128(
         vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
 #else
-    printf("SIMD128 not supported!!!\n");
     webarkitVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
 #endif
   } else {
-    printf("Without simd128!!!\n");
     webarkitVideoLuma_default(vli->buff.get(), (unsigned char *__restrict)dataPtr, vli->buffSize);
     return vli->buff.get();
   }
@@ -61,7 +57,7 @@ int webarkitVideoLumaFinal(WebARKitLumaInfo **vli_p) {
 static void webarkitVideoLuma_default(uint8_t *__restrict dest,
                                  uint8_t *__restrict src, int32_t numPixels) {
   unsigned int p, q;
-  printf("default luma conversion!!!\n");
+  webarkitLOGd("Using webarkitVideoLuma_default for luma conversion!!!");
   q = 0;
   for (p = 0; p < numPixels; p++) {
     dest[p] = (R8_CCIR601 * src[q + 0] + G8_CCIR601 * src[q + 1] +
@@ -72,11 +68,11 @@ static void webarkitVideoLuma_default(uint8_t *__restrict dest,
 }
 
 #ifdef __wasm_simd128__
-static void webarkitVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
+static void webarkitVideoLumaRGBAtoLuma_Emscripten_simd128(uint8_t *__restrict dest,
                                                        uint8_t *__restrict src,
                                                        int32_t numPixels) {
 
-  printf("using webarkitVideoLumaRGBAtoL_Emscripten_simd128_fast !!!\n");
+  webarkitLOGd("Using webarkitVideoLumaRGBAtoLuma_Emscripten_simd128 for Luma conversion !!!");
 
   v128_t *pin = (v128_t *)src;
   int64_t *pout = (int64_t *)dest;

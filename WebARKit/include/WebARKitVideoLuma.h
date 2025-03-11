@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdbool>
 #include <memory>
+#include <WebARKit/WebARKitLog.h>
 
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h> // For SIMD operations
@@ -26,7 +27,7 @@ struct WebARKitLumaInfo {
 };
 
 #ifdef __wasm_simd128__
-static void webarkitVideoLumaRGBAtoL_Emscripten_simd128(uint8_t *__restrict dest,
+static void webarkitVideoLumaRGBAtoLuma_Emscripten_simd128(uint8_t *__restrict dest,
     uint8_t *__restrict src,
     int32_t numPixels);
 #endif
