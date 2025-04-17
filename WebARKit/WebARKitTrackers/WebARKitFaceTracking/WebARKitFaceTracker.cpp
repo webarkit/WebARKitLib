@@ -16,12 +16,34 @@ WebARKitFaceTracker::~WebARKitFaceTracker() {
 }
 
 // Initialization
-void WebARKitFaceTracker::init(const std::string &model_path) {
+void WebARKitFaceTracker::init(const std::string &model_path, char buf[], size_t buf_len) {
   detector = dlib::get_frontal_face_detector();
   webarkitLOGi("Loading model from: %s", model_path.c_str());
-  dlib::deserialize(model_path) >> landmarkDetector;
+
+  // Decompress the model
+  char *decompressed = new char[modelSize];
+  z_stream stream;
+  stream.zalloc = Z_NULL;
+  stream.zfree = Z_NULL;
+  stream.opaque = Z_NULL;
+  stream.avail_in = buf_len;
+  stream.next_in = (Bytef *)buf;
+  stream.avail_out = modelSize;
+  stream.next_out = (Bytef *)decompressed;
+
+  inflateInit(&stream);
+  inflate(&stream, Z_NO_FLUSH);
+  inflateEnd(&stream);
+
+  std::string model(decompressed, stream.total_out);
+  std::istringstream model_istringstream(model);
+  dlib::deserialize(model_istringstream) >> landmarkDetector;
   webarkitLOGi("Model loaded successfully!");
 
+  delete[] buf;
+  delete[] decompressed;
+
+  // Initialize landmark points
   for (auto k = 0; k < landmarkDetector.num_parts(); ++k) {
     pointsPrev.emplace_back(0, 0);
     points.emplace_back(0, 0);
@@ -51,75 +73,73 @@ void WebARKitFaceTracker::track(const cv::Mat &image) {
     return;
   }
 
-  while (true) {
-    cv::cvtColor(image, imGray, cv::COLOR_BGR2GRAY);
-    float height = image.rows;
-    float IMAGE_RESIZE = height / RESIZE_HEIGHT;
-    cv::resize(image, imSmall, cv::Size(), 1.0 / IMAGE_RESIZE, 1.0 / IMAGE_RESIZE);
+  cv::cvtColor(image, imGray, cv::COLOR_BGR2GRAY);
+  float height = image.rows;
+  float IMAGE_RESIZE = height / RESIZE_HEIGHT;
+  cv::resize(image, imSmall, cv::Size(), 1.0 / IMAGE_RESIZE, 1.0 / IMAGE_RESIZE);
 
-    dlib::cv_image<dlib::bgr_pixel> cimg_small(imSmall);
-    dlib::cv_image<dlib::bgr_pixel> cimg(image);
+  dlib::cv_image<dlib::bgr_pixel> cimg_small(imSmall);
+  dlib::cv_image<dlib::bgr_pixel> cimg(image);
 
-    faces = detector(cimg_small);
-    if (faces.empty()) continue;
+  faces = detector(cimg_small);
+  if (faces.empty()) return;
 
-    std::vector<dlib::full_object_detection> shapes;
-    for (const auto &face : faces) {
-      dlib::rectangle r(
-          (long)(face.left() * IMAGE_RESIZE),
-          (long)(face.top() * IMAGE_RESIZE),
-          (long)(face.right() * IMAGE_RESIZE),
-          (long)(face.bottom() * IMAGE_RESIZE)
-      );
+  std::vector<dlib::full_object_detection> shapes;
+  for (const auto &face : faces) {
+    dlib::rectangle r(
+        (long)(face.left() * IMAGE_RESIZE),
+        (long)(face.top() * IMAGE_RESIZE),
+        (long)(face.right() * IMAGE_RESIZE),
+        (long)(face.bottom() * IMAGE_RESIZE)
+    );
 
-      dlib::full_object_detection shape = landmarkDetector(cimg, r);
-      shapes.push_back(shape);
+    dlib::full_object_detection shape = landmarkDetector(cimg, r);
+    shapes.push_back(shape);
 
-      for (auto k = 0; k < shape.num_parts(); ++k) {
-        if (isFirstFrame) {
-          pointsPrev[k].x = pointsDetectedPrev[k].x = shape.part(k).x();
-          pointsPrev[k].y = pointsDetectedPrev[k].y = shape.part(k).y();
-        } else {
-          pointsPrev[k] = points[k];
-          pointsDetectedPrev[k] = pointsDetectedCur[k];
-        }
-
-        points[k].x = pointsDetectedCur[k].x = shape.part(k).x();
-        points[k].y = pointsDetectedCur[k].y = shape.part(k).y();
-      }
-
-      if (eyeDistanceNotCalculated) {
-        eyeDistance = interEyeDistance(shape);
-        winSize = cv::Size(2 * int(eyeDistance / 4) + 1, 2 * int(eyeDistance / 4) + 1);
-        eyeDistanceNotCalculated = false;
-        dotRadius = eyeDistance > 100 ? 3 : 2;
-        sigma = eyeDistance * eyeDistance / 400;
-      }
-
-      cv::buildOpticalFlowPyramid(imGray, imGrayPyr, winSize, maxLevel);
-      cv::calcOpticalFlowPyrLK(imGrayPrevPyr, imGrayPyr, pointsPrev, points, status, err, winSize, maxLevel, termcrit, 0, 0.0001);
-
-      for (auto k = 0; k < shape.num_parts(); ++k) {
-        double n = norm(pointsDetectedPrev[k] - pointsDetectedCur[k]);
-        double alpha = exp(-n * n / sigma);
-        points[k] = (1 - alpha) * pointsDetectedCur[k] + alpha * points[k];
-      }
-
-      if (showStabilized) {
-        // Render stabilized points
-        // renderFace(im, points, cv::Scalar(255, 0, 0), dotRadius);
+    for (auto k = 0; k < shape.num_parts(); ++k) {
+      if (isFirstFrame) {
+        pointsPrev[k].x = pointsDetectedPrev[k].x = shape.part(k).x();
+        pointsPrev[k].y = pointsDetectedPrev[k].y = shape.part(k).y();
       } else {
-        // Render unstabilized points
-        // renderFace(im, pointsDetectedCur, cv::Scalar(0, 0, 255), dotRadius);
+        pointsPrev[k] = points[k];
+        pointsDetectedPrev[k] = pointsDetectedCur[k];
       }
+
+      points[k].x = pointsDetectedCur[k].x = shape.part(k).x();
+      points[k].y = pointsDetectedCur[k].y = shape.part(k).y();
     }
 
-    imPrev = image.clone();
-    imGrayPrev = imGray.clone();
-    imGrayPrevPyr = imGrayPyr;
-    imGrayPyr.clear();
-    isFirstFrame = false;
+    if (eyeDistanceNotCalculated) {
+      eyeDistance = interEyeDistance(shape);
+      winSize = cv::Size(2 * int(eyeDistance / 4) + 1, 2 * int(eyeDistance / 4) + 1);
+      eyeDistanceNotCalculated = false;
+      dotRadius = eyeDistance > 100 ? 3 : 2;
+      sigma = eyeDistance * eyeDistance / 400;
+    }
+
+    cv::buildOpticalFlowPyramid(imGray, imGrayPyr, winSize, maxLevel);
+    cv::calcOpticalFlowPyrLK(imGrayPrevPyr, imGrayPyr, pointsPrev, points, status, err, winSize, maxLevel, termcrit, 0, 0.0001);
+
+    for (auto k = 0; k < shape.num_parts(); ++k) {
+      double n = norm(pointsDetectedPrev[k] - pointsDetectedCur[k]);
+      double alpha = exp(-n * n / sigma);
+      points[k] = (1 - alpha) * pointsDetectedCur[k] + alpha * points[k];
+    }
+
+    if (showStabilized) {
+      // Render stabilized points
+      // renderFace(im, points, cv::Scalar(255, 0, 0), dotRadius);
+    } else {
+      // Render unstabilized points
+      // renderFace(im, pointsDetectedCur, cv::Scalar(0, 0, 255), dotRadius);
+    }
   }
+
+  imPrev = image.clone();
+  imGrayPrev = imGray.clone();
+  imGrayPrevPyr = imGrayPyr;
+  imGrayPyr.clear();
+  isFirstFrame = false;
 }
 
 // Utility

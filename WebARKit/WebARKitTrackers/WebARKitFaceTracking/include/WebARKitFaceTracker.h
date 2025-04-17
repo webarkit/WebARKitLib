@@ -10,6 +10,7 @@
 #include <dlib/image_processing.h>
 #include <dlib/image_processing/frontal_face_detector.h>
 #include <dlib/opencv.h>
+#include <dlib/external/zlib/zlib.h>
 
 #include <opencv2/core.hpp>
 #include <opencv2/core/types_c.h>
@@ -18,6 +19,7 @@
 #include <WebARKit/WebARKitLog.h>
 
 constexpr int RESIZE_HEIGHT = 360;
+constexpr size_t modelSize = 99693937;
 
 namespace webarkit {
 
@@ -26,7 +28,7 @@ public:
   WebARKitFaceTracker();
   ~WebARKitFaceTracker();
 
-  void init(const std::string &model_path);
+  void init(const std::string &model_path, char buf[], size_t buf_len);
   void track(const cv::Mat &image);
 
 private:
