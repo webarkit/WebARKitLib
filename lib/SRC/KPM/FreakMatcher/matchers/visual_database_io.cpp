@@ -39,16 +39,31 @@
 //#include <framework/logger.h>
 //#include <matchers/feature_store_io.h>
 
-/*
 namespace vision {
 
     bool SaveFeatureStore(const BinaryFeatureStore& store,
                           const std::string& dir,
                           const db_id_t& db_id,
                           frame_id_t image_id) {
+        // Create a DB directory if needed
+        /*if(!FileExists(dir)) {
+            LOG_INFO("Creating directory: %s", dir.c_str());
+            if(!CreateDirectory(dir)) {
+                LOG_ERROR("Unable to create directory: %s", dir.c_str())
+                return false;
+            }
+        }
+        
+        // Save the feature file to the db directory
+        ASSERT(FileExists(dir), "Directory doesn't exist");
+        const std::string filename = dir + "/db." + db_id + "-image." + toString(image_id) + ".features";
+        //LOG_INFO("Saving feature file: %s", filename.c_str());
+        if(!SaveFeatureStore(store, filename)) {
+            LOG_ERROR("Failed to save file: %s", filename.c_str());
+            return false;
+        }*/
         
         return true;
     }
     
 } // vision
-*/
