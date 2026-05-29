@@ -55,12 +55,18 @@ void WebARKitPatternTrackingInfo::getTrackablePose(cv::Mat& pose) {
 
 void WebARKitPatternTrackingInfo::updateTrackable() {
     if (transMat) {
-        //visible = true;
+        // Keep `trans` as the raw OpenCV pose (rotation unmodified, translation
+        // scaled). The CV->GL handedness conversion (negate Y and Z rows incl.
+        // translation) is applied downstream by arglCameraViewRHf when building
+        // the GL right-handed modelview (matrixGL_RH / getGLViewMatrix).
+        // Previously, rotation columns 1 and 2 were negated here but the
+        // translation was not, producing an inconsistent partial conversion
+        // that left tracked objects behind the camera in OpenGL renderers.
         for (int j = 0; j < 3; j++) {
-            trans[j][0] =  transMat[j][0];
-            trans[j][1] = -transMat[j][1];
-            trans[j][2] = -transMat[j][2];
-            trans[j][3] = (transMat[j][3] * m_scale * 0.001f * 1.64f );
+            trans[j][0] = transMat[j][0];
+            trans[j][1] = transMat[j][1];
+            trans[j][2] = transMat[j][2];
+            trans[j][3] = (transMat[j][3] * m_scale * 0.001f * 1.64f);
         }
     }
 }
