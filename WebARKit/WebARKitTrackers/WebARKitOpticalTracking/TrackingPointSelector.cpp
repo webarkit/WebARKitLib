@@ -170,6 +170,13 @@ std::vector<cv::Point2f> TrackingPointSelector::GetTrackedFeaturesWarped()
 {
     std::vector<cv::Point2f> selectedPoints = GetTrackedFeatures();
     std::vector<cv::Point2f> warpedPoints;
+    // cv::perspectiveTransform asserts on an empty input (and requires a valid
+    // 3x3 homography). This happens when a marker is detected on the very first
+    // frame, before the tracked-point selection has been populated. Return an
+    // empty result instead of throwing.
+    if (selectedPoints.empty() || _homography.empty()) {
+        return warpedPoints;
+    }
     perspectiveTransform(selectedPoints, warpedPoints, _homography);
     return warpedPoints;
 }

@@ -390,13 +390,20 @@ class WebARKitTracker::WebARKitTrackerImpl {
             cv::Mat _pose;
             std::vector<cv::Point2f> imgPoints = _trackSelection.GetTrackedFeaturesWarped();
             std::vector<cv::Point3f> objPoints = _trackSelection.GetTrackedFeatures3d();
-            _patternTrackingInfo.cameraPoseFromPoints(_pose, objPoints, imgPoints, m_camMatrix, m_distortionCoeff);
-            // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
-            _patternTrackingInfo.getTrackablePose(_pose);
-            _patternTrackingInfo.updateTrackable();
-            _patternTrackingInfo.computeGLviewMatrix(_pose);
-            fill_output(m_H);
-            WEBARKIT_LOGi("Marker tracked ! Num. matches : %d\n", numMatches);
+            // Need at least 4 correspondences for solvePnP, and the two sets must
+            // match in size. On the very first frame a marker can be detected
+            // before the tracked-point selection is populated (the optical-flow
+            // branch that calls GetInitialFeatures() is gated on _frameCount > 0),
+            // leaving these empty. Skip pose estimation in that case.
+            if (imgPoints.size() >= 4 && imgPoints.size() == objPoints.size()) {
+                _patternTrackingInfo.cameraPoseFromPoints(_pose, objPoints, imgPoints, m_camMatrix, m_distortionCoeff);
+                // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
+                _patternTrackingInfo.getTrackablePose(_pose);
+                _patternTrackingInfo.updateTrackable();
+                _patternTrackingInfo.computeGLviewMatrix(_pose);
+                fill_output(m_H);
+                WEBARKIT_LOGi("Marker tracked ! Num. matches : %d\n", numMatches);
+            }
         }
 
         swapImagePyramid();
