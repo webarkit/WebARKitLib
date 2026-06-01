@@ -48,7 +48,7 @@
 
 #include <vector>
 #include <memory>
-#include <unordered_map>
+#include <map>
 
 #include "feature_point.h"
 
@@ -69,7 +69,15 @@ namespace vision {
         
         typedef Keyframe<96> keyframe_t;
         typedef std::shared_ptr<keyframe_t> keyframe_ptr_t;
-        typedef std::unordered_map<id_t, keyframe_ptr_t> keyframe_map_t;
+        // std::map (not std::unordered_map): query() iterates this
+        // collection and breaks ties on inlier-count with a strict
+        // "first wins" comparison. unordered_map has implementation-
+        // defined iteration order, so the winning keyframe on
+        // borderline ties varied across libstdc++ vs MSVC STL builds.
+        // std::map's ascending-key order makes the tie-breaking
+        // platform-independent. Mirrors the BTreeMap fix on the Rust
+        // port (issue #170).
+        typedef std::map<id_t, keyframe_ptr_t> keyframe_map_t;
         
         typedef BinomialPyramid32f pyramid_t;
         typedef DoGScaleInvariantDetector detector_t;
