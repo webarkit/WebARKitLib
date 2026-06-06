@@ -190,6 +190,31 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     std::array<double, 16> getCameraProjectionMatrix() { return m_cameraProjectionMatrix; };
 
+    // Override the synthetic FOV-based camera with a real ArtoolkitX
+    // camera_para.dat (ARParam) buffer, then refresh the intrinsic matrix,
+    // distortion coefficients and GL projection. Call after initialize() and
+    // before reading getCameraProjectionMatrix().
+    bool loadCameraParam(const void* buffer, int size) {
+        if (!_camera->loadCameraParamFromBuffer(buffer, size, _frameSizeX, _frameSizeY)) {
+            WEBARKIT_LOGe("loadCameraParam: failed to load camera_para buffer.\n");
+            return false;
+        }
+        std::array<double, 9> camData = _camera->getCameraData();
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                m_camMatrix(i, j) = camData[i * 3 + j];
+            }
+        }
+        std::array<double, 6> dist = _camera->getDistortionCoefficients();
+        m_distortionCoeff = cv::Mat::zeros(5, 1, cv::DataType<double>::type);
+        for (int i = 0; i < 5; ++i) {
+            m_distortionCoeff.at<double>(i, 0) = dist[i];
+        }
+        webarkit::cameraProjectionMatrix(camData, 0.1, 1000.0, _frameSizeX, _frameSizeY, m_cameraProjectionMatrix);
+        WEBARKIT_LOGi("Loaded real camera calibration from camera_para.dat.\n");
+        return true;
+    }
+
     bool isValid() { return _valid; };
 
   protected:
@@ -830,6 +855,10 @@ cv::Mat WebARKitTracker::getGLViewMatrix() { return _trackerImpl->getGLViewMatri
 
 std::array<double, 16> WebARKitTracker::getCameraProjectionMatrix() {
     return _trackerImpl->getCameraProjectionMatrix();
+}
+
+bool WebARKitTracker::loadCameraParam(const void* buffer, int size) {
+    return _trackerImpl->loadCameraParam(buffer, size);
 }
 
 bool WebARKitTracker::isValid() { return _trackerImpl->isValid(); }
