@@ -55,17 +55,23 @@ void WebARKitPatternTrackingInfo::getTrackablePose(cv::Mat& pose) {
 
 void WebARKitPatternTrackingInfo::updateTrackable() {
     if (transMat) {
-        // Keep `trans` as the raw OpenCV pose (rotation unmodified, translation
-        // scaled). The CV->GL handedness conversion (negate Y and Z rows incl.
-        // translation) is applied downstream by arglCameraViewRHf when building
-        // the GL right-handed modelview (matrixGL_RH / getGLViewMatrix).
-        // Previously, rotation columns 1 and 2 were negated here but the
-        // translation was not, producing an inconsistent partial conversion
-        // that left tracked objects behind the camera in OpenGL renderers.
+        // CV->GL conversion, marker/object side: negate the Y and Z rotation
+        // COLUMNS (matching ArtoolkitX ARTrackable2d::updateWithTwoDResults).
+        // Combined with the Y,Z ROW negation applied downstream by arglCameraViewRHf
+        // (when building matrixGL_RH / getGLViewMatrix), this yields the consistent
+        // similarity D*R*D (D = diag(1,-1,-1)) -- a proper right-handed marker frame
+        // with X=right, Y=up, Z=toward the viewer, so AR content placed at +Z pops
+        // up out of the marker as expected. Without this column negation the frame
+        // is the raw OpenCV handedness (Z into the marker / away from the camera).
+        //
+        // The translation (column 3) is NOT negated here -- it keeps its sign and
+        // the marker-size scale. arglCameraViewRHf negates the Y,Z translation rows
+        // downstream, so depth stays in front of the camera (no "behind camera"
+        // regression); only the rotation handedness is corrected. See WebARKitLib#42.
         for (int j = 0; j < 3; j++) {
-            trans[j][0] = transMat[j][0];
-            trans[j][1] = transMat[j][1];
-            trans[j][2] = transMat[j][2];
+            trans[j][0] =  transMat[j][0];
+            trans[j][1] = -transMat[j][1];
+            trans[j][2] = -transMat[j][2];
             trans[j][3] = (transMat[j][3] * m_scale * 0.001f * 1.64f);
         }
     }

@@ -90,7 +90,7 @@ TEST(WebARKitGLTest, TestCameraProjectionMatrix) {
   std::array<double, 9> camera_mat = camera.getCameraData();
   std::array<double, 16> projectionMatrix = {0.0};
   webarkit::cameraProjectionMatrix(camera_mat, 0.01, 100.0, width, height, projectionMatrix);
-  EXPECT_EQ(projectionMatrix[0], -1.7851850084276433);
+  EXPECT_EQ(projectionMatrix[0], 1.7851850084276433);
   EXPECT_EQ(projectionMatrix[5], 2.3802466779035241);
   EXPECT_EQ(projectionMatrix[10], -1.0002000200020003);
   EXPECT_EQ(projectionMatrix[11], -1.0);
@@ -147,7 +147,7 @@ TEST(WebARKitTest, CheckCameraProjectionMatrix) {
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Check if the cameraProjectionMatrix is correct
   std::array<double, 16> camProjectionMatrix = manager.getCameraProjectionMatrix();
-  EXPECT_EQ(camProjectionMatrix[0], -1.7851850084276433);
+  EXPECT_EQ(camProjectionMatrix[0], 1.7851850084276433);
   EXPECT_EQ(camProjectionMatrix[5], 2.3802466779035241);
   EXPECT_EQ(camProjectionMatrix[10], -1.0002000200020003);
   EXPECT_EQ(camProjectionMatrix[11], -1.0);
