@@ -16,8 +16,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _maxNumberOfMarkersToTrack(1),
           _currentlyTrackedMarkers(0), _frameCount(0),  _frameSizeX(0),
         _frameSizeY(0),
-        _featureDetectPyrLevel(0),
-        _featureDetectScaleFactor(cv::Vec2f(1.0f, 1.0f)),
         _isDetected(false), _isTracking(false), numMatches(0),
           minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f), _trackVizActive(false),
           _trackViz(TrackerVisualization()) { 
@@ -31,36 +29,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
         _frameSizeX = frameWidth;
         _frameSizeY = frameHeight;
 
-        // Calculate image downsamping factor. 0 = no size change, 1 = half width and height, 2 = quarter width and height etc.
-        double xmin_log2 = std::log2(static_cast<double>(featureImageMinSize.width));
-        double ymin_log2 = std::log2(static_cast<double>(featureImageMinSize.height));
-        _featureDetectPyrLevel = std::min(std::floor(std::log2(static_cast<double>(_frameSizeX)) - xmin_log2), std::floor(std::log2(static_cast<double>(_frameSizeY)) - ymin_log2));
-        
-        // WebARKitLib#42 FIX: feature detection currently runs on the FULL-resolution
-        // frame -- the pyrDown downsampling block in resetTracking() is disabled and
-        // extractFeatures() is called on `frame` directly. Detected keypoints are
-        // therefore already in full-frame coordinates, so the match-side rescale
-        // (MatchFeatures: pt *= _featureDetectScaleFactor) and the mask-side rescale
-        // (createFeatureMask: bbox / _featureDetectScaleFactor) MUST be identity.
-        //
-        // Computing the factor from _featureDetectPyrLevel gave 2.0 for frames larger
-        // than featureImageMinSize (640x480) -- e.g. the 2000x1500 static image -- which
-        // DOUBLED every matched keypoint, pushing the marker localization to ~2x its
-        // true position (bottom-right), exploding the homography and the solvePnP pose.
-        // (640x480 webcams have pyrLevel 0 => factor 1.0, which is why this stayed hidden.)
-        //
-        // Keep the factor at 1.0 while detection is full-res. If downsampled detection
-        // is restored (re-enable the pyrDown block), restore the loop below as well.
-        _featureDetectScaleFactor = cv::Vec2f(1.0f, 1.0f);
-        /*
-        int xScaled = _frameSizeX;
-        int yScaled = _frameSizeY;
-        for (int i = 1; i <= _featureDetectPyrLevel; i++) {
-            xScaled = (xScaled + 1) / 2;
-            yScaled = (yScaled + 1) / 2;
-            _featureDetectScaleFactor = cv::Vec2f((float)_frameSizeX / (float)xScaled, (float)_frameSizeY / (float)yScaled);
-        }
-        */
+        // NOTE: feature detection runs on the FULL-resolution frame (see resetTracking).
+        // ArtoolkitX's pyramid downsampling + the matching keypoint rescale are
+        // intentionally not used here; restoring them for performance is tracked in
+        // webarkit/WebARKitLib#44.
 
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
@@ -357,31 +329,20 @@ class WebARKitTracker::WebARKitTrackerImpl {
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
 
-        // This if cond. doesn't works as expected in artoolkitx. This make the tracking process unstable.
-        // if (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack) {
-            /*cv::Mat detectionFrame;
-            if (_featureDetectPyrLevel < 1) {
-                detectionFrame = frame;
-            } else {
-                cv::Mat srcFrame = frame;
-                for (int pyrLevel = 1; pyrLevel <= _featureDetectPyrLevel; pyrLevel++) {
-                    cv::pyrDown(srcFrame, detectionFrame, cv::Size(0, 0));
-                    srcFrame = detectionFrame;
-                }
-            }*/
+        // Feature detection runs on the FULL-resolution frame, every frame -- no
+        // pyramid downsampling and no "skip detection while already tracking" guard.
+        // This favours re-acquisition stability over per-frame cost. Restoring the
+        // ArtoolkitX downsampling + detection guard for performance is tracked in
+        // webarkit/WebARKitLib#44.
+        cv::Mat featureMask = createFeatureMask(frame);
 
-            cv::Mat featureMask = createFeatureMask(frame);
-
-            if (!extractFeatures(frame, featureMask, frameKeyPts, frameDescr)) {
-                WEBARKIT_LOGe("No features detected in extractFeatures!\n");
-                // return false;
-            };
-            //if (!_isDetected) {
-            WEBARKIT_LOGd("frame KeyPoints size: %d\n", frameKeyPts.size());
-            if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
-                MatchFeatures(frameKeyPts, frameDescr);
-            }
-        //} ref -> if (_currentlyTrackedMarkers < _maxNumberOfMarkersToTrack) {
+        if (!extractFeatures(frame, featureMask, frameKeyPts, frameDescr)) {
+            WEBARKIT_LOGe("No features detected in extractFeatures!\n");
+        }
+        WEBARKIT_LOGd("frame KeyPoints size: %d\n", frameKeyPts.size());
+        if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
+            MatchFeatures(frameKeyPts, frameDescr);
+        }
         int i = 0;
         if (_isDetected) {
             WEBARKIT_LOGd("Start tracking!\n");
@@ -493,13 +454,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         // } // end for cycle
 
         if (maxMatches > 0) {
-            // No-op while detection runs full-res (_featureDetectScaleFactor == 1).
-            // Kept so that restoring downsampled detection re-activates the rescale.
-            for (int i = 0; i < finalMatched1.size(); i++) {
-                finalMatched1[i].pt.x *= _featureDetectScaleFactor[0];
-                finalMatched1[i].pt.y *= _featureDetectScaleFactor[1];
-            }
-
+            // Matched keypoints are already in full-frame coordinates (full-res
+            // detection), so no rescale is applied here. See webarkit/WebARKitLib#44.
             homography::WebARKitHomographyInfo homoInfo =
                 getHomographyInliers(Points(finalMatched2), Points(finalMatched1));
             if (homoInfo.validHomography) {
@@ -706,10 +662,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 featureMask = cv::Mat::ones(frame.size(), frame.type());
             }
             std::vector<std::vector<cv::Point>> contours(1);
+            // Full-res detection: the warped bbox is already in frame coordinates,
+            // matching the full-res mask. (No /scaleFactor; see webarkit/WebARKitLib#44.)
             for (int j = 0; j < 4; j++) {
-                    // contours[0].push_back(cv::Point(_trackables[i]._bBoxTransformed[j].x/_featureDetectScaleFactor[0],_trackables[i]._bBoxTransformed[j].y/_featureDetectScaleFactor[1]));
-                    contours[0].push_back(cv::Point(_bBoxTransformed[j].x/_featureDetectScaleFactor[0],_bBoxTransformed[j].y/_featureDetectScaleFactor[1]));
-                }
+                contours[0].push_back(cv::Point(_bBoxTransformed[j].x, _bBoxTransformed[j].y));
+            }
             drawContours(featureMask, contours, 0, cv::Scalar(0), -1, 8);
         }
         return featureMask;
@@ -723,10 +680,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     int _frameSizeX;
     int _frameSizeY;
-    /// Pyramid level used in downsampling incoming image for feature matching. 0 = no size change, 1 = half width/height, 2 = quarter width/heigh etc.
-    int _featureDetectPyrLevel;
-    /// Scale factor applied to images used for feature matching. Will be 2^_featureDetectPyrLevel.
-    cv::Vec2f _featureDetectScaleFactor;
 
     bool _valid;
 
