@@ -58,7 +58,15 @@ void cameraProjectionMatrix(const std::array<double, 9>& calibration, double nea
   double c_x = calibration.at(2); // Camera primary point x
   double c_y = calibration.at(5); // Camera primary point y
 
-  projectionMatrix[0] = -2.0f * f_x / screenWidth;
+  // WebARKitLib#42: standard GL projection with BOTH focal terms positive.
+  // The modelview (matrixGL_RH) already performs the CV->GL handedness flip by
+  // negating the Y and Z rows in arglCameraViewRHf, so the projection itself must
+  // be the plain pinhole form. The previous negative X focal (-2*f_x/w) mirrored
+  // the marker horizontally: a marker origin at camera -X projected to +X (right)
+  // instead of -X (left). Verified against the tracked pose: origin (tx,ty,tz)=
+  // (-1.996, 2.223, -9.094) projects to NDC (-0.39, +0.58) (upper-left, on the
+  // marker) only with +2*f_x/w; the negative sign put it upper-right.
+  projectionMatrix[0] = 2.0f * f_x / screenWidth;
   projectionMatrix[1] = 0.0f;
   projectionMatrix[2] = 0.0f;
   projectionMatrix[3] = 0.0f;
