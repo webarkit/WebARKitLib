@@ -36,7 +36,23 @@ class WebARKitTracker::WebARKitTrackerImpl {
         double ymin_log2 = std::log2(static_cast<double>(featureImageMinSize.height));
         _featureDetectPyrLevel = std::min(std::floor(std::log2(static_cast<double>(_frameSizeX)) - xmin_log2), std::floor(std::log2(static_cast<double>(_frameSizeY)) - ymin_log2));
         
-        // Calculate the exact scale factor using the same calculation pyrDown uses.
+        // WebARKitLib#42 FIX: feature detection currently runs on the FULL-resolution
+        // frame -- the pyrDown downsampling block in resetTracking() is disabled and
+        // extractFeatures() is called on `frame` directly. Detected keypoints are
+        // therefore already in full-frame coordinates, so the match-side rescale
+        // (MatchFeatures: pt *= _featureDetectScaleFactor) and the mask-side rescale
+        // (createFeatureMask: bbox / _featureDetectScaleFactor) MUST be identity.
+        //
+        // Computing the factor from _featureDetectPyrLevel gave 2.0 for frames larger
+        // than featureImageMinSize (640x480) -- e.g. the 2000x1500 static image -- which
+        // DOUBLED every matched keypoint, pushing the marker localization to ~2x its
+        // true position (bottom-right), exploding the homography and the solvePnP pose.
+        // (640x480 webcams have pyrLevel 0 => factor 1.0, which is why this stayed hidden.)
+        //
+        // Keep the factor at 1.0 while detection is full-res. If downsampled detection
+        // is restored (re-enable the pyrDown block), restore the loop below as well.
+        _featureDetectScaleFactor = cv::Vec2f(1.0f, 1.0f);
+        /*
         int xScaled = _frameSizeX;
         int yScaled = _frameSizeY;
         for (int i = 1; i <= _featureDetectPyrLevel; i++) {
@@ -44,6 +60,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
             yScaled = (yScaled + 1) / 2;
             _featureDetectScaleFactor = cv::Vec2f((float)_frameSizeX / (float)xScaled, (float)_frameSizeY / (float)yScaled);
         }
+        */
 
         setDetectorType(trackerType);
         if (trackerType == webarkit::TEBLID_TRACKER) {
@@ -476,6 +493,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
         // } // end for cycle
 
         if (maxMatches > 0) {
+            // No-op while detection runs full-res (_featureDetectScaleFactor == 1).
+            // Kept so that restoring downsampled detection re-activates the rescale.
             for (int i = 0; i < finalMatched1.size(); i++) {
                 finalMatched1[i].pt.x *= _featureDetectScaleFactor[0];
                 finalMatched1[i].pt.y *= _featureDetectScaleFactor[1];
