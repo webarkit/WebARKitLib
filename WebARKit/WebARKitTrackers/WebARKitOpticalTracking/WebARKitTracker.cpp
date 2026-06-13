@@ -297,6 +297,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // _trackables[trackableId]._isDetected = false;
             _isTracking = false;
             _isDetected = false;
+            // WebARKitLib#46: template matching is the appearance check -- if it fails
+            // (the tracked region no longer looks like the marker, e.g. the marker
+            // left the frame and optical flow drifted onto static background), the
+            // marker is lost. Clear _valid too so isValid() turns false and the
+            // tracker reports 'not found'. runOpticalFlow's failure path already does
+            // this; ArtoolkitX has no _valid and treats !isDetected && !isTracking as
+            // "not visible" (IsTrackableVisible).
+            this->_valid = false;
             _currentlyTrackedMarkers--;
         }
         if (_trackVizActive) {
@@ -344,7 +352,15 @@ class WebARKitTracker::WebARKitTrackerImpl {
             MatchFeatures(frameKeyPts, frameDescr);
         }
         int i = 0;
-        if (_isDetected) {
+        // WebARKitLib#46: also run optical flow while tracking, not only on a fresh
+        // detection. When the marker leaves the frame, MatchFeatures fails
+        // (_isDetected = false) but _isTracking is still true; running optical flow
+        // here lets it fail on the now-absent marker and clear _isTracking/_valid
+        // (via updateTrackableHomography), so isValid() turns false and the tracker
+        // reports 'not found' instead of staying stuck on a stale pose. It also
+        // bridges momentary detection dropouts with a fresh pose while the marker is
+        // still present.
+        if (_isDetected || _isTracking) {
             WEBARKIT_LOGd("Start tracking!\n");
             if (_frameCount > 0 && _prevPyramid.size() > 0) {
                 // if (_prevPyramid.size() > 0) {
