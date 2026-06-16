@@ -16,7 +16,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         : corners(4), initialized(false), output(17, 0.0), _valid(false), _maxNumberOfMarkersToTrack(1),
           _currentlyTrackedMarkers(0), _frameCount(0),  _frameSizeX(0),
         _frameSizeY(0),
-        _isDetected(false), _isTracking(false), numMatches(0),
+        _isDetected(false), _isTracking(false), _centerOrigin(false), numMatches(0),
           minNumMatches(MIN_NUM_MATCHES), _nn_match_ratio(0.7f), _trackVizActive(false),
           _trackViz(TrackerVisualization()) { 
         m_camMatrix = cv::Matx33d::zeros();
@@ -180,6 +180,10 @@ class WebARKitTracker::WebARKitTrackerImpl {
     std::array<double, 16> getCameraProjectionMatrix() { return m_cameraProjectionMatrix; };
 
     bool isValid() { return _valid; };
+
+    // WebARKitLib#38: when true, the pose origin is the marker centre instead of
+    // the reference image's top-left corner. Default false (ArtoolkitX parity).
+    void setOriginCentered(bool centered) { _centerOrigin = centered; };
 
   protected:
     bool RunTemplateMatching(cv::Mat frame, int trackableId) {
@@ -384,6 +388,19 @@ class WebARKitTracker::WebARKitTrackerImpl {
             cv::Mat _pose;
             std::vector<cv::Point2f> imgPoints = _trackSelection.GetTrackedFeaturesWarped();
             std::vector<cv::Point3f> objPoints = _trackSelection.GetTrackedFeatures3d();
+            // WebARKitLib#38 (webarkit-testing#38): optional centered origin. When
+            // enabled, shift the 3D object points so the pose origin is the marker
+            // centre instead of the reference image's top-left corner -- content at
+            // (0,0,0) then sits in the middle of the marker. Offsetting the object
+            // points moves only the solved translation; the rotation is unchanged.
+            // Applied to the solvePnP points ONLY -- the 2D imgPoints and the
+            // matching/template/homography paths stay in raw image space. Default
+            // off (ArtoolkitX parity). See docs/design-center-origin-option.md.
+            if (_centerOrigin) {
+                const float cx = _pattern.size.width * 0.5f;
+                const float cy = _pattern.size.height * 0.5f;
+                for (auto& p : objPoints) { p.x -= cx; p.y -= cy; }
+            }
             // Need at least 4 correspondences for solvePnP, and the two sets must
             // match in size. On the very first frame a marker can be detected
             // before the tracked-point selection is populated (the optical-flow
@@ -703,6 +720,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     bool _isTracking;
 
+    // WebARKitLib#38: pose origin = marker centre when true (default false).
+    bool _centerOrigin;
+
     std::vector<cv::Point2f> corners;
 
     cv::Mat m_H;
@@ -821,5 +841,7 @@ std::array<double, 16> WebARKitTracker::getCameraProjectionMatrix() {
 }
 
 bool WebARKitTracker::isValid() { return _trackerImpl->isValid(); }
+
+void WebARKitTracker::setOriginCentered(bool centered) { _trackerImpl->setOriginCentered(centered); }
 
 } // namespace webarkit

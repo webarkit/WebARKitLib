@@ -123,4 +123,8 @@ bool WebARKitManager::isValid() {
   return m_tracker->isValid();
 }
 
+void WebARKitManager::setOriginCentered(bool centered) {
+  m_tracker->setOriginCentered(centered);
+}
+
 } // namespace webarkit

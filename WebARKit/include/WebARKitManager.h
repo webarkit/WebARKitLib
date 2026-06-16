@@ -113,6 +113,9 @@ class WebARKitManager {
     std::array<double, 16> getCameraProjectionMatrix();
 
     bool isValid();
+
+    /// WebARKitLib#38: pose origin = marker centre when true (default false).
+    void setOriginCentered(bool centered);
 };
 
 } // namespace webarkit
