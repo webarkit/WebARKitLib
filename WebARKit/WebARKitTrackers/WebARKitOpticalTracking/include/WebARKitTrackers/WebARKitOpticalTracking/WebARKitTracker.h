@@ -43,6 +43,9 @@ class WebARKitTracker {
 
     bool isValid();
 
+    // WebARKitLib#38: pose origin = marker centre when true (default false).
+    void setOriginCentered(bool centered);
+
   private:
     class WebARKitTrackerImpl;
 
