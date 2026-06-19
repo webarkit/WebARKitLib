@@ -190,9 +190,9 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     std::vector<double> getOutputData() { return output; };
 
-    cv::Mat getPoseMatrix() { return _patternTrackingInfo.pose3d; };
+    cv::Mat getPoseMatrixCV() { return _patternTrackingInfo.pose3d; };
 
-    float* getPoseMatrix2() { return (float*)_patternTrackingInfo.trans; }
+    float* getPoseMatrixGL() { return (float*)_patternTrackingInfo.trans; }
 
     //float[3][4] getPoseMatrix3() { return _patternTrackingInfo.trans; }
     //float (*getPoseMatrix3())[3][4] { return &_patternTrackingInfo.trans; }
@@ -892,9 +892,9 @@ void WebARKitTracker::processFrameData(uchar* frameData, size_t frameCols, size_
 
 std::vector<double> WebARKitTracker::getOutputData() { return _trackerImpl->getOutputData(); }
 
-cv::Mat WebARKitTracker::getPoseMatrix() { return _trackerImpl->getPoseMatrix(); }
+cv::Mat WebARKitTracker::getPoseMatrixCV() { return _trackerImpl->getPoseMatrixCV(); }
 
-float* WebARKitTracker::getPoseMatrix2() { return _trackerImpl->getPoseMatrix2(); }
+float* WebARKitTracker::getPoseMatrixGL() { return _trackerImpl->getPoseMatrixGL(); }
 
 //float[3][4] WebARKitTracker::getPoseMatrix3() { return _trackerImpl->getPoseMatrix3(); }
 //float (*WebARKitTracker::getPoseMatrix3())[3][4]) { return &_trackerImpl->getPoseMatrix3(); }
