@@ -19,6 +19,21 @@ void WebARKitPatternTrackingInfo::cameraPoseFromPoints(cv::Mat& pose, const std:
     cv::Mat rMat;
     Rodrigues(rvec, rMat);
     cv::hconcat(rMat, tvec, pose);
+
+    // WebARKitLib#55: also populate pose3d -- the raw 4x4 OpenCV-convention camera
+    // pose returned by getPoseMatrixCV(). The live path previously left pose3d at its
+    // zero-initialised value (only the now-dead computePose wrote it), so
+    // getPoseMatrixCV() returned an all-zero matrix. Build it here from the same
+    // rMat/tvec the GL path uses, so the CV and GL getters both reflect the current
+    // frame. No handedness/scale correction is applied (that is getPoseMatrixGL's
+    // trans); pose3d stays in raw OpenCV convention.
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            pose3d.at<double>(row, col) = rMat.at<double>(row, col);
+        }
+        pose3d.at<double>(row, 3) = tvec.at<double>(row, 0);
+    }
+    pose3d.at<double>(3, 3) = 1.0;
 };
 
 void WebARKitPatternTrackingInfo::computePose(std::vector<cv::Point3f>& treeDPoints,

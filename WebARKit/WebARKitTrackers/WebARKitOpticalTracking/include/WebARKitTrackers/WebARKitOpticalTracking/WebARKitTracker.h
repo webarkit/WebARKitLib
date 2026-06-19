@@ -31,9 +31,9 @@ class WebARKitTracker {
 
     std::vector<double> getOutputData();
 
-    cv::Mat getPoseMatrix();
+    cv::Mat getPoseMatrixCV();
     
-    float* getPoseMatrix2();
+    float* getPoseMatrixGL();
 
     //float (*WebARKitTracker::getPoseMatrix3()[3][4]);
 

@@ -97,12 +97,12 @@ std::vector<double> WebARKitManager::getOutputData() {
     return m_tracker->getOutputData();
 };
 
-cv::Mat WebARKitManager::getPoseMatrix() {
-    return m_tracker->getPoseMatrix();
+cv::Mat WebARKitManager::getPoseMatrixCV() {
+    return m_tracker->getPoseMatrixCV();
 }
 
-float* WebARKitManager::getPoseMatrix2() {
-    return m_tracker->getPoseMatrix2();
+float* WebARKitManager::getPoseMatrixGL() {
+    return m_tracker->getPoseMatrixGL();
 }
 
 cv::Mat WebARKitManager::getGLViewMatrix() {
@@ -111,7 +111,7 @@ cv::Mat WebARKitManager::getGLViewMatrix() {
 
 std::array<double, 16> WebARKitManager::getTransformationMatrix() {
     std::array<double, 16> transformationMatrix;
-    webarkit::arglCameraViewRHf((float (*)[4])m_tracker->getPoseMatrix2(), (float*)transformationMatrix.data(), 1.0f);
+    webarkit::arglCameraViewRHf((float (*)[4])m_tracker->getPoseMatrixGL(), (float*)transformationMatrix.data(), 1.0f);
     return transformationMatrix;
 }
 
