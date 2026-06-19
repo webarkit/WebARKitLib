@@ -363,31 +363,46 @@ class WebARKitTracker::WebARKitTrackerImpl {
         cv::Mat frameDescr;
         std::vector<cv::KeyPoint> frameKeyPts;
 
-        // WebARKitLib#44: detect features on a pyrDown'd copy of the frame for
-        // performance on large frames. matched keypoints are scaled back to full-frame
-        // coordinates in MatchFeatures via _featureDetectScaleFactor. For level 0
-        // (frame <= featureImageMinSize, e.g. 640x480) detectionFrame == frame, so the
-        // path is identical to full-res detection. Detection still runs every frame
-        // (the "skip while tracking" guard is the separate webarkit/WebARKitLib#44 part B).
-        cv::Mat detectionFrame;
-        if (_featureDetectPyrLevel < 1) {
-            detectionFrame = frame;
-        } else {
-            cv::Mat srcFrame = frame;
-            for (int pyrLevel = 1; pyrLevel <= _featureDetectPyrLevel; pyrLevel++) {
-                cv::pyrDown(srcFrame, detectionFrame, cv::Size(0, 0));
-                srcFrame = detectionFrame;
+        // WebARKitLib#44 part B: skip feature detection while the marker is already
+        // being tracked. Detection (extractFeatures + descriptor matching) is the
+        // dominant per-frame cost; once optical flow has a lock (_isTracking), it
+        // maintains the pose and re-detection is unnecessary. When optical flow or
+        // template matching loses the marker, _isTracking is cleared (see runOpticalFlow
+        // / RunTemplateMatching) and detection resumes on the next frame to re-acquire.
+        //
+        // The guard is on _isTracking, NOT on _currentlyTrackedMarkers <
+        // _maxNumberOfMarkersToTrack: _isDetected is reset to false every frame (above),
+        // and on the first detection frame optical flow is skipped (_frameCount == 0), so
+        // the marker is detected but not yet "tracking". A counter-based guard would then
+        // skip both detection AND optical flow on the next frame and freeze (this bites
+        // the static-image example, which feeds the same frame repeatedly). Gating on
+        // _isTracking re-detects until optical flow actually holds a lock.
+        if (!_isTracking) {
+            // WebARKitLib#44 part A: detect features on a pyrDown'd copy of the frame for
+            // performance on large frames. matched keypoints are scaled back to full-frame
+            // coordinates in MatchFeatures via _featureDetectScaleFactor. For level 0
+            // (frame <= featureImageMinSize, e.g. 640x480) detectionFrame == frame, so the
+            // path is identical to full-res detection.
+            cv::Mat detectionFrame;
+            if (_featureDetectPyrLevel < 1) {
+                detectionFrame = frame;
+            } else {
+                cv::Mat srcFrame = frame;
+                for (int pyrLevel = 1; pyrLevel <= _featureDetectPyrLevel; pyrLevel++) {
+                    cv::pyrDown(srcFrame, detectionFrame, cv::Size(0, 0));
+                    srcFrame = detectionFrame;
+                }
             }
-        }
 
-        cv::Mat featureMask = createFeatureMask(detectionFrame);
+            cv::Mat featureMask = createFeatureMask(detectionFrame);
 
-        if (!extractFeatures(detectionFrame, featureMask, frameKeyPts, frameDescr)) {
-            WEBARKIT_LOGe("No features detected in extractFeatures!\n");
-        }
-        WEBARKIT_LOGd("frame KeyPoints size: %d\n", frameKeyPts.size());
-        if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
-            MatchFeatures(frameKeyPts, frameDescr);
+            if (!extractFeatures(detectionFrame, featureMask, frameKeyPts, frameDescr)) {
+                WEBARKIT_LOGe("No features detected in extractFeatures!\n");
+            }
+            WEBARKIT_LOGd("frame KeyPoints size: %d\n", frameKeyPts.size());
+            if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
+                MatchFeatures(frameKeyPts, frameDescr);
+            }
         }
         int i = 0;
         // WebARKitLib#46: also run optical flow while tracking, not only on a fresh
