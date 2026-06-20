@@ -441,7 +441,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // leaving these empty. Skip pose estimation in that case.
             if (imgPoints.size() >= 4 && imgPoints.size() == objPoints.size()) {
                 _patternTrackingInfo.cameraPoseFromPoints(_pose, objPoints, imgPoints, m_camMatrix, m_distortionCoeff);
-                // _patternTrackingInfo.computePose(_pattern.points3d, warpedCorners, m_camMatrix, m_distortionCoeff);
                 _patternTrackingInfo.getTrackablePose(_pose);
                 _patternTrackingInfo.updateTrackable();
                 _patternTrackingInfo.computeGLviewMatrix(_pose);

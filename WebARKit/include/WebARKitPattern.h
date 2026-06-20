@@ -35,23 +35,14 @@ class WebARKitPatternTrackingInfo {
 
     void cameraPoseFromPoints(cv::Mat& pose, const std::vector<cv::Point3f>& objPts, const std::vector<cv::Point2f>& imgPts, const cv::Matx33f& caMatrix, const cv::Mat& distCoeffs);
 
-    /**
-     * Compute pattern pose using PnP algorithm
-     */
-    void computePose(std::vector<cv::Point3f>& treeDPoints, std::vector<cv::Point2f>& imgPoints, const cv::Matx33f& caMatrix,
-                     const cv::Mat& distCoeffs);
-
     void getTrackablePose(cv::Mat& pose);
 
     void updateTrackable();
-
-    void computeGLviewMatrix();
 
     void computeGLviewMatrix(cv::Mat &pose);
 
   private:
     float m_scale;
-    void invertPose();
 };
 
 #endif // WEBARKITPATTERN_H
