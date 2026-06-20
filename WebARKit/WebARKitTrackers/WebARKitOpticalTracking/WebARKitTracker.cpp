@@ -194,8 +194,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     float* getPoseMatrixGL() { return (float*)_patternTrackingInfo.trans; }
 
-    //float[3][4] getPoseMatrix3() { return _patternTrackingInfo.trans; }
-    //float (*getPoseMatrix3())[3][4] { return &_patternTrackingInfo.trans; }
 
     cv::Mat getGLViewMatrix() { return _patternTrackingInfo.glViewMatrix; };
 
@@ -212,9 +210,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
         // std::cout << "Starting template match" << std::endl;
         std::vector<cv::Point2f> finalTemplatePoints, finalTemplateMatchPoints;
         // Get a handle on the corresponding points from current image and the marker
-        // std::vector<cv::Point2f> trackablePoints = _trackables[trackableId]._trackSelection.GetTrackedFeatures();
-        // std::vector<cv::Point2f> trackablePointsWarped =
-        // _trackables[trackableId]._trackSelection.GetTrackedFeaturesWarped();
         std::vector<cv::Point2f> trackablePoints = _trackSelection.GetTrackedFeatures();
         std::vector<cv::Point2f> trackablePointsWarped = _trackSelection.GetTrackedFeaturesWarped();
         // Create an empty result image - May be able to pre-initialize this container
@@ -227,22 +222,16 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
         for (int j = 0; j < n; j++) {
             auto pt = trackablePointsWarped[j];
-            // if (cv::pointPolygonTest(_trackables[trackableId]._bBoxTransformed, trackablePointsWarped[j], true) > 0)
-            // {
             if (cv::pointPolygonTest(_bBoxTransformed, trackablePointsWarped[j], true) > 0) {
                 auto ptOrig = trackablePoints[j];
 
                 cv::Rect templateRoi = GetTemplateRoi(pt);
                 cv::Rect frameROI(0, 0, frame.cols, frame.rows);
                 if (IsRoiValidForFrame(frameROI, templateRoi)) {
-                    // cv::Rect markerRoi(0, 0, _trackables[trackableId]._image.cols,
-                    // _trackables[trackableId]._image.rows);
                     cv::Rect markerRoi(0, 0, _image.cols, _image.rows);
 
                     std::vector<cv::Point2f> vertexPoints = GetVerticesFromPoint(ptOrig);
                     std::vector<cv::Point2f> vertexPointsResults;
-                    // perspectiveTransform(vertexPoints, vertexPointsResults,
-                    // _trackables[trackableId]._trackSelection.GetHomography());
                     perspectiveTransform(vertexPoints, vertexPointsResults, _trackSelection.GetHomography());
 
                     cv::Rect srcBoundingBox = cv::boundingRect(cv::Mat(vertexPointsResults));
@@ -250,8 +239,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
                     vertexPoints.clear();
                     vertexPoints = GetVerticesFromTopCorner(srcBoundingBox.x, srcBoundingBox.y, srcBoundingBox.width,
                                                             srcBoundingBox.height);
-                    // perspectiveTransform(vertexPoints, vertexPointsResults,
-                    // _trackables[trackableId]._trackSelection.GetHomography().inv());
                     perspectiveTransform(vertexPoints, vertexPointsResults, _trackSelection.GetHomography().inv());
 
                     std::vector<cv::Point2f> testVertexPoints = FloorVertexPoints(vertexPointsResults);
@@ -269,7 +256,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
                             if (templateBoundingBox.area() > 0 && searchROI.area() > templateBoundingBox.area()) {
                                 cv::Mat searchImage = frame(searchROI);
-                                // cv::Mat templateImage = _trackables[trackableId]._image(templateBoundingBox);
                                 cv::Mat templateImage = _image(templateBoundingBox);
                                 cv::Mat warpedTemplate;
 
@@ -319,8 +305,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
         bool gotHomography = updateTrackableHomography(trackableId, finalTemplatePoints, finalTemplateMatchPoints);
         if (!gotHomography) {
-            // _trackables[trackableId]._isTracking = false;
-            // _trackables[trackableId]._isDetected = false;
             _isTracking = false;
             _isDetected = false;
             // WebARKitLib#46: template matching is the appearance check -- if it fails
@@ -501,7 +485,6 @@ class WebARKitTracker::WebARKitTrackerImpl {
         int maxMatches = 0;
         int bestMatchIndex = -1;
         std::vector<cv::KeyPoint> finalMatched1, finalMatched2;
-        // for (int i = 0; i < _trackables.size(); i++) {
         if (!_isDetected) {
             std::vector<std::vector<cv::DMatch>> matches = getMatches(newFrameDescriptors);
             numMatches = matches.size();
@@ -549,24 +532,17 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 getHomographyInliers(Points(finalMatched2), Points(finalMatched1));
             if (homoInfo.validHomography) {
                 // std::cout << "New marker detected" << std::endl;
-                //_trackables[bestMatchIndex]._isDetected = true;
                 _isDetected = true;
                 // Since we've just detected the marker, make sure next invocation of
                 // GetInitialFeatures() for this marker makes a new selection.
-                //_trackables[bestMatchIndex]._trackSelection.ResetSelection();
                 _trackSelection.ResetSelection();
-                //_trackables[bestMatchIndex]._trackSelection.SetHomography(homoInfo.homography);
                 _trackSelection.SetHomography(homoInfo.homography);
 
                 // Use the homography to form the initial estimate of the bounding box.
                 // This will be refined by the optical flow pass.
-                // perspectiveTransform(_trackables[bestMatchIndex]._bBox, _trackables[bestMatchIndex]._bBoxTransformed,
-                // homoInfo.homography);
                 perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
                 if (_trackVizActive) {
                     for (int i = 0; i < 4; i++) {
-                        // _trackViz.bounds[i][0] = _trackables[bestMatchIndex]._bBoxTransformed[i].x;
-                        // _trackViz.bounds[i][1] = _trackables[bestMatchIndex]._bBoxTransformed[i].y;
                         _trackViz.bounds[i][0] = _bBoxTransformed[i].x;
                         _trackViz.bounds[i][1] = _bBoxTransformed[i].y;
                     }
@@ -632,14 +608,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 perspectiveTransform(_bBox, _bBoxTransformed, homoInfo.homography);
                 if (_trackVizActive) {
                     for (int i = 0; i < 4; i++) {
-                        // _trackViz.bounds[i][0] = _trackables[trackableId]._bBoxTransformed[i].x;
-                        // _trackViz.bounds[i][1] = _trackables[trackableId]._bBoxTransformed[i].y;
                         _trackViz.bounds[i][0] = _bBoxTransformed[i].x;
                         _trackViz.bounds[i][1] = _bBoxTransformed[i].y;
                     }
                 }
                 if (_frameCount > 1) {
-                    // _trackables[trackableId]._trackSelection.ResetSelection();
                     _trackSelection.ResetSelection();
                 }
                 return true;
@@ -896,8 +869,6 @@ cv::Mat WebARKitTracker::getPoseMatrixCV() { return _trackerImpl->getPoseMatrixC
 
 float* WebARKitTracker::getPoseMatrixGL() { return _trackerImpl->getPoseMatrixGL(); }
 
-//float[3][4] WebARKitTracker::getPoseMatrix3() { return _trackerImpl->getPoseMatrix3(); }
-//float (*WebARKitTracker::getPoseMatrix3())[3][4]) { return &_trackerImpl->getPoseMatrix3(); }
 
 cv::Mat WebARKitTracker::getGLViewMatrix() { return _trackerImpl->getGLViewMatrix(); }
 
