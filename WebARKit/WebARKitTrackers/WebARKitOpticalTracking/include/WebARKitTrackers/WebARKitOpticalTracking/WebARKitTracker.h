@@ -35,7 +35,6 @@ class WebARKitTracker {
     
     float* getPoseMatrixGL();
 
-    //float (*WebARKitTracker::getPoseMatrix3()[3][4]);
 
     cv::Mat getGLViewMatrix();
 
