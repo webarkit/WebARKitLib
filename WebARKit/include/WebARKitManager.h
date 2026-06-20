@@ -92,8 +92,6 @@ class WebARKitManager {
 
     bool initTracker(uchar* refData, size_t refCols, size_t refRows, ColorSpace colorSpace);
 
-    bool update();
-
     void setLogLevel(int logLevel);
 
     bool shutdown();
