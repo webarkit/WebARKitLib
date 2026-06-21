@@ -61,7 +61,10 @@ needs**:
   not by webarkit-testing. ([ARnft](https://github.com/webarkit/ARnft) consumes
   jsartoolkitNFT as an npm module and doesn't build the emscripten code itself.)
 
-A standalone CMake config also exists for the unit tests (see below).
+`WebARKit/CMakeLists.txt` can **already build WebARKitLib as a static library**
+today; the "planned" part above is webarkit-testing switching its WASM build over to
+it (away from `tools/makem.js`). A standalone CMake config also drives the unit tests
+(see below).
 
 ## Tests
 
