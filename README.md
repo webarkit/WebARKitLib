@@ -62,9 +62,13 @@ needs**:
   jsartoolkitNFT as an npm module and doesn't build the emscripten code itself.)
 
 `WebARKit/CMakeLists.txt` can **already build WebARKitLib as a static library**
-today; the "planned" part above is webarkit-testing switching its WASM build over to
-it (away from `tools/makem.js`). A standalone CMake config also drives the unit tests
-(see below).
+today — for both **WASM** (emscripten) and **native Linux**, selected via the
+`EMSCRIPTEN_COMP` flag. It depends on a prebuilt **OpenCV** from
+[webarkit/opencv-em](https://github.com/webarkit/opencv-em) (the emscripten
+`opencv-js-…-emcc` build for WASM, or the native `opencv-…` build for Linux),
+fetched automatically via CMake `FetchContent`. The "planned" part above is
+webarkit-testing switching its WASM build over to this CMake config (away from
+`tools/makem.js`). The same config also drives the unit tests (see below).
 
 ## Tests
 
