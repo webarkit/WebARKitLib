@@ -38,8 +38,14 @@ refactor(#50): remove dead computePose/invertPose
 
 ## Cross-repo changes (the PR pair)
 
-A change that affects the WASM build is consumed by webarkit-testing via the
-submodule. Coordinate both repos:
+> **Applies to `WebARKit/` (this folder) ↔ the `webarkit-testing` repo.** This flow is
+> for changes to the **`WebARKit/`** OCVT tracker, which the **webarkit-testing**
+> superproject compiles to WASM. Changes to the vendored `lib/SRC/**` / `include/AR/**`
+> (old ARToolKit5) do **not** use this flow — they reach the web through
+> [jsartoolkitNFT](https://github.com/webarkit/jsartoolkitNFT), a different consumer.
+
+A change to `WebARKit/` that affects the WASM build is consumed by webarkit-testing via
+the submodule. Coordinate both repos:
 
 1. Branch from `dev` in **both** WebARKitLib and webarkit-testing.
 2. Make the C++ change here; in webarkit-testing bump the submodule pointer and
