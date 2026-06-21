@@ -1,0 +1,52 @@
+#include <WebARKitCamera.h>
+#include <WebARKitLog.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
+
+namespace webarkit {
+WebARKitCamera::WebARKitCamera() : xsize(-1), ysize(-1), diagonal_fov_degrees(70.0) { cmat.fill(0.0); }
+
+WebARKitCamera::~WebARKitCamera() {}
+
+bool WebARKitCamera::setupCamera(int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    xsize = width;
+    ysize = height;
+
+    setFocalLength(xsize, ysize);
+
+    cmat.at(0) = focal_length;
+    cmat.at(2) = 0.5 * xsize;
+    cmat.at(4) = focal_length;
+    cmat.at(5) = 0.5 * ysize;
+    cmat.at(8) = 1.0;
+    kc.fill(0.0);
+    return true;
+};
+
+void WebARKitCamera::printSettings() {
+    WEBARKIT_LOGi("WebARKit: Camera Size %d , %d\n", xsize, ysize);
+    WEBARKIT_LOGi("WebARKit: camera matrix = [%.2f  %.2f %.2f]\n", cmat[0], cmat[1], cmat[2]);
+    WEBARKIT_LOGi("                          [%.2f  %.2f %.2f]\n", cmat[3], cmat[4], cmat[5]);
+    WEBARKIT_LOGi("                          [%.2f  %.2f %.2f]\n", cmat[6], cmat[7], cmat[8]);
+    WEBARKIT_LOGi("WebARKit: kc = [%.4f %.4f %.4f %.4f %.4f %.4f]\n", kc[0], kc[1], kc[2], kc[3], kc[4], kc[5]);
+};
+
+std::array<double, 9> WebARKitCamera::getCameraData() const {
+    return cmat;
+}
+
+std::array<double, 6> WebARKitCamera::getDistortionCoefficients() const {
+   return kc;
+}
+
+void WebARKitCamera::setFocalLength(int width, int height) {
+    double diagonal_image_size;
+    double diagonal_fov_radians;
+     // simple routine to calculate focal length from diagonal field of view, and convert to camera matrix.
+    diagonal_image_size = std::pow(std::pow(width, 2.0) + std::pow(height, 2.0), 0.5);
+    diagonal_fov_radians = diagonal_fov_degrees * m_pi / 180.0;
+    focal_length = 0.5 * diagonal_image_size / std::tan(0.5 * diagonal_fov_radians);
+}
+} // namespace webarkit
