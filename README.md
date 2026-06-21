@@ -83,7 +83,11 @@ cmake -S tests -B tests/build && cmake --build tests/build && ctest --test-dir t
 
 ## Contributing
 
+Please read [`./CONTRIBUTING.md`](./CONTRIBUTING.md) for the full guidelines. In short:
+
 - Branch from `dev`; PR back to `dev`; sign your commits and reference the issue.
+- **Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/)**
+  (e.g. `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 - Library changes are usually paired with a build/bump in webarkit-testing — see that
   repo's "cross-repo PR pair" flow.
 - Don't modify the vendored `lib/SRC/**` / `include/AR/**` (old ARToolKit5) as part of
