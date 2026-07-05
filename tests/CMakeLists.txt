@@ -10,6 +10,7 @@ endif()
 
 # Fetch googletest v1.13.0  commit b796f7d44681514f58a683a3a71ff17c94edb0c1
 include(FetchContent)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/OpenCVEm.cmake)
 FetchContent_Declare(
   googletest
   URL https://github.com/google/googletest/archive/b796f7d44681514f58a683a3a71ff17c94edb0c1.zip
@@ -19,7 +20,8 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   build_opencv
- URL https://github.com/webarkit/opencv-em/releases/download/0.1.6/opencv-4.10.0.zip
+  URL ${OPENCV_NATIVE_URL}
+  URL_HASH ${OPENCV_NATIVE_HASH}
 )
 
 FetchContent_MakeAvailable(googletest build_opencv)
