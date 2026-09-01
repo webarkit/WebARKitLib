@@ -2,6 +2,7 @@
 
 extern const double DEFAULT_NN_MATCH_RATIO = 0.7f;
 extern const double TEBLID_NN_MATCH_RATIO = 0.8f;
+extern const double AKAZE_NN_MATCH_RATIO = 0.8f; ///< artoolkitX OCVT parity (OCVConfig nn_match_ratio).
 extern const int DEFAULT_MAX_FEATURES = 800;
 extern const int TEBLID_MAX_FEATURES = 1000;
 extern const int N = 10;
