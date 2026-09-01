@@ -398,8 +398,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // frame before giving up. This preserves the #44 fast path for markers that
             // survive downsampling while restoring small-marker detection parity with
             // WebARKitLib-rs / jsartoolkitNFT (which never downsample).
-            if (static_cast<int>(frameKeyPts.size()) <= minRequiredDetectedFeatures && _featureDetectPyrLevel > 0) {
-                WEBARKIT_LOGd("Too few keypoints after pyrDown (%d <= %d); retrying at full resolution.\n",
+            if (static_cast<int>(frameKeyPts.size()) < minRequiredDetectedFeatures && _featureDetectPyrLevel > 0) {
+                WEBARKIT_LOGd("Too few keypoints after pyrDown (%d < %d); retrying at full resolution.\n",
                               frameKeyPts.size(), (int)minRequiredDetectedFeatures);
                 detectionFrame = frame;
                 detectionScaleFactor = cv::Vec2f(1.0f, 1.0f);
