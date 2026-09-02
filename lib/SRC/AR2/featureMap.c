@@ -200,7 +200,7 @@ AR2FeatureMapT *ar2GenFeatureMap( AR2ImageT *image,
         fp2++;
     }
     for( j = 1; j < ysize-1; j++ ) {
-        ARLOGi("\r%4d/%4d.", j+1, ysize); fflush(stdout);
+        ARLOGd("\r%4d/%4d.", j+1, ysize); fflush(stdout);
         *(fp++) = 1.0f;
         fp2++;
         for( i = 1; i < xsize-1; i++ ) {

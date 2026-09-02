@@ -6,6 +6,8 @@ const char * WARKTerror = "%c🚩[webarkit-error:]";
 const char * WARKTerrorStyle = "color: #ffffff; background-color: #ff0101; border-radius: 4px; padding: 2px";
 const char * WARKTwarn = "%c⚠️[webarkit-warn:]";
 const char * WARKTwarnStyle = "color: #774400; background-color: #ffff99; border-radius: 4px; padding: 2px";
+const char * WARKTdebug = "%c🐞[webarkit-debug:]";
+const char * WARKTdebugStyle = "color: #000000; background-color: #ffcc00; border-radius: 4px; padding: 2px";
 
 void webarkitLOGi(const std::string &message) {
     EM_ASM ({
@@ -267,3 +269,26 @@ void webarkitLOGw(const std::string &message, int  format) {
     format
     );
 }
+
+#if defined WEBARKIT_DEBUG
+
+void webarkitLOGd(const std::string &message) {
+    EM_ASM ({
+        var message = UTF8ToString($0);
+        var debugHead =  UTF8ToString($1);
+        var style = UTF8ToString($2);
+        console.log(debugHead + message, style);
+    },
+    message.c_str(),
+    WARKTdebug,
+    WARKTdebugStyle
+    );
+}
+
+#else
+
+void webarkitLOGd(const std::string &message) {
+    // do nothing
+}
+
+#endif
