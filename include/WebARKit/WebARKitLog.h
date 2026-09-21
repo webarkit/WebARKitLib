@@ -40,5 +40,6 @@ void webarkitLOGw(const std::string &message, const char * format);
 
 void webarkitLOGw(const std::string &message, int  format);
 
+void webarkitLOGd(const std::string &message);
 
 #endif // #ifndef WEBARKIT_LOG_H
