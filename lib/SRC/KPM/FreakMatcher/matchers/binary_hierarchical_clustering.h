@@ -37,7 +37,7 @@
 
 #include "kmedoids.h"
 
-#include <unordered_map>
+#include <map>
 #include <queue>
 
 namespace vision {
@@ -214,7 +214,16 @@ namespace vision {
         typedef Node<NUM_BYTES_PER_FEATURE> node_t;
         typedef std::unique_ptr<node_t> node_ptr_t;
         typedef BinarykMedoids<NUM_BYTES_PER_FEATURE> kmedoids_t;
-        typedef std::unordered_map<int, std::vector<int> > cluster_map_t;
+        // std::map (not std::unordered_map): BHC tree construction
+        // iterates this map to build the topology of clusters. With
+        // unordered_map, the resulting tree's child ordering varied
+        // across STL implementations and produced different BHC
+        // topologies on different platforms, which propagated into
+        // different inlier sets and homographies. std::map's
+        // ascending-key iteration makes BHC tree topology
+        // deterministic. Mirrors the BTreeMap fix on the Rust port
+        // (see freak/clustering.rs and issue #170).
+        typedef std::map<int, std::vector<int> > cluster_map_t;
         
         typedef PriorityQueueItem<NUM_BYTES_PER_FEATURE> queue_item_t;
         typedef std::priority_queue<queue_item_t> queue_t;

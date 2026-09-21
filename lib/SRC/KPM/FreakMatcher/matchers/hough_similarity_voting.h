@@ -40,18 +40,26 @@
 #include <framework/error.h>
 
 #include <vector>
-#include <unordered_map>
+#include <map>
 
 namespace vision {
 
     /**
-     * Hough voting for a similarity transformation based on a set of correspondences. 
+     * Hough voting for a similarity transformation based on a set of correspondences.
      */
     class HoughSimilarityVoting
     {
     public:
-        
-        typedef std::unordered_map<unsigned int, unsigned int> hash_t;
+
+        // std::map (not std::unordered_map): the vote-tally is consumed
+        // by getMaximumNumberOfVotes, which iterates and picks the bin
+        // with the highest count. unordered_map has implementation-
+        // defined iteration order (libstdc++ vs MSVC STL) so tied bins
+        // produced different winners across platforms, making the
+        // matcher non-deterministic across builds. std::map gives a
+        // stable ascending-key ordering that resolves ties consistently.
+        // Mirrors the BTreeMap fix on the Rust port (issue #170).
+        typedef std::map<unsigned int, unsigned int> hash_t;
         typedef std::pair<int /*size*/, int /*index*/> vote_t;
         typedef std::vector<vote_t> vote_vector_t;
         
