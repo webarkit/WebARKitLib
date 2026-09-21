@@ -293,6 +293,7 @@ int kpmSetRefDataSet( KpmHandle *kpmHandle, KpmRefDataSet *refDataSet )
                 }
                 ARLOGi("page %d, image num %d, points - %d\n", k, m, points.size());
                 kpmHandle->pageIDs[db_id] = kpmHandle->refDataSet.pageInfo[k].pageNo;
+                ARLOGd("kpmSetRefDataSet: db_id=%d -> pageNo=%d (page index %d, image %d, %d points)\n", db_id, kpmHandle->refDataSet.pageInfo[k].pageNo, k, m, (int)points.size());
                 kpmHandle->freakMatcher->addFreakFeaturesAndDescriptors(points,descriptors,points_3d,kpmHandle->refDataSet.pageInfo[k].imageInfo[m].width,kpmHandle->refDataSet.pageInfo[k].imageInfo[m].height,db_id++);
             }
         }
@@ -639,8 +640,10 @@ for (int pageLoop = 0; pageLoop < kpmHandle->resultNum; pageLoop++) {
 
 const vision::matches_t& matches = kpmHandle->freakMatcher->inliers();
 int matched_image_id = kpmHandle->freakMatcher->matchedId();
-if (matched_image_id != 0) {
+ARLOGd("kpmMatching: matchedId=%d (resultNum=%d, inliers=%d)\n", matched_image_id, kpmHandle->resultNum, (int)matches.size());
+if (matched_image_id >= 0) {
     int matchedPageNo = kpmHandle->pageIDs[matched_image_id];
+    ARLOGd("kpmMatching: matchedId=%d maps to pageNo=%d\n", matched_image_id, matchedPageNo);
 
     if( !kpmHandle->result[matchedPageNo].skipF ) {
         ret = kpmUtilGetPose_binary(kpmHandle->cparamLT,
