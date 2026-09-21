@@ -6,9 +6,26 @@ superproject as a submodule.
 
 ## Workflow
 
-- **Branch from `dev`** and open your PR **against `dev`** (not `main`).
+- **Branch from `dev`** and open your PR **against `dev`** (not `master`).
 - Reference the related issue in the PR description.
 - **Sign your commits** (`git commit -S …`).
+
+### Merging a branch-sync PR
+
+Ordinary PRs can be squashed. A PR that **syncs one long-lived branch into another**
+— typically `master` back into `dev` after a release — must be merged with
+**"Create a merge commit"**, never squash or rebase.
+
+Squashing collapses the incoming commits into a single new commit, and rebasing
+replays them under new SHAs. Either way `dev` ends up *containing* the code without
+git recognising the two branches as related, so the next sync offers the same commits
+again and usually conflicts.
+
+Only a merge commit makes the incoming commits genuine ancestors, which is what makes
+the following sync a no-op.
+
+This is not hypothetical: `dev` drifted 14 commits behind `master` and had to be
+repaired in #68, and consumers could not build against `dev` in the meantime.
 
 ## Commit messages — Conventional Commits
 
