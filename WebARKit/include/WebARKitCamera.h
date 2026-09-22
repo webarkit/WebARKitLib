@@ -11,6 +11,11 @@ class WebARKitCamera {
 
     bool setupCamera(int width, int height);
 
+    // Load real camera calibration from an ArtoolkitX camera_para.dat buffer
+    // (ARParam), rescaled to width x height. Fills the intrinsic matrix and
+    // distortion from the file instead of the synthetic FOV-based defaults.
+    bool loadCameraParamFromBuffer(const void* buffer, int size, int width, int height);
+
     void printSettings();
 
     std::array<double, 9> getCameraData() const;
