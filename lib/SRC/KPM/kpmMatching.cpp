@@ -194,13 +194,16 @@ int kpmSetRefDataSet( KpmHandle *kpmHandle, KpmRefDataSet *refDataSet )
     // page per scale). Refuse a dataset that would not fit before changing any
     // state, instead of writing past them.
     {
+        // Check each count against the room left before adding it, so a corrupt
+        // or hostile dataset cannot overflow the running total past the check.
         int imageTotal = 0;
         for( i = 0; i < refDataSet->pageNum; i++ ) {
-            imageTotal += refDataSet->pageInfo[i].imageNum;
-        }
-        if( imageTotal > DB_IMAGE_MAX ) {
-            ARLOGe("kpmSetRefDataSet(): %d reference images exceed DB_IMAGE_MAX (%d).\n", imageTotal, DB_IMAGE_MAX);
-            return -1;
+            const int imageNum = refDataSet->pageInfo[i].imageNum;
+            if( imageNum < 0 || imageNum > DB_IMAGE_MAX - imageTotal ) {
+                ARLOGe("kpmSetRefDataSet(): page %d has %d reference images; the set exceeds DB_IMAGE_MAX (%d).\n", i, imageNum, DB_IMAGE_MAX);
+                return -1;
+            }
+            imageTotal += imageNum;
         }
     }
 #endif
@@ -284,6 +287,16 @@ int kpmSetRefDataSet( KpmHandle *kpmHandle, KpmRefDataSet *refDataSet )
         free(featureVector.sf);
     }
 #else
+    // Register the new set in a fresh matcher. Reusing the old one kept every
+    // keyframe it already held: an id the new set registers again is refused
+    // as a duplicate (the old keyframe stays) while its 3D points are replaced,
+    // so pose estimation paired old matches with new, shorter point lists. The
+    // matcher carries no configuration beyond construction (kpmCreateHandle),
+    // so a new instance is equivalent to the original.
+    delete kpmHandle->freakMatcher;
+    kpmHandle->freakMatcher = new vision::VisualDatabaseFacade;
+    kpmHandle->dbImageNum = 0;
+
     if (kpmHandle->refDataSet.num != 0) {
         featureVector.num = kpmHandle->refDataSet.num;
 
@@ -667,11 +680,11 @@ for (int pageLoop = 0; pageLoop < kpmHandle->resultNum; pageLoop++) {
 const vision::image_matches_t& imageMatches = kpmHandle->freakMatcher->matches();
 std::map<int, std::vector<const vision::image_match_t*> > candidatesPerPage;
 for (const vision::image_match_t& imageMatch : imageMatches) {
-    // kpmSetRefDataSet() does not clear the matcher, so after a reference set is
-    // replaced by a smaller one its extra images are still matched. Their ids are
-    // at or above dbImageNum and map to page positions this result[] may not have.
+    // Invariant checks. kpmSetRefDataSet() registers each set in a fresh
+    // matcher, so every id is below dbImageNum and maps into result[]; should
+    // that ever break, log it rather than index the mapping arrays out of bounds.
     if (imageMatch.id < 0 || imageMatch.id >= kpmHandle->dbImageNum) {
-        ARLOGe("kpmMatching: ignoring stale matcher image %d (current images: %d).\n", imageMatch.id, kpmHandle->dbImageNum);
+        ARLOGe("kpmMatching: matcher image %d is outside the current set (%d images).\n", imageMatch.id, kpmHandle->dbImageNum);
         continue;
     }
     const int pageIndex = kpmHandle->pageIndices[imageMatch.id];
