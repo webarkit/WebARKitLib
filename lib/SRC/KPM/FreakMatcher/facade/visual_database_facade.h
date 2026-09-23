@@ -91,7 +91,9 @@ namespace vision {
         const std::vector<unsigned char>& getQueryDescriptors() const;
         
         const matches_t& inliers() const;
-        
+
+        const image_matches_t& matches() const;
+
     private:
         std::unique_ptr<VisualDatabaseImpl> mVisualDbImpl;
     }; // VisualDatabaseFacade

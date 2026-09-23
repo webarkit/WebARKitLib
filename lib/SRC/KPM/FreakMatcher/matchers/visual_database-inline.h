@@ -193,7 +193,8 @@ namespace vision {
     bool VisualDatabase<FEATURE_EXTRACTOR, STORE, MATCHER>::query(const keyframe_t* query_keyframe) {
         mMatchedInliers.clear();
         mMatchedId = -1;
-        
+        mMatches.clear();
+
         const std::vector<FeaturePoint>& query_points = query_keyframe->store().points();
         
         // Loop over all the images in the database
@@ -337,10 +338,20 @@ namespace vision {
             }
             
             //std::cout<<"inliers-"<<inliers.size()<<std::endl;
-            if(inliers.size() >= mMinNumInliers && inliers.size() > mMatchedInliers.size()) {
-                CopyVector9(mMatchedGeometry, H);
-                mMatchedInliers.swap(inliers);
-                mMatchedId = it->first;
+            if(inliers.size() >= mMinNumInliers) {
+                // Keep every image that passes, not only the best (#635): with
+                // several markers in view, each one has its own match.
+                image_match_t match;
+                match.id = it->first;
+                match.inliers = inliers;
+                CopyVector9(match.geometry, H);
+                mMatches.push_back(match);
+
+                if(inliers.size() > mMatchedInliers.size()) {
+                    CopyVector9(mMatchedGeometry, H);
+                    mMatchedInliers.swap(inliers);
+                    mMatchedId = it->first;
+                }
             }
         }
         
