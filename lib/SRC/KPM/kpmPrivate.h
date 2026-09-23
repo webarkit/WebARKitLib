@@ -89,6 +89,7 @@ struct _KpmHandle {
     int                       resultNum;
     int                       pageIDs[DB_IMAGE_MAX];
     int                       pageIndices[DB_IMAGE_MAX]; // position in refDataSet.pageInfo (and result[]) of each db_id's page
+    int                       dbImageNum;                // images registered by the last kpmSetRefDataSet(): ids 0..dbImageNum-1 are current
 };
 
 #endif // !__kpmPrivate_h__
