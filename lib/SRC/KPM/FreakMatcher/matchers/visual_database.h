@@ -159,7 +159,14 @@ namespace vision {
          * @return Matched geometry matrix
          */
         const float* matchedGeometry() const { return mMatchedGeometry; }
-        
+
+        /**
+         * @return Every reference image that passed the inlier tests in the last
+         * query(), in database order. matchedId()/inliers()/matchedGeometry()
+         * still describe the single best of these.
+         */
+        const image_matches_t& matches() const { return mMatches; }
+
         /**
          * Get the detector.
          */
@@ -183,7 +190,8 @@ namespace vision {
         matches_t mMatchedInliers;
         id_t mMatchedId;
         float mMatchedGeometry[9];
-        
+        image_matches_t mMatches;
+
         keyframe_ptr_t mQueryKeyframe;
     
         // Map of keyframe

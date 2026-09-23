@@ -47,5 +47,16 @@ namespace vision {
     }; // match_t
     
     typedef std::vector<match_t> matches_t;
-    
+
+    /**
+     * One reference image that survived geometric verification against the query.
+     */
+    struct image_match_t {
+        int id;             // reference image id: the db_id passed to addImage()
+        matches_t inliers;  // correspondences consistent with `geometry`
+        float geometry[9];  // homography, row-major
+    }; // image_match_t
+
+    typedef std::vector<image_match_t> image_matches_t;
+
 } // vision

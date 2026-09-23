@@ -39,6 +39,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <map>
 
 #include <KPM/kpm.h>
 #include "kpmPrivate.h"
@@ -638,50 +639,39 @@ for (int pageLoop = 0; pageLoop < kpmHandle->resultNum; pageLoop++) {
     kpmHandle->result[pageLoop].camPoseF = -1;
 }
 
-const vision::matches_t& matches = kpmHandle->freakMatcher->inliers();
-int matched_image_id = kpmHandle->freakMatcher->matchedId();
-ARLOGd("kpmMatching: matchedId=%d (resultNum=%d, inliers=%d)\n", matched_image_id, kpmHandle->resultNum, (int)matches.size());
-if (matched_image_id >= 0) {
-    int matchedPageNo = kpmHandle->pageIDs[matched_image_id];
-    ARLOGd("kpmMatching: matchedId=%d maps to pageNo=%d\n", matched_image_id, matchedPageNo);
-
-    if( !kpmHandle->result[matchedPageNo].skipF ) {
-        ret = kpmUtilGetPose_binary(kpmHandle->cparamLT,
-                                    matches ,
-                                    kpmHandle->freakMatcher->get3DFeaturePoints(matched_image_id),
-                                    kpmHandle->freakMatcher->getQueryFeaturePoints(),
-                                    kpmHandle->result[matchedPageNo].camPose,
-                                    &(kpmHandle->result[matchedPageNo].error) );
-
-        if (ret == 0) {
-            kpmHandle->result[matchedPageNo].camPoseF = 0;
-            kpmHandle->result[matchedPageNo].inlierNum = (int)matches.size();
-            kpmHandle->result[matchedPageNo].pageNo = matchedPageNo;
-            ARLOGi("Page[%d]  pre:%3d, aft:%3d, error = %f\n", matchedPageNo, (int)matches.size(), (int)matches.size(), kpmHandle->result[matchedPageNo].error);
-        }
+// Every reference image that passed the matcher's tests (#635). Each page was
+// registered as several images — one per scale, see kpmSetRefDataSet — so
+// several matches can belong to one page. Keep the best-supported per page.
+const vision::image_matches_t& imageMatches = kpmHandle->freakMatcher->matches();
+std::map<int, const vision::image_match_t*> bestPerPage;
+for (const vision::image_match_t& imageMatch : imageMatches) {
+    const int pageNo = kpmHandle->pageIDs[imageMatch.id];
+    auto best = bestPerPage.find(pageNo);
+    if (best == bestPerPage.end() || imageMatch.inliers.size() > best->second->inliers.size()) {
+        bestPerPage[pageNo] = &imageMatch;
     }
 }
-/*
-        for (int pageLoop = 0; pageLoop < kpmHandle->resultNum; pageLoop++) {
+ARLOGd("kpmMatching: %d image match(es) across %d page(s)\n", (int)imageMatches.size(), (int)bestPerPage.size());
 
-            kpmHandle->result[pageLoop].pageNo = kpmHandle->refDataSet.pageInfo[pageLoop].pageNo;
-            kpmHandle->result[pageLoop].camPoseF = -1;
-            if( kpmHandle->result[pageLoop].skipF ) continue;
+for (const auto& entry : bestPerPage) {
+    const int pageNo = entry.first;
+    const vision::image_match_t& imageMatch = *entry.second;
+    // result[] is indexed by page number, as it was before this change.
+    if (kpmHandle->result[pageNo].skipF) continue;
 
-
-            const vision::matches_t& matches = kpmHandle->freakMatcher->inliers();
-            int matched_image_id = kpmHandle->freakMatcher->matchedId();
-            if (matched_image_id < 0) continue;
-
-            //ARLOGi("Pose (freak) - %s",arrayToString2(kpmHandle->result[pageLoop].camPose).c_str());
-            if( ret == 0 ) {
-                kpmHandle->result[pageLoop].camPoseF = 0;
-                kpmHandle->result[pageLoop].inlierNum = (int)matches.size();
-                kpmHandle->result[pageLoop].pageNo = kpmHandle->pageIDs[matched_image_id];
-                ARLOGi("Page[%d]  pre:%3d, aft:%3d, error = %f\n", pageLoop, (int)matches.size(), (int)matches.size(), kpmHandle->result[pageLoop].error);
-            }
-        }
-        */
+    ret = kpmUtilGetPose_binary(kpmHandle->cparamLT,
+                                imageMatch.inliers,
+                                kpmHandle->freakMatcher->get3DFeaturePoints(imageMatch.id),
+                                kpmHandle->freakMatcher->getQueryFeaturePoints(),
+                                kpmHandle->result[pageNo].camPose,
+                                &(kpmHandle->result[pageNo].error));
+    if (ret == 0) {
+        kpmHandle->result[pageNo].camPoseF = 0;
+        kpmHandle->result[pageNo].inlierNum = (int)imageMatch.inliers.size();
+        kpmHandle->result[pageNo].pageNo = pageNo;
+        ARLOGi("Page[%d]  pre:%3d, aft:%3d, error = %f\n", pageNo, (int)imageMatch.inliers.size(), (int)imageMatch.inliers.size(), kpmHandle->result[pageNo].error);
+    }
+}
 #endif
 #if !BINARY_FEATURE
         free(featureVector.sf);

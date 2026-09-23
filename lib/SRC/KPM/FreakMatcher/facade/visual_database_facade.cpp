@@ -150,7 +150,11 @@ namespace vision {
     const matches_t& VisualDatabaseFacade::inliers() const{
         return mVisualDbImpl->mVdb->inliers();
     }
-    
+
+    const image_matches_t& VisualDatabaseFacade::matches() const{
+        return mVisualDbImpl->mVdb->matches();
+    }
+
     int VisualDatabaseFacade::getWidth(int image_id) const{
         return mVisualDbImpl->mVdb->keyframe(image_id)->width();
     }
