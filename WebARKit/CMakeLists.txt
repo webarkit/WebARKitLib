@@ -9,20 +9,32 @@ if(VERSION GREATER 3.24)
 endif()
 
 include(FetchContent)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/OpenCVEm.cmake)
+
+option(WEBARKIT_SIMD "Use the SIMD-enabled emscripten OpenCV build" OFF)
 
 if(${EMSCRIPTEN_COMP} EQUAL 1)
-  message("Fetching opencv for emscripten compilation from webarkit/opencv-em ...")
-  FetchContent_Declare(
-    build_opencv
-    URL https://github.com/webarkit/opencv-em/releases/download/0.1.6/opencv-js-4.10.0-emcc-3.1.38.zip
-  )
+  if(WEBARKIT_SIMD)
+    set(OPENCV_FETCH_DESC "SIMD emscripten")
+    set(OPENCV_FETCH_URL ${OPENCV_EMSCRIPTEN_SIMD_URL})
+    set(OPENCV_FETCH_HASH ${OPENCV_EMSCRIPTEN_SIMD_HASH})
+  else()
+    set(OPENCV_FETCH_DESC "emscripten")
+    set(OPENCV_FETCH_URL ${OPENCV_EMSCRIPTEN_URL})
+    set(OPENCV_FETCH_HASH ${OPENCV_EMSCRIPTEN_HASH})
+  endif()
 else()
-  message("Fetching opencv from webarkit/opencv-em ...")
-  FetchContent_Declare(
-    build_opencv
-    URL https://github.com/webarkit/opencv-em/releases/download/0.1.6/opencv-4.10.0.zip
-  )
+  set(OPENCV_FETCH_DESC "native")
+  set(OPENCV_FETCH_URL ${OPENCV_NATIVE_URL})
+  set(OPENCV_FETCH_HASH ${OPENCV_NATIVE_HASH})
 endif()
+
+message("Fetching ${OPENCV_FETCH_DESC} opencv from webarkit/opencv-em ${OPENCV_EM_RELEASE} ...")
+FetchContent_Declare(
+  build_opencv
+  URL ${OPENCV_FETCH_URL}
+  URL_HASH ${OPENCV_FETCH_HASH}
+)
 
 FetchContent_MakeAvailable(build_opencv)
 
