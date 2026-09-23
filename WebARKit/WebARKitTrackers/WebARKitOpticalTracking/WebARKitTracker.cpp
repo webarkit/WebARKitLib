@@ -60,8 +60,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
         } else if (trackerType == webarkit::AKAZE_TRACKER) {
-            _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
-            minNumMatches = 40;
+            // WebARKitLib#53: align with artoolkitX OCVT -- nn_match_ratio 0.8 (not 0.7)
+            // and a lower minNumMatches floor. A small marker yields few matches after
+            // downsampling; the previous values (0.7 / 40) rejected nearly all of them.
+            _nn_match_ratio = AKAZE_NN_MATCH_RATIO;
+            minNumMatches = 15;
         } else {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
             minNumMatches = 15;
@@ -368,14 +371,17 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // (frame <= featureImageMinSize, e.g. 640x480) detectionFrame == frame, so the
             // path is identical to full-res detection.
             cv::Mat detectionFrame;
+            cv::Vec2f detectionScaleFactor;
             if (_featureDetectPyrLevel < 1) {
                 detectionFrame = frame;
+                detectionScaleFactor = cv::Vec2f(1.0f, 1.0f);
             } else {
                 cv::Mat srcFrame = frame;
                 for (int pyrLevel = 1; pyrLevel <= _featureDetectPyrLevel; pyrLevel++) {
                     cv::pyrDown(srcFrame, detectionFrame, cv::Size(0, 0));
                     srcFrame = detectionFrame;
                 }
+                detectionScaleFactor = _featureDetectScaleFactor;
             }
 
             cv::Mat featureMask = createFeatureMask(detectionFrame);
@@ -383,9 +389,31 @@ class WebARKitTracker::WebARKitTrackerImpl {
             if (!extractFeatures(detectionFrame, featureMask, frameKeyPts, frameDescr)) {
                 WEBARKIT_LOGe("No features detected in extractFeatures!\n");
             }
-            WEBARKIT_LOGd("frame KeyPoints size: %d\n", frameKeyPts.size());
+            WEBARKIT_LOGd("frame KeyPoints size: %d (pyrLevel %d)\n", frameKeyPts.size(),
+                          (int)_featureDetectPyrLevel);
+
+            // WebARKitLib#53: a small marker in a large frame can fall below the detector
+            // threshold after pyrDown (too few keypoints to attempt a match). When that
+            // happens and the frame was downsampled, retry once on the full-resolution
+            // frame before giving up. This preserves the #44 fast path for markers that
+            // survive downsampling while restoring small-marker detection parity with
+            // WebARKitLib-rs / jsartoolkitNFT (which never downsample).
+            if (static_cast<int>(frameKeyPts.size()) <= minRequiredDetectedFeatures && _featureDetectPyrLevel > 0) {
+                WEBARKIT_LOGd("Too few keypoints after pyrDown (%d <= %d); retrying at full resolution.\n",
+                              frameKeyPts.size(), (int)minRequiredDetectedFeatures);
+                detectionFrame = frame;
+                detectionScaleFactor = cv::Vec2f(1.0f, 1.0f);
+                featureMask = createFeatureMask(detectionFrame);
+                frameKeyPts.clear();
+                frameDescr.release();
+                if (!extractFeatures(detectionFrame, featureMask, frameKeyPts, frameDescr)) {
+                    WEBARKIT_LOGe("No features detected in full-resolution extractFeatures!\n");
+                }
+                WEBARKIT_LOGd("frame KeyPoints size (full-res retry): %d\n", frameKeyPts.size());
+            }
+
             if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
-                MatchFeatures(frameKeyPts, frameDescr);
+                MatchFeatures(frameKeyPts, frameDescr, detectionScaleFactor);
             }
         }
         int i = 0;
@@ -480,7 +508,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     void swapImagePyramid() { _pyramid.swap(_prevPyramid); }
 
-    void MatchFeatures(const std::vector<cv::KeyPoint>& newFrameFeatures, cv::Mat newFrameDescriptors) {
+    void MatchFeatures(const std::vector<cv::KeyPoint>& newFrameFeatures, cv::Mat newFrameDescriptors,
+                       const cv::Vec2f& scaleFactor) {
         int maxMatches = 0;
         int bestMatchIndex = -1;
         std::vector<cv::KeyPoint> finalMatched1, finalMatched2;
@@ -518,14 +547,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
         // } // end for cycle
 
         if (maxMatches > 0) {
-            // WebARKitLib#44: detection ran on the downsampled detectionFrame, so the
-            // matched FRAME keypoints (finalMatched1) are in downsampled coordinates --
+            // WebARKitLib#44: detection may run on the downsampled detectionFrame, so the
+            // matched FRAME keypoints (finalMatched1) are in that frame's coordinates --
             // scale them back up to full-frame coordinates before fitting the
-            // homography. Level 0 => factor 1.0 => no-op. The reference keypoints
-            // (finalMatched2) stay in reference coordinates.
+            // homography. Identity factor (level 0, or the #53 full-res retry) => no-op.
+            // The reference keypoints (finalMatched2) stay in reference coordinates.
             for (size_t i = 0; i < finalMatched1.size(); i++) {
-                finalMatched1[i].pt.x *= _featureDetectScaleFactor[0];
-                finalMatched1[i].pt.y *= _featureDetectScaleFactor[1];
+                finalMatched1[i].pt.x *= scaleFactor[0];
+                finalMatched1[i].pt.y *= scaleFactor[1];
             }
             homography::WebARKitHomographyInfo homoInfo =
                 getHomographyInliers(Points(finalMatched2), Points(finalMatched1));
@@ -814,7 +843,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
     void setDetectorType(webarkit::TRACKER_TYPE trackerType) {
         _trackerType = trackerType;
         if (trackerType == webarkit::TRACKER_TYPE::AKAZE_TRACKER) {
-            const double akaze_thresh = 3e-4; // AKAZE detection threshold set to locate about 1000 keypoints
+            // WebARKitLib#53: use the artoolkitX OCVT default threshold (0.001) instead of
+            // 3e-4. This is the minimum detector response a keypoint must have to be
+            // accepted, so it is stricter than 3e-4, not looser -- but it matches the
+            // value artoolkitX uses in production and was validated to restore detection
+            // on small markers after downsampling.
+            const double akaze_thresh = 1e-3; // AKAZE detection threshold (artoolkitX OCVT default)
             cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
             akaze->setThreshold(akaze_thresh);
             this->_featureDetector = akaze;

@@ -29,8 +29,9 @@ INSTANTIATE_TEST_SUITE_P(WebARKitEnumTestSuite, WebARKitEnumTest,
                                                              webarkit::ColorSpace::GRAY})));
                                                           
 TEST(WebARKitConfigTest, TestConfigValues) {
-  EXPECT_EQ(DEFAULT_NN_MATCH_RATIO, 0.7f);
-  EXPECT_EQ(TEBLID_NN_MATCH_RATIO, 0.8f);
+  EXPECT_DOUBLE_EQ(DEFAULT_NN_MATCH_RATIO, 0.7);
+  EXPECT_DOUBLE_EQ(TEBLID_NN_MATCH_RATIO, 0.8);
+  EXPECT_DOUBLE_EQ(AKAZE_NN_MATCH_RATIO, 0.8);
   EXPECT_EQ(DEFAULT_MAX_FEATURES, 800);
   EXPECT_EQ(TEBLID_MAX_FEATURES, 1000);
   EXPECT_EQ(N, 10);
