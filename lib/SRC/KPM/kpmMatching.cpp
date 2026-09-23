@@ -189,6 +189,21 @@ int kpmSetRefDataSet( KpmHandle *kpmHandle, KpmRefDataSet *refDataSet )
         ARLOGe("kpmSetRefDataSet(): refDataSet.\n");
         return -1;
     }
+#if BINARY_FEATURE
+    // pageIDs[] and pageIndices[] hold one entry per registered image (one per
+    // page per scale). Refuse a dataset that would not fit before changing any
+    // state, instead of writing past them.
+    {
+        int imageTotal = 0;
+        for( i = 0; i < refDataSet->pageNum; i++ ) {
+            imageTotal += refDataSet->pageInfo[i].imageNum;
+        }
+        if( imageTotal > DB_IMAGE_MAX ) {
+            ARLOGe("kpmSetRefDataSet(): %d reference images exceed DB_IMAGE_MAX (%d).\n", imageTotal, DB_IMAGE_MAX);
+            return -1;
+        }
+    }
+#endif
 
     // Copy the refPoints into the kpmHandle's dataset.
     if( kpmHandle->refDataSet.refPoint != NULL ) {
@@ -300,6 +315,7 @@ int kpmSetRefDataSet( KpmHandle *kpmHandle, KpmRefDataSet *refDataSet )
                 kpmHandle->freakMatcher->addFreakFeaturesAndDescriptors(points,descriptors,points_3d,kpmHandle->refDataSet.pageInfo[k].imageInfo[m].width,kpmHandle->refDataSet.pageInfo[k].imageInfo[m].height,db_id++);
             }
         }
+        kpmHandle->dbImageNum = db_id;
     }
 #endif
 
@@ -651,7 +667,19 @@ for (int pageLoop = 0; pageLoop < kpmHandle->resultNum; pageLoop++) {
 const vision::image_matches_t& imageMatches = kpmHandle->freakMatcher->matches();
 std::map<int, std::vector<const vision::image_match_t*> > candidatesPerPage;
 for (const vision::image_match_t& imageMatch : imageMatches) {
-    candidatesPerPage[kpmHandle->pageIndices[imageMatch.id]].push_back(&imageMatch);
+    // kpmSetRefDataSet() does not clear the matcher, so after a reference set is
+    // replaced by a smaller one its extra images are still matched. Their ids are
+    // at or above dbImageNum and map to page positions this result[] may not have.
+    if (imageMatch.id < 0 || imageMatch.id >= kpmHandle->dbImageNum) {
+        ARLOGe("kpmMatching: ignoring stale matcher image %d (current images: %d).\n", imageMatch.id, kpmHandle->dbImageNum);
+        continue;
+    }
+    const int pageIndex = kpmHandle->pageIndices[imageMatch.id];
+    if (pageIndex < 0 || pageIndex >= kpmHandle->resultNum) {
+        ARLOGe("kpmMatching: image %d maps to page position %d, outside 0..%d.\n", imageMatch.id, pageIndex, kpmHandle->resultNum - 1);
+        continue;
+    }
+    candidatesPerPage[pageIndex].push_back(&imageMatch);
 }
 ARLOGd("kpmMatching: %d image match(es) across %d page(s)\n", (int)imageMatches.size(), (int)candidatesPerPage.size());
 
