@@ -1,3 +1,6 @@
+#ifndef MARKER_DECOMPRESS_H
+#define MARKER_DECOMPRESS_H
+
 #include <stdio.h>
 
 #ifdef __cplusplus
@@ -19,3 +22,5 @@ void extractDataAndSave(const char* str, const char* name);
 #ifdef __cplusplus
 }
 #endif
+
+#endif // MARKER_DECOMPRESS_H

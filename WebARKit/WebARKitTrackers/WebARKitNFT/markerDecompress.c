@@ -1,5 +1,4 @@
 #include <WebARKitTrackers/WebARKitNFT/markerDecompress.h>
-#include <emscripten.h>
 
 #ifdef _WIN32
 #  include <Windows.h>
@@ -12,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <AR/ar.h>
-#include <zlib/zlib.h>
+#include <zlib.h>
 
 const int mem_size_4mb = 4*1024*1024;
 

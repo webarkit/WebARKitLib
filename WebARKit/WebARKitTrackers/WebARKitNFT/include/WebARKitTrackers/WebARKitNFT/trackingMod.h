@@ -64,7 +64,7 @@
 extern "C" {
 #endif
 
-int ar2Tracking2dSub ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
+int ar2Tracking2dSubMod ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
                               ARUint8 *dataPtr, ARUint8 *mfImage, AR2TemplateT **templ,
                               AR2Tracking2DResultT *result );
 

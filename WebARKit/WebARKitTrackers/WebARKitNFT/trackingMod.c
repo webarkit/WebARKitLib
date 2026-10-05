@@ -211,7 +211,7 @@ AR2HandleT *ar2CreateHandleSubMod( int pixFormat, int xsize, int ysize/*, int th
          for( j = 0; j < k; j++ ) {
              {
                  AR2Tracking2DParamT* arg = &ar2Handle->arg[j];
-                 arg->ret = ar2Tracking2dSub(arg->ar2Handle, arg->surfaceSet, arg->candidate,
+                 arg->ret = ar2Tracking2dSubMod(arg->ar2Handle, arg->surfaceSet, arg->candidate,
                                              arg->dataPtr, arg->mfImage, &(arg->templ), &(arg->result));
              }
              //threadEndWait( ar2Handle->threadHandle[j] );

@@ -47,21 +47,21 @@
 #include <AR2/tracking.h>
 
 #if AR2_CAPABLE_ADAPTIVE_TEMPLATE
-int ar2Tracking2dSub ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
+int ar2Tracking2dSubMod ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
                               ARUint8 *dataPtr, ARUint8 *mfImage, AR2TemplateT **templ,
                               AR2Template2T **templ2, AR2Tracking2DResultT *result );
 #else
-int ar2Tracking2dSub ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
+int ar2Tracking2dSubMod ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
                               ARUint8 *dataPtr, ARUint8 *mfImage, AR2TemplateT **templ,
                               AR2Tracking2DResultT *result );
 #endif
 
 #if AR2_CAPABLE_ADAPTIVE_TEMPLATE
-int ar2Tracking2dSub ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
+int ar2Tracking2dSubMod ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
                               ARUint8 *dataPtr, ARUint8 *mfImage, AR2TemplateT **templ,
                               AR2Template2T **templ2, AR2Tracking2DResultT *result )
 #else
-int ar2Tracking2dSub ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
+int ar2Tracking2dSubMod ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,
                               ARUint8 *dataPtr, ARUint8 *mfImage, AR2TemplateT **templ,
                               AR2Tracking2DResultT *result )
 #endif
