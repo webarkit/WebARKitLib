@@ -8,6 +8,17 @@ if(VERSION GREATER 3.24)
   cmake_policy(SET CMP0135 NEW)
 endif()
 
+option(WEBARKIT_BUILD_OPTICAL "Build the OpenCV optical tracker (WebARKitLib target)" ON)
+option(WEBARKIT_BUILD_NFT "Build the NFT tracking helpers (WebARKitNFT target, no OpenCV)" OFF)
+
+if(WEBARKIT_BUILD_NFT)
+  add_subdirectory(WebARKitTrackers/WebARKitNFT)
+endif()
+
+if(NOT WEBARKIT_BUILD_OPTICAL)
+  return()
+endif()
+
 include(FetchContent)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/OpenCVEm.cmake)
 
