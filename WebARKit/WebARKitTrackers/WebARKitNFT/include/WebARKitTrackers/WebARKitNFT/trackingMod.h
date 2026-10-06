@@ -57,6 +57,10 @@
 #include <AR2/marker.h>
 #include <AR2/tracking.h>
 
+#if AR2_CAPABLE_ADAPTIVE_TEMPLATE
+#  error "WebARKitNFT trackingMod does not support AR2_CAPABLE_ADAPTIVE_TEMPLATE"
+#endif
+
 #define    AR2_TRACKING_6DOF                   1
 #define    AR2_TRACKING_HOMOGRAPHY             2
 
