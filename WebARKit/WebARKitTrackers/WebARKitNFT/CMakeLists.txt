@@ -16,6 +16,11 @@ file(GLOB AR_SOURCES
 set(ARUTIL_SOURCES
   ${ARTK_SRC}/ARUtil/log.c
   ${ARTK_SRC}/ARUtil/file_utils.c
+  # minizip, used by file_utils.c (zip/unzip helpers)
+  ${ARTK_SRC}/ARUtil/crypt.c
+  ${ARTK_SRC}/ARUtil/ioapi.c
+  ${ARTK_SRC}/ARUtil/unzip.c
+  ${ARTK_SRC}/ARUtil/zip.c
 )
 
 set(AR2_SOURCES
@@ -68,6 +73,11 @@ target_include_directories(WebARKitNFT
 target_compile_definitions(WebARKitNFT PUBLIC HAVE_NFT)
 
 if(EMSCRIPTEN)
+  # Emscripten has no fopen64/ftello64/fseeko64: let minizip use the plain calls.
+  set_source_files_properties(
+    ${ARTK_SRC}/ARUtil/ioapi.c ${ARTK_SRC}/ARUtil/unzip.c ${ARTK_SRC}/ARUtil/zip.c
+    PROPERTIES COMPILE_DEFINITIONS USE_FILE32API
+  )
   # libjpeg and zlib come from the Emscripten ports.
   target_compile_options(WebARKitNFT PUBLIC -sUSE_LIBJPEG=1 -sUSE_ZLIB=1)
   target_link_options(WebARKitNFT PUBLIC -sUSE_LIBJPEG=1 -sUSE_ZLIB=1)
