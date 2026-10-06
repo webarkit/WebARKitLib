@@ -34,6 +34,7 @@
 //
 
 #include "visual_database_facade.h"
+#include <unordered_map>
 #include <matchers/visual_database-inline.h>
 #include <matchers/freak.h>
 #include <matchers/keyframe.h>
