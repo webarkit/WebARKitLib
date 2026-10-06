@@ -14,10 +14,13 @@
 #include <zlib.h>
 
 static const size_t inflate_chunk = 4*1024*1024;
+static const size_t inflate_max = MARKER_DECOMPRESS_MAX_SIZE;
 
 /*
  * Inflate a whole zlib stream. On success *outLen is the decompressed size and
  * the buffer has an extra NUL after it, so it can be searched as a string.
+ * Streams that expand past inflate_max are rejected, so a small archive with
+ * a huge expansion ratio cannot exhaust memory.
  */
 static char *inflateAll(const unsigned char *in, size_t inLen, size_t *outLen)
 {
@@ -37,13 +40,21 @@ static char *inflateAll(const unsigned char *in, size_t inLen, size_t *outLen)
 
     do {
         if (strm.total_out == cap) {
-            char *bigger = realloc(out, cap * 2 + 1);
+            size_t newCap;
+            char *bigger;
+            if (cap >= inflate_max) {
+                ARLOGe("Error: .zft data expands past %zu bytes\n", inflate_max);
+                ret = Z_MEM_ERROR;
+                break;
+            }
+            newCap = cap > inflate_max / 2 ? inflate_max : cap * 2;
+            bigger = realloc(out, newCap + 1);
             if (bigger == NULL) {
                 ret = Z_MEM_ERROR;
                 break;
             }
             out = bigger;
-            cap *= 2;
+            cap = newCap;
         }
         strm.next_out = (Bytef *)(out + strm.total_out);
         strm.avail_out = (uInt)(cap - strm.total_out);
