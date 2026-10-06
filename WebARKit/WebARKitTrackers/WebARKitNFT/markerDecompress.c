@@ -28,7 +28,8 @@ int decompressMarkers(const char* src, const char* outTemp){
     if ( fp == NULL )
     {
         ARLOGe("Error opening .zft file\n");
-        exit(EXIT_FAILURE);
+        free(c);
+        return -1;
     }
 
     fseek (fp, 0, SEEK_END);
@@ -40,7 +41,9 @@ int decompressMarkers(const char* src, const char* outTemp){
     if (in == NULL)
     {
         ARLOGe("Error mallocing %i bytes for inflate\n", filesize);
-        exit(EXIT_FAILURE);
+        fclose(fp);
+        free(c);
+        return -1;
     }
     ret = fread (in, 1, filesize, fp);
     fclose (fp);
@@ -63,14 +66,14 @@ int decompressMarkers(const char* src, const char* outTemp){
 
     free(in);
 
-    extractDataAndSave(c, outTemp);
+    int result = extractDataAndSave(c, outTemp);
 
     free(c);
-    return 0;
+    return result;
     // return markerData;
 }
 
-void extractDataAndSave(const char* str, const char* name){
+int extractDataAndSave(const char* str, const char* name){
     // string and variable name structure
     //
     //                iset_final_index
@@ -97,7 +100,7 @@ void extractDataAndSave(const char* str, const char* name){
     char *fsetInitialIndex = strstr(str, "\",\"fset\":\"");
     if (fsetInitialIndex == NULL) {
         ARLOGe("Error: 'fset' not found in the string.\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     int fset_initial_index = (fsetInitialIndex - str);
 
@@ -108,7 +111,7 @@ void extractDataAndSave(const char* str, const char* name){
     char *fset3InitialIndex = strstr(str, "\",\"fset3\":\"");
     if (fset3InitialIndex == NULL) {
         ARLOGe("Error: 'fset3' not found in the string.\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     int fset3_initial_index = (fset3InitialIndex - str);
     int fset3_final_index = (fset3_initial_index + 11);
@@ -118,7 +121,7 @@ void extractDataAndSave(const char* str, const char* name){
     char *endOfStr = strstr(str, "\"}");
     if (endOfStr == NULL) {
         ARLOGe("Error: end of string not found.\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     int endPos = endOfStr - str;
 
@@ -127,7 +130,7 @@ void extractDataAndSave(const char* str, const char* name){
     // ---ISET---
     if (iset_content_size <= 0) {
         ARLOGe("Error: Invalid iset_content_size: %d\n", iset_content_size);
-        exit(EXIT_FAILURE);
+        return -1;
     }
     char *iset_contentHex = malloc(iset_content_size);
     strncpy(iset_contentHex, str + iset_final_index, iset_content_size);
@@ -165,7 +168,7 @@ void extractDataAndSave(const char* str, const char* name){
     free(fset3Name);
     free(fset3_contentHex);
 
-    // return tempMarkerData;
+    return 0;
 }
 
 FILE *openZFT( const char *filename, const char *ext)

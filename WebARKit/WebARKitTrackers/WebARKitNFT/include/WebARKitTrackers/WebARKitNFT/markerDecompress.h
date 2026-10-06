@@ -17,7 +17,7 @@ typedef struct
 char* nameConcat(const char *s1, const char *s2);
 FILE *openZFT( const char *filename, const char *ext);
 int decompressMarkers(const char* src, const char* outTemp);
-void extractDataAndSave(const char* str, const char* name);
+int extractDataAndSave(const char* str, const char* name);
 
 #ifdef __cplusplus
 }
