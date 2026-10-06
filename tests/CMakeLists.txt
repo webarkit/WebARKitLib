@@ -37,6 +37,20 @@ add_executable(webarkit_nft_test webarkit_nft_test.cc)
 target_compile_definitions(webarkit_nft_test PRIVATE WEBARKIT_NFT_THREADS)
 target_link_libraries(webarkit_nft_test WebARKitNFT GTest::gtest_main)
 
+# markerDecompress built with a 1 MB limit, to test the limit handling cheaply.
+find_package(ZLIB REQUIRED)
+add_executable(webarkit_nft_limit_test
+  webarkit_nft_limit_test.cc
+  ../WebARKit/WebARKitTrackers/WebARKitNFT/markerDecompress.c
+  ../lib/SRC/ARUtil/log.c
+)
+target_compile_definitions(webarkit_nft_limit_test PRIVATE MARKER_DECOMPRESS_MAX_SIZE=1048576)
+target_include_directories(webarkit_nft_limit_test PRIVATE
+  ../WebARKit/WebARKitTrackers/WebARKitNFT/include
+  ../include
+)
+target_link_libraries(webarkit_nft_limit_test ZLIB::ZLIB GTest::gtest_main)
+
 add_executable(
   webarkit_test
   webarkit_test.cc
@@ -86,3 +100,4 @@ target_link_libraries(
 include(GoogleTest)
 gtest_discover_tests(webarkit_test)
 gtest_discover_tests(webarkit_nft_test)
+gtest_discover_tests(webarkit_nft_limit_test)

@@ -15,7 +15,7 @@ jobs:
               sudo apt-get update && sudo apt install libjpeg-dev zlib1g-dev
         - name: Build and test WebARKitLib
           run: |
-              cd tests && mkdir build && cd build && cmake -DEMSCRIPTEN_COMP=0 .. && make && ./webarkit_test && ./webarkit_nft_test
+              cd tests && mkdir build && cd build && cmake -DEMSCRIPTEN_COMP=0 .. && make && ./webarkit_test && ./webarkit_nft_test && ./webarkit_nft_limit_test
         - name: Build WebARKitLib with Emscripten (Docker)
           run: |
              cd ..
