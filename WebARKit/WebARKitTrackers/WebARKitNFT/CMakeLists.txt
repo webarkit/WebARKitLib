@@ -2,7 +2,7 @@
 # plus the ARToolKit sources they need (AR, ARICP, AR2, KPM, ARUtil).
 # The source lists mirror jsartoolkitNFT/tools/makem.js. No OpenCV dependency.
 
-option(WEBARKIT_NFT_THREADS "Build the threaded KPM worker (trackingSub) with pthreads" OFF)
+option(WEBARKIT_NFT_THREADS "Build the threaded KPM worker (trackingSub); on Emscripten also enables -pthread" OFF)
 
 get_filename_component(WEBARKITLIB_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../../.. ABSOLUTE)
 set(ARTK_SRC ${WEBARKITLIB_ROOT}/lib/SRC)
@@ -16,6 +16,8 @@ file(GLOB AR_SOURCES
 set(ARUTIL_SOURCES
   ${ARTK_SRC}/ARUtil/log.c
   ${ARTK_SRC}/ARUtil/file_utils.c
+  # thread helpers: AR2 handle.c/tracking.c call them even without the KPM worker
+  ${ARTK_SRC}/ARUtil/thread_sub.c
   # minizip, used by file_utils.c (zip/unzip helpers)
   ${ARTK_SRC}/ARUtil/crypt.c
   ${ARTK_SRC}/ARUtil/ioapi.c
@@ -54,7 +56,6 @@ set(NFT_SOURCES
 )
 
 if(WEBARKIT_NFT_THREADS)
-  list(APPEND ARUTIL_SOURCES ${ARTK_SRC}/ARUtil/thread_sub.c)
   list(APPEND NFT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/trackingSub.c)
 endif()
 
@@ -88,9 +89,6 @@ if(EMSCRIPTEN)
 else()
   find_package(JPEG REQUIRED)
   find_package(ZLIB REQUIRED)
-  target_link_libraries(WebARKitNFT PUBLIC JPEG::JPEG ZLIB::ZLIB)
-  if(WEBARKIT_NFT_THREADS)
-    find_package(Threads REQUIRED)
-    target_link_libraries(WebARKitNFT PUBLIC Threads::Threads)
-  endif()
+  find_package(Threads REQUIRED)
+  target_link_libraries(WebARKitNFT PUBLIC JPEG::JPEG ZLIB::ZLIB Threads::Threads)
 endif()
