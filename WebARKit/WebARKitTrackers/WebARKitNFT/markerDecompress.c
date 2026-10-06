@@ -13,16 +13,23 @@
 #include <AR/ar.h>
 #include <zlib.h>
 
+#if MARKER_DECOMPRESS_MAX_SIZE < 1
+#  error "MARKER_DECOMPRESS_MAX_SIZE must be at least 1"
+#endif
+
 static const size_t inflate_chunk = 4*1024*1024;
+static const size_t inflate_max = MARKER_DECOMPRESS_MAX_SIZE;
 
 /*
  * Inflate a whole zlib stream. On success *outLen is the decompressed size and
  * the buffer has an extra NUL after it, so it can be searched as a string.
+ * Streams that expand past inflate_max are rejected, so a small archive with
+ * a huge expansion ratio cannot exhaust memory.
  */
 static char *inflateAll(const unsigned char *in, size_t inLen, size_t *outLen)
 {
     z_stream strm;
-    size_t cap = inflate_chunk;
+    size_t cap = inflate_chunk < inflate_max ? inflate_chunk : inflate_max;
     char *out = malloc(cap + 1);
     int ret;
 
@@ -37,13 +44,29 @@ static char *inflateAll(const unsigned char *in, size_t inLen, size_t *outLen)
 
     do {
         if (strm.total_out == cap) {
-            char *bigger = realloc(out, cap * 2 + 1);
+            size_t newCap;
+            char *bigger;
+            if (cap >= inflate_max) {
+                // At the limit: let zlib finish the stream (empty final block,
+                // trailer) with the one spare byte after the buffer. Any output
+                // written there means the stream is larger than the limit.
+                strm.next_out = (Bytef *)(out + cap);
+                strm.avail_out = 1;
+                ret = inflate(&strm, Z_NO_FLUSH);
+                if (strm.total_out > cap) {
+                    ARLOGe("Error: .zft data expands past %zu bytes\n", inflate_max);
+                    ret = Z_MEM_ERROR;
+                }
+                continue;
+            }
+            newCap = cap > inflate_max / 2 ? inflate_max : cap * 2;
+            bigger = realloc(out, newCap + 1);
             if (bigger == NULL) {
                 ret = Z_MEM_ERROR;
                 break;
             }
             out = bigger;
-            cap *= 2;
+            cap = newCap;
         }
         strm.next_out = (Bytef *)(out + strm.total_out);
         strm.avail_out = (uInt)(cap - strm.total_out);

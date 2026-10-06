@@ -45,6 +45,7 @@
 #include <AR2/template.h>
 #include <AR2/searchPoint.h>
 #include <AR2/tracking.h>
+#include <WebARKitTrackers/WebARKitNFT/trackingMod.h>
 
 #if AR2_CAPABLE_ADAPTIVE_TEMPLATE
 int ar2Tracking2dSubMod ( AR2HandleT *handle, AR2SurfaceSetT *surfaceSet, AR2TemplateCandidateT *candidate,

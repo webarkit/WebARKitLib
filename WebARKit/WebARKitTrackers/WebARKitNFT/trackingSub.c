@@ -210,7 +210,7 @@ static void *trackingInitMain( THREAD_HANDLE_T *threadHandle )
         return (NULL);
     }
     trackingInitHandle = (TrackingInitHandle *)threadGetArg(threadHandle);
-    if (!threadHandle) {
+    if (!trackingInitHandle) {
         ARLOGe("Error starting tracking thread: empty trackingInitHandle.\n");
         return (NULL);
     }

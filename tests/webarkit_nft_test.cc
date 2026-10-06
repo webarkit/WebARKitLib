@@ -37,6 +37,11 @@ std::string readFile(const std::string &path) {
   return ss.str();
 }
 
+bool fileExists(const std::string &path) {
+  std::ifstream in(path, std::ios::binary);
+  return in.good();
+}
+
 } // namespace
 
 TEST(MarkerDecompressTest, ExtractsIsetFsetAndFset3) {
@@ -57,15 +62,42 @@ TEST(MarkerDecompressTest, MissingFileReturnsError) {
   EXPECT_EQ(decompressMarkers("does_not_exist", "nft_test_out"), -1);
 }
 
+TEST(MarkerDecompressTest, ArchiveExpandingPastTheLimitReturnsError) {
+  // Deflate MARKER_DECOMPRESS_MAX_SIZE + 1 MB of a valid-looking marker in
+  // chunks, so the test never holds the expanded data in memory.
+  z_stream strm = {};
+  ASSERT_EQ(deflateInit(&strm, Z_BEST_COMPRESSION), Z_OK);
+  std::string compressed;
+  std::vector<unsigned char> out(64 * 1024);
+  auto feed = [&](const std::string &data, int flush) {
+    strm.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(data.data()));
+    strm.avail_in = static_cast<uInt>(data.size());
+    do {
+      strm.next_out = out.data();
+      strm.avail_out = static_cast<uInt>(out.size());
+      deflate(&strm, flush);
+      compressed.append(reinterpret_cast<char *>(out.data()), out.size() - strm.avail_out);
+    } while (strm.avail_out == 0);
+  };
+  const std::string chunk(1024 * 1024, 'A');
+  feed("{\"iset\":\"", Z_NO_FLUSH);
+  for (size_t i = 0; i < MARKER_DECOMPRESS_MAX_SIZE / chunk.size() + 1; i++) feed(chunk, Z_NO_FLUSH);
+  feed("\",\"fset\":\"F\",\"fset3\":\"G\"}", Z_FINISH);
+  deflateEnd(&strm);
+  {
+    std::ofstream file("nft_test_huge.zft", std::ios::binary);
+    file.write(compressed.data(), compressed.size());
+  }
+
+  EXPECT_EQ(decompressMarkers("nft_test_huge", "nft_test_huge_out"), -1);
+  EXPECT_FALSE(fileExists("nft_test_huge_out.iset"));
+  std::remove("nft_test_huge.zft");
+}
+
 TEST(MarkerDecompressTest, MalformedContentReturnsError) {
   writeZft("nft_test_bad", "{\"iset\":\"ISETDATA\"}");
   EXPECT_EQ(decompressMarkers("nft_test_bad", "nft_test_out"), -1);
   std::remove("nft_test_bad.zft");
-}
-
-static bool fileExists(const std::string &path) {
-  std::ifstream in(path, std::ios::binary);
-  return in.good();
 }
 
 TEST(MarkerDecompressTest, ExtractsMarkersLargerThanFourMegabytes) {
