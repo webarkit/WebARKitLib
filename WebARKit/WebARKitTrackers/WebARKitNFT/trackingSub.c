@@ -59,6 +59,7 @@ typedef struct {
     int                     imageSize;      // Bytes per image.
     TrackingInitResult      results[TRACKING_INIT_MAX_RESULTS]; // Every matched page.
     int                     resultNum;                          // How many of results[] are set.
+    int                     scanPending;    // Client side: a search was started and its results not yet collected.
 } TrackingInitHandle;
 
 static void *trackingInitMain( THREAD_HANDLE_T *threadHandle );
@@ -99,9 +100,21 @@ THREAD_HANDLE_T *trackingInitInit( KpmHandle *kpmHandle )
     trackingInitHandle->kpmHandle = kpmHandle;
     trackingInitHandle->imageSize = kpmHandleGetXSize(kpmHandle) * kpmHandleGetYSize(kpmHandle);
     trackingInitHandle->imageLumaPtr  = (ARUint8 *)malloc(trackingInitHandle->imageSize);
+    if( trackingInitHandle->imageLumaPtr == NULL ) {
+        ARLOGe("trackingInitInit(): Error: out of memory for a %d byte image.\n", trackingInitHandle->imageSize);
+        free( trackingInitHandle );
+        return NULL;
+    }
     trackingInitHandle->resultNum = 0;
+    trackingInitHandle->scanPending = 0;
 
     threadHandle = threadInit(0, trackingInitHandle, trackingInitMain);
+    if( threadHandle == NULL ) {
+        ARLOGe("trackingInitInit(): Error: unable to start the worker thread.\n");
+        free( trackingInitHandle->imageLumaPtr );
+        free( trackingInitHandle );
+        return NULL;
+    }
     return threadHandle;
 }
 
@@ -119,7 +132,14 @@ int trackingInitStart( THREAD_HANDLE_T *threadHandle, ARUint8 *imageLumaPtr )
         ARLOGe("trackingInitStart(): Error: NULL trackingInitHandle.\n");
         return (-1);
     }
+    // The worker reads imageLumaPtr until its results are collected: never
+    // overwrite it under a running search.
+    if (trackingInitHandle->scanPending) {
+        ARLOGe("trackingInitStart(): Error: previous search not collected yet; call trackingInitGetResults() first.\n");
+        return (-1);
+    }
     memcpy( trackingInitHandle->imageLumaPtr, imageLumaPtr, trackingInitHandle->imageSize );
+    trackingInitHandle->scanPending = 1;
     threadStartSignal( threadHandle );
 
     return 0;
@@ -142,6 +162,7 @@ int trackingInitGetResults( THREAD_HANDLE_T *threadHandle, TrackingInitResult re
     n = trackingInitHandle->resultNum < maxResults ? trackingInitHandle->resultNum : maxResults;
     memcpy(results, trackingInitHandle->results, n * sizeof(TrackingInitResult));
     *resultNum = n;
+    trackingInitHandle->scanPending = 0;
     return 1;
 }
 

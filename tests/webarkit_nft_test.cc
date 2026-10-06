@@ -9,10 +9,13 @@
 
 #include <zlib.h>
 
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -60,6 +63,65 @@ TEST(MarkerDecompressTest, MalformedContentReturnsError) {
   std::remove("nft_test_bad.zft");
 }
 
+static bool fileExists(const std::string &path) {
+  std::ifstream in(path, std::ios::binary);
+  return in.good();
+}
+
+TEST(MarkerDecompressTest, ExtractsMarkersLargerThanFourMegabytes) {
+  const std::string iset(5 * 1024 * 1024, 0x41);
+  writeZft("nft_test_big", "{\"iset\":\"" + iset + "\",\"fset\":\"F\",\"fset3\":\"G\"}");
+
+  EXPECT_EQ(decompressMarkers("nft_test_big", "nft_test_big_out"), 0);
+  EXPECT_EQ(readFile("nft_test_big_out.iset"), iset);
+  EXPECT_EQ(readFile("nft_test_big_out.fset3"), "G");
+
+  std::remove("nft_test_big.zft");
+  std::remove("nft_test_big_out.iset");
+  std::remove("nft_test_big_out.fset");
+  std::remove("nft_test_big_out.fset3");
+}
+
+TEST(MarkerDecompressTest, KeepsBinaryBytesUnchanged) {
+  const std::string bytes("A\nB\r\nC\x1a" "D", 8);
+  writeZft("nft_test_bin", "{\"iset\":\"" + bytes + "\",\"fset\":\"F\",\"fset3\":\"G\"}");
+
+  EXPECT_EQ(decompressMarkers("nft_test_bin", "nft_test_bin_out"), 0);
+  EXPECT_EQ(readFile("nft_test_bin_out.iset"), bytes);
+
+  std::remove("nft_test_bin.zft");
+  std::remove("nft_test_bin_out.iset");
+  std::remove("nft_test_bin_out.fset");
+  std::remove("nft_test_bin_out.fset3");
+}
+
+TEST(MarkerDecompressTest, FieldsOutOfOrderReturnErrorAndWriteNothing) {
+  writeZft("nft_test_order", "{\"iset\":\"I\",\"fset3\":\"G\",\"fset\":\"F\"}");
+  EXPECT_EQ(decompressMarkers("nft_test_order", "nft_test_order_out"), -1);
+  EXPECT_FALSE(fileExists("nft_test_order_out.iset"));
+  std::remove("nft_test_order.zft");
+}
+
+TEST(MarkerDecompressTest, NonZlibDataReturnsError) {
+  {
+    std::ofstream out("nft_test_raw.zft", std::ios::binary);
+    out << "{\"iset\":\"I\",\"fset\":\"F\",\"fset3\":\"G\"}";
+  }
+  EXPECT_EQ(decompressMarkers("nft_test_raw", "nft_test_raw_out"), -1);
+  EXPECT_FALSE(fileExists("nft_test_raw_out.iset"));
+  std::remove("nft_test_raw.zft");
+}
+
+TEST(MarkerDecompressTest, KeepsTheSourceArchive) {
+  writeZft("nft_test_keep", "{\"iset\":\"I\",\"fset\":\"F\",\"fset3\":\"G\"}");
+  EXPECT_EQ(decompressMarkers("nft_test_keep", "nft_test_keep_out"), 0);
+  EXPECT_TRUE(fileExists("nft_test_keep.zft"));
+  std::remove("nft_test_keep.zft");
+  std::remove("nft_test_keep_out.iset");
+  std::remove("nft_test_keep_out.fset");
+  std::remove("nft_test_keep_out.fset3");
+}
+
 TEST(NFTMarkerStateTest, DefaultsToNotTracking) {
   NFTMarkerState state;
   EXPECT_FALSE(state.tracking);
@@ -83,6 +145,32 @@ TEST(TrackingSubTest, StartsAndQuitsWorkerThread) {
   ASSERT_NE(thread, nullptr);
   EXPECT_EQ(trackingInitQuit(&thread), 0);
   EXPECT_EQ(thread, nullptr);
+  kpmDeleteHandle(&kpmHandle);
+}
+
+TEST(TrackingSubTest, RejectsStartUntilResultsAreCollected) {
+  KpmHandle *kpmHandle = kpmCreateHandle2(64, 48);
+  ASSERT_NE(kpmHandle, nullptr);
+  THREAD_HANDLE_T *thread = trackingInitInit(kpmHandle);
+  ASSERT_NE(thread, nullptr);
+  std::vector<ARUint8> image(64 * 48, 128);
+
+  EXPECT_EQ(trackingInitStart(thread, image.data()), 0);
+  EXPECT_EQ(trackingInitStart(thread, image.data()), -1);
+
+  TrackingInitResult results[TRACKING_INIT_MAX_RESULTS];
+  int resultNum = 0;
+  int ret;
+  while ((ret = trackingInitGetResults(thread, results, TRACKING_INIT_MAX_RESULTS, &resultNum)) == 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(ret, 1);
+  EXPECT_EQ(trackingInitStart(thread, image.data()), 0);
+
+  while (trackingInitGetResults(thread, results, TRACKING_INIT_MAX_RESULTS, &resultNum) == 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(trackingInitQuit(&thread), 0);
   kpmDeleteHandle(&kpmHandle);
 }
 #endif
