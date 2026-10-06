@@ -13,161 +13,189 @@
 #include <AR/ar.h>
 #include <zlib.h>
 
-const int mem_size_4mb = 4*1024*1024;
+static const size_t inflate_chunk = 4*1024*1024;
+
+/*
+ * Inflate a whole zlib stream. On success *outLen is the decompressed size and
+ * the buffer has an extra NUL after it, so it can be searched as a string.
+ */
+static char *inflateAll(const unsigned char *in, size_t inLen, size_t *outLen)
+{
+    z_stream strm;
+    size_t cap = inflate_chunk;
+    char *out = malloc(cap + 1);
+    int ret;
+
+    if (out == NULL) return NULL;
+    memset(&strm, 0, sizeof(strm));
+    if (inflateInit(&strm) != Z_OK) {
+        free(out);
+        return NULL;
+    }
+    strm.next_in = (Bytef *)in;
+    strm.avail_in = (uInt)inLen;
+
+    do {
+        if (strm.total_out == cap) {
+            char *bigger = realloc(out, cap * 2 + 1);
+            if (bigger == NULL) {
+                ret = Z_MEM_ERROR;
+                break;
+            }
+            out = bigger;
+            cap *= 2;
+        }
+        strm.next_out = (Bytef *)(out + strm.total_out);
+        strm.avail_out = (uInt)(cap - strm.total_out);
+        ret = inflate(&strm, Z_NO_FLUSH);
+    } while (ret == Z_OK);
+
+    if (ret != Z_STREAM_END) {
+        ARLOGe("Error inflating .zft data (zlib error %d)\n", ret);
+        inflateEnd(&strm);
+        free(out);
+        return NULL;
+    }
+    *outLen = strm.total_out;
+    out[*outLen] = 0;
+    inflateEnd(&strm);
+    return out;
+}
 
 int decompressMarkers(const char* src, const char* outTemp){
-    // markerContentStruct *markerData;
     FILE *fp;
-    char* in;
-    char* out;
-    int filesize, ret;
-    const char *ext = "zft";
-    char *c = malloc (mem_size_4mb);
+    unsigned char *in;
+    char *c;
+    long filesize;
+    size_t outLen;
 
-    fp = openZFT(src, ext);
+    fp = openZFT(src, "zft");
     if ( fp == NULL )
     {
         ARLOGe("Error opening .zft file\n");
-        free(c);
         return -1;
     }
 
     fseek (fp, 0, SEEK_END);
     filesize = ftell (fp);
     fseek (fp, 0, SEEK_SET);
-
-    in = malloc (filesize);
-
-    if (in == NULL)
+    if (filesize <= 0)
     {
-        ARLOGe("Error mallocing %i bytes for inflate\n", filesize);
+        ARLOGe("Error: empty or unreadable .zft file\n");
         fclose(fp);
-        free(c);
         return -1;
     }
-    ret = fread (in, 1, filesize, fp);
+
+    in = malloc (filesize);
+    if (in == NULL)
+    {
+        ARLOGe("Error mallocing %ld bytes for inflate\n", filesize);
+        fclose(fp);
+        return -1;
+    }
+    if (fread (in, 1, filesize, fp) != (size_t)filesize)
+    {
+        ARLOGe("Error reading .zft file\n");
+        fclose(fp);
+        free(in);
+        return -1;
+    }
     fclose (fp);
-    char *tempName = nameConcat(src, ext);
-    remove(tempName);
-    free(tempName);
 
-    z_stream infstream;
-    infstream.zalloc = Z_NULL;
-    infstream.zfree = Z_NULL;
-    infstream.opaque = Z_NULL;
-    infstream.avail_in = filesize;
-    infstream.next_in = (Bytef *) in;
-    infstream.avail_out = (uInt)mem_size_4mb;
-    infstream.next_out = (Bytef *) c;
-
-    inflateInit(&infstream);
-    inflate(&infstream, Z_NO_FLUSH);
-    inflateEnd(&infstream);
-
+    c = inflateAll(in, (size_t)filesize, &outLen);
     free(in);
+    if (c == NULL) return -1;
 
     int result = extractDataAndSave(c, outTemp);
 
     free(c);
     return result;
-    // return markerData;
+}
+
+/* Write one extracted marker file in binary mode; 0 on success, -1 on error. */
+static int saveMarkerFile(const char *name, const char *ext, const char *data, size_t size)
+{
+    char *fileName = nameConcat(name, ext);
+    FILE *fp;
+    int ok;
+
+    if (fileName == NULL) return -1;
+    fp = fopen(fileName, "wb");
+    if (fp == NULL) {
+        ARLOGe("Error: cannot create %s\n", fileName);
+        free(fileName);
+        return -1;
+    }
+    ok = fwrite(data, 1, size, fp) == size;
+    if (fclose(fp) != 0) ok = 0;
+    if (!ok) {
+        ARLOGe("Error: cannot write %s\n", fileName);
+        remove(fileName);
+    }
+    free(fileName);
+    return ok ? 0 : -1;
+}
+
+static void removeMarkerFile(const char *name, const char *ext)
+{
+    char *fileName = nameConcat(name, ext);
+    if (fileName == NULL) return;
+    remove(fileName);
+    free(fileName);
 }
 
 int extractDataAndSave(const char* str, const char* name){
-    // string and variable name structure
-    //
-    //                iset_final_index
-    //               V
-    // str = {"iset":"test","fset":"test2","fset3":"test3"}
-    //       ∧
-    //        Beginning of str or iset_initial_index
-    //
-    //
-    // iset_final_index    fset_initial_index
-    //                V    V
-    //  str = {"iset":"test","fset":"test2","fset3":"test3"}
-    //                 ---- <- iset_content
-    //
+    // The decompressed data is: {"iset":"<iset>","fset":"<fset>","fset3":"<fset3>"}
+    static const char isetKey[]  = "{\"iset\":\"";
+    static const char fsetKey[]  = "\",\"fset\":\"";
+    static const char fset3Key[] = "\",\"fset3\":\"";
+    static const char endKey[]   = "\"}";
 
-    // markerContentStruct *tempMarkerData;
+    if (strncmp(str, isetKey, sizeof(isetKey) - 1) != 0) {
+        ARLOGe("Error: 'iset' not found at the start of the string.\n");
+        return -1;
+    }
+    const char *iset = str + sizeof(isetKey) - 1;
 
-    FILE *tempIset;
-    FILE *tempFset;
-    FILE *tempFset3;
-
-    int iset_final_index = 9;
-
-    char *fsetInitialIndex = strstr(str, "\",\"fset\":\"");
-    if (fsetInitialIndex == NULL) {
+    const char *fsetKeyPos = strstr(iset, fsetKey);
+    if (fsetKeyPos == NULL) {
         ARLOGe("Error: 'fset' not found in the string.\n");
         return -1;
     }
-    int fset_initial_index = (fsetInitialIndex - str);
+    const char *fset = fsetKeyPos + sizeof(fsetKey) - 1;
 
-    int fset_final_index = (fset_initial_index + 10);
-
-    int iset_content_size = fset_initial_index - iset_final_index;
-
-    char *fset3InitialIndex = strstr(str, "\",\"fset3\":\"");
-    if (fset3InitialIndex == NULL) {
+    const char *fset3KeyPos = strstr(fset, fset3Key);
+    if (fset3KeyPos == NULL) {
         ARLOGe("Error: 'fset3' not found in the string.\n");
         return -1;
     }
-    int fset3_initial_index = (fset3InitialIndex - str);
-    int fset3_final_index = (fset3_initial_index + 11);
+    const char *fset3 = fset3KeyPos + sizeof(fset3Key) - 1;
 
-    int fset_content_size = fset3_initial_index - fset_final_index;
-
-    char *endOfStr = strstr(str, "\"}");
-    if (endOfStr == NULL) {
+    const char *end = strstr(fset3, endKey);
+    if (end == NULL) {
         ARLOGe("Error: end of string not found.\n");
         return -1;
     }
-    int endPos = endOfStr - str;
 
-    int fset3_content_size = endPos - fset3_final_index;
-
-    // ---ISET---
-    if (iset_content_size <= 0) {
-        ARLOGe("Error: Invalid iset_content_size: %d\n", iset_content_size);
+    // Searching each key after the previous one keeps the fields ordered.
+    size_t isetSize  = (size_t)(fsetKeyPos - iset);
+    size_t fsetSize  = (size_t)(fset3KeyPos - fset);
+    size_t fset3Size = (size_t)(end - fset3);
+    if (isetSize == 0 || fsetSize == 0 || fset3Size == 0) {
+        ARLOGe("Error: empty marker field (iset %zu, fset %zu, fset3 %zu bytes).\n", isetSize, fsetSize, fset3Size);
         return -1;
     }
-    char *iset_contentHex = malloc(iset_content_size);
-    strncpy(iset_contentHex, str + iset_final_index, iset_content_size);
 
-    // tempMarkerData->iset_content = iset_contentHex;
-    char *isetName = nameConcat(name, ".iset");
-    tempIset = fopen(isetName, "w");
-    fwrite(iset_contentHex, iset_content_size, 1, tempIset);
-    // printf(iset_contentHex);
-    fclose(tempIset);
-    free(isetName);
-    free(iset_contentHex);
-
-    // ---FSET---
-    char *fset_contentHex = malloc(fset_content_size);
-    strncpy(fset_contentHex, str + fset_final_index, fset_content_size);
-
-    // tempMarkerData->fset_content = fset_contentHex;
-    char *fsetName = nameConcat(name, ".fset");
-    tempFset = fopen(fsetName, "w");
-    fwrite(fset_contentHex, fset_content_size, 1, tempFset);
-    fclose(tempFset);
-    free(fsetName);
-    free(fset_contentHex);
-
-    // ---FSET3---
-    char *fset3_contentHex = malloc(fset3_content_size);
-    strncpy(fset3_contentHex, str + fset3_final_index, fset3_content_size);
-
-    // tempMarkerData->fset3_content = fset3_contentHex;
-    char *fset3Name = nameConcat(name, ".fset3");
-    tempFset3 = fopen(fset3Name, "w");
-    fwrite(fset3_contentHex, fset3_content_size, 1, tempFset3);
-    fclose(tempFset3);
-    free(fset3Name);
-    free(fset3_contentHex);
-
+    if (saveMarkerFile(name, ".iset", iset, isetSize) != 0) return -1;
+    if (saveMarkerFile(name, ".fset", fset, fsetSize) != 0) {
+        removeMarkerFile(name, ".iset");
+        return -1;
+    }
+    if (saveMarkerFile(name, ".fset3", fset3, fset3Size) != 0) {
+        removeMarkerFile(name, ".iset");
+        removeMarkerFile(name, ".fset");
+        return -1;
+    }
     return 0;
 }
 
@@ -196,7 +224,7 @@ char* nameConcat(const char *s1, const char *s2)
     const size_t len1 = strlen(s1);
     const size_t len2 = strlen(s2);
     char *result = malloc(len1 + len2 + 1); // +1 for the null-terminator
-    // in real code you would check for errors in malloc here
+    if (result == NULL) return NULL;
     memcpy(result, s1, len1);
     memcpy(result + len1, s2, len2 + 1); // +1 to copy the null-terminator
     return result;
