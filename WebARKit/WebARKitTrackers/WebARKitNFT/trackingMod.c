@@ -86,6 +86,8 @@ AR2HandleT *ar2CreateHandleSubMod( int pixFormat, int xsize, int ysize/*, int th
     }
     ar2Handle->simThresh         = AR2_DEFAULT_SIM_THRESH;
     ar2Handle->trackingThresh    = AR2_DEFAULT_TRACKING_THRESH;
+    ar2Handle->cparamLT          = NULL;
+    ar2Handle->icpHandle         = NULL;
 
 
     ar2Handle->threadNum = 1;
@@ -93,6 +95,9 @@ AR2HandleT *ar2CreateHandleSubMod( int pixFormat, int xsize, int ysize/*, int th
     for( i = 0; i < ar2Handle->threadNum; i++ ) {
         arMalloc( ar2Handle->arg[i].mfImage, ARUint8, xsize*ysize );
         ar2Handle->arg[i].templ = NULL;
+#if AR2_CAPABLE_ADAPTIVE_TEMPLATE
+        ar2Handle->arg[i].templ2 = NULL;
+#endif
 //        ar2Handle->threadHandle[i] = threadInit(i, &(ar2Handle->arg[i]), ar2Tracking2d);
     }
 
