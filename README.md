@@ -70,9 +70,33 @@ fetched automatically via CMake `FetchContent`. The "planned" part above is
 webarkit-testing switching its WASM build over to this CMake config (away from
 `tools/makem.js`). The same config also drives the unit tests (see below).
 
+### NFT helpers (`WebARKit/WebARKitTrackers/WebARKitNFT`)
+
+The web-adapted NFT helpers formerly in jsartoolkitNFT live here (#75):
+
+| Header (`<WebARKitTrackers/WebARKitNFT/...>`) | Provides |
+|---|---|
+| `trackingMod.h` | `ar2TrackingMod()`, `ar2CreateHandleMod()`, `ar2DeleteHandleMod()` — single-threaded AR2 tracking |
+| `markerDecompress.h` | `decompressMarkers()` — unpacks a `.zft` into `.iset`/`.fset`/`.fset3` (returns `-1` on error) |
+| `trackingSub.h` | `trackingInit*()` — KPM detection on a worker thread (pthreads) |
+| `NFTMarkerState.h` | per-marker tracking state (C++ only) |
+
+They are built by the `WebARKitNFT` static library, which also compiles the
+ARToolKit5 sources it needs (AR, ARICP, AR2, KPM, ARUtil) and does **not** need
+OpenCV. CMake options in `WebARKit/CMakeLists.txt`:
+
+- `WEBARKIT_BUILD_OPTICAL` (ON) — the OpenCV `WebARKitLib` target
+- `WEBARKIT_BUILD_NFT` (OFF) — the `WebARKitNFT` target (needs libjpeg and zlib)
+- `WEBARKIT_NFT_THREADS` (OFF) — adds `trackingSub` (pthreads)
+
+```bash
+emcmake cmake -S WebARKit -B build-nft -DWEBARKIT_BUILD_OPTICAL=OFF -DWEBARKIT_BUILD_NFT=ON -DWEBARKIT_NFT_THREADS=ON
+cmake --build build-nft
+```
+
 ## Tests
 
-C++ unit tests (GoogleTest) live in [`tests/`](tests/) (`webarkit_test.cc`,
+C++ unit tests (GoogleTest) live in [`tests/`](tests/) (`webarkit_test.cc`, `webarkit_nft_test.cc`,
 `CMakeLists.txt`, `pinball.jpg`) and run in CI via
 [`.github/workflows/test.yml`](https://github.com/webarkit/WebARKitLib/actions/workflows/test.yml).
 Build them standalone with CMake:

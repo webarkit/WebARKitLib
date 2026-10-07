@@ -276,7 +276,7 @@ int ar2SelectTemplate( AR2TemplateCandidateT *candidate, AR2TemplateCandidateT *
         }
         if( j == 0 ) return -1;
 
-        k = (int)((float )j * rand() / (RAND_MAX + 1.0F));
+        k = (int)((double)j * rand() / ((double)RAND_MAX + 1.0));
         for( i = j = 0; candidate[i].flag != -1; i++ ) {
             if( candidate[i].flag != 0 ) continue;
             if( j == k ) {

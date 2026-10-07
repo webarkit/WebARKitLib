@@ -10,12 +10,12 @@ jobs:
           uses: actions/setup-node@v6
           with:
             node-version: '22.x'
-        - name: Update Ubuntu and install libjpeg-dev
+        - name: Update Ubuntu and install libjpeg-dev and zlib1g-dev
           run: |
-              sudo apt-get update && sudo apt install libjpeg-dev
+              sudo apt-get update && sudo apt install libjpeg-dev zlib1g-dev
         - name: Build and test WebARKitLib
           run: |
-              cd tests && mkdir build && cd build && cmake -DEMSCRIPTEN_COMP=0 .. && make && ./webarkit_test
+              cd tests && mkdir build && cd build && cmake -DEMSCRIPTEN_COMP=0 .. && make && ./webarkit_test && ./webarkit_nft_test && ./webarkit_nft_limit_test
         - name: Build WebARKitLib with Emscripten (Docker)
           run: |
              cd ..
