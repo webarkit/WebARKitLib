@@ -60,10 +60,16 @@ class WebARKitTracker::WebARKitTrackerImpl {
         if (trackerType == webarkit::TEBLID_TRACKER) {
             _nn_match_ratio = TEBLID_NN_MATCH_RATIO;
         } else if (trackerType == webarkit::AKAZE_TRACKER) {
-            // WebARKitLib#53: align with artoolkitX OCVT -- nn_match_ratio 0.8 (not 0.7)
-            // and a lower minNumMatches floor. A small marker yields few matches after
-            // downsampling; the previous values (0.7 / 40) rejected nearly all of them.
+            // WebARKitLib#53: align with artoolkitX OCVT -- nn_match_ratio 0.8 (not 0.7).
+            // minNumMatches is the floor of ratio-test survivors enforced in
+            // MatchFeatures; a small marker yields few matches after downsampling, and
+            // the previous 40 would reject it.
             _nn_match_ratio = AKAZE_NN_MATCH_RATIO;
+            minNumMatches = 15;
+        } else if (trackerType == webarkit::FREAK_TRACKER) {
+            // WebARKitLib#53: FREAK fails the ratio test at 0.7 on pinball-demo.jpg even at
+            // full resolution; 0.8 (artoolkitX OCVT value) restores detection.
+            _nn_match_ratio = FREAK_NN_MATCH_RATIO;
             minNumMatches = 15;
         } else {
             _nn_match_ratio = DEFAULT_NN_MATCH_RATIO;
@@ -384,36 +390,41 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 detectionScaleFactor = _featureDetectScaleFactor;
             }
 
-            cv::Mat featureMask = createFeatureMask(detectionFrame);
-
-            if (!extractFeatures(detectionFrame, featureMask, frameKeyPts, frameDescr)) {
-                WEBARKIT_LOGe("No features detected in extractFeatures!\n");
-            }
-            WEBARKIT_LOGd("frame KeyPoints size: %d (pyrLevel %d)\n", frameKeyPts.size(),
-                          (int)_featureDetectPyrLevel);
-
-            // WebARKitLib#53: a small marker in a large frame can fall below the detector
-            // threshold after pyrDown (too few keypoints to attempt a match). When that
-            // happens and the frame was downsampled, retry once on the full-resolution
-            // frame before giving up. This preserves the #44 fast path for markers that
-            // survive downsampling while restoring small-marker detection parity with
-            // WebARKitLib-rs / jsartoolkitNFT (which never downsample).
-            if (static_cast<int>(frameKeyPts.size()) <= minRequiredDetectedFeatures && _featureDetectPyrLevel > 0) {
-                WEBARKIT_LOGd("Too few keypoints after pyrDown (%d <= %d); retrying at full resolution.\n",
-                              frameKeyPts.size(), (int)minRequiredDetectedFeatures);
-                detectionFrame = frame;
-                detectionScaleFactor = cv::Vec2f(1.0f, 1.0f);
-                featureMask = createFeatureMask(detectionFrame);
+            // Detect + match on a given frame. Returns true when MatchFeatures found a
+            // valid homography (_isDetected).
+            auto detectAndMatch = [&](cv::Mat& img, const cv::Vec2f& scale, const char* label) {
+                cv::Mat featureMask = createFeatureMask(img);
                 frameKeyPts.clear();
                 frameDescr.release();
-                if (!extractFeatures(detectionFrame, featureMask, frameKeyPts, frameDescr)) {
-                    WEBARKIT_LOGe("No features detected in full-resolution extractFeatures!\n");
+                if (!extractFeatures(img, featureMask, frameKeyPts, frameDescr)) {
+                    WEBARKIT_LOGe("No features detected in extractFeatures (%s)!\n", label);
                 }
-                WEBARKIT_LOGd("frame KeyPoints size (full-res retry): %d\n", frameKeyPts.size());
-            }
+                WEBARKIT_LOGd("frame KeyPoints size: %d (%s)\n", frameKeyPts.size(), label);
+                if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
+                    MatchFeatures(frameKeyPts, frameDescr, scale);
+                }
+                return _isDetected;
+            };
 
-            if (static_cast<int>(frameKeyPts.size()) > minRequiredDetectedFeatures) {
-                MatchFeatures(frameKeyPts, frameDescr, detectionScaleFactor);
+            detectAndMatch(detectionFrame, detectionScaleFactor, "pyramid");
+
+            // WebARKitLib#53: a small marker in a large frame may yield plenty of frame
+            // keypoints after pyrDown, yet too few *on the marker* survive for the ratio
+            // test / RANSAC to accept a homography. Gating the retry on keypoint count
+            // therefore never fires in exactly the case it was meant for; gate it on
+            // match failure instead. When the frame was downsampled and matching did
+            // not produce a detection, retry once at full resolution before giving up.
+            // This preserves the #44 fast path for markers that survive downsampling
+            // (no extra work when detection succeeds) and restores small-marker
+            // detection parity with WebARKitLib-rs / jsartoolkitNFT (which never
+            // downsample). The extra full-res pass only costs while NOT detected --
+            // once tracking holds a lock, detection is skipped entirely (#44 part B).
+            if (!_isDetected && _featureDetectPyrLevel > 0) {
+                WEBARKIT_LOGd("No detection on pyramid frame; retrying at full resolution.\n");
+                if (detectAndMatch(frame, cv::Vec2f(1.0f, 1.0f), "full-res retry")) {
+                    WEBARKIT_LOGi("Marker detected on full-resolution retry (pyrLevel %d).\n",
+                                  _featureDetectPyrLevel);
+                }
             }
         }
         int i = 0;
@@ -546,7 +557,13 @@ class WebARKitTracker::WebARKitTrackerImpl {
         }
         // } // end for cycle
 
-        if (maxMatches > 0) {
+        // WebARKitLib#53: minNumMatches is the floor of ratio-test survivors required
+        // before attempting a homography (previously assigned per tracker but never
+        // read). Below it RANSAC is pointless and would only produce a spurious fit.
+        if (maxMatches > 0 && maxMatches < minNumMatches) {
+            WEBARKIT_LOGd("Good matches %d < minNumMatches %d; skipping homography.\n", maxMatches, minNumMatches);
+        }
+        if (maxMatches > 0 && maxMatches >= minNumMatches) {
             // WebARKitLib#44: detection may run on the downsampled detectionFrame, so the
             // matched FRAME keypoints (finalMatched1) are in that frame's coordinates --
             // scale them back up to full-frame coordinates before fitting the
