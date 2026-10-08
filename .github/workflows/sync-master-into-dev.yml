@@ -1,7 +1,12 @@
 name: Sync master into dev
 
-# WebARKitLib#70: after a release lands on master, open a master -> dev PR so the
-# two branches cannot silently drift apart. Silent when dev already contains master.
+# WebARKitLib#70: after a release lands on master, open (or update) a master -> dev
+# PR so the two branches cannot silently drift apart. Silent when dev already
+# contains master.
+#
+# One stable branch, one PR, updated in place -- never closed or deleted by this
+# workflow -- so conflict-resolution commits a contributor pushes onto the sync
+# branch are always kept, and PRs the workflow did not create are never touched.
 on:
   push:
     branches: [master]
@@ -21,6 +26,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       LABEL: branch-sync
+      BRANCH: chore/sync-master-into-dev
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,37 +46,89 @@ jobs:
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open master -> dev sync PR
+      - name: Update the sync branch
+        id: branch
         if: steps.check.outputs.needed == 'true'
-        env:
-          SHA: ${{ steps.check.outputs.sha }}
         run: |
-          branch="chore/sync-dev-$SHA"
-          gh label create "$LABEL" --color FBCA04 \
-            --description "master -> dev branch sync; merge with a merge commit" 2>/dev/null || true
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ "$(gh pr list --head "$branch" --state open --json number --jq length)" != "0" ]; then
-            echo "Sync PR for $SHA already open."
+          if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            echo "Creating $BRANCH at master."
+            git push origin "origin/master:refs/heads/$BRANCH"
+            echo "updated=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Supersede any older sync PR: the new branch contains everything it had.
-          for num in $(gh pr list --base dev --label "$LABEL" --state open --json number --jq '.[].number'); do
-            gh pr close "$num" --delete-branch \
-              --comment "Superseded by a newer master -> dev sync ($SHA)."
-          done
+          git fetch origin "$BRANCH"
+          head=$(git rev-parse FETCH_HEAD)
 
-          git push origin "origin/master:refs/heads/$branch"
-          gh pr create --base dev --head "$branch" --label "$LABEL" \
+          if git merge-base --is-ancestor origin/master "$head"; then
+            echo "$BRANCH already contains master."
+          elif git merge-base --is-ancestor "$head" origin/master; then
+            # Nothing of its own: fast-forward.
+            git push origin "origin/master:refs/heads/$BRANCH"
+          elif [ -z "$(git rev-list origin/dev..$head ^origin/master)" ]; then
+            # Its extra commits are already in dev (a previous sync was merged):
+            # nothing to keep, so restart it at master. The lease guards against a
+            # push that lands between the fetch above and this one.
+            git push --force-with-lease="refs/heads/$BRANCH:$head" \
+              origin "origin/master:refs/heads/$BRANCH"
+          else
+            # It carries unmerged work (e.g. conflict resolution): keep it and
+            # merge master on top.
+            git checkout -q --detach "$head"
+            if git merge --no-edit origin/master; then
+              git push origin "HEAD:refs/heads/$BRANCH"
+            else
+              git merge --abort
+              echo "conflict=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::master conflicts with work on $BRANCH; leaving it for a human."
+            fi
+          fi
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the sync PR
+        if: steps.branch.outputs.updated == 'true'
+        env:
+          SHA: ${{ steps.check.outputs.sha }}
+          CONFLICT: ${{ steps.branch.outputs.conflict }}
+        run: |
+          gh label create "$LABEL" --color FBCA04 \
+            --description "master -> dev branch sync; merge with a merge commit" 2>/dev/null || true
+
+          # Only ever the PR whose head is this workflow's branch in this repository.
+          pr=$(gh pr list --base dev --head "$BRANCH" --state open \
+                 --json number,headRepositoryOwner \
+                 --jq ".[] | select(.headRepositoryOwner.login == \"${GITHUB_REPOSITORY_OWNER}\") | .number" | head -n1)
+
+          if [ -n "$pr" ]; then
+            if [ "$CONFLICT" = "true" ]; then
+              gh pr comment "$pr" --body "master moved to \`$SHA\` but merging it into \`$BRANCH\` conflicts with the commits already on that branch. Please merge \`master\` into \`$BRANCH\` by hand and push."
+            else
+              gh pr edit "$pr" --title "chore: sync master into dev ($SHA)"
+              echo "Updated sync PR #$pr to $SHA."
+            fi
+            exit 0
+          fi
+
+          if [ "$CONFLICT" = "true" ]; then
+            echo "::warning::No open sync PR and $BRANCH conflicts with master; not opening one automatically."
+            exit 0
+          fi
+
+          gh pr create --base dev --head "$BRANCH" --label "$LABEL" \
             --title "chore: sync master into dev ($SHA)" \
             --body "$(cat <<BODY
-          Automated sync of \`master\` ($SHA) into \`dev\` (WebARKitLib#70).
+          Automated sync of \`master\` into \`dev\` (WebARKitLib#70). This PR is updated in place
+          whenever \`master\` moves again.
 
           > [!IMPORTANT]
           > Merge with **Create a merge commit** — never squash or rebase.
           > Only a merge commit makes the master commits ancestors of \`dev\`, so the next
           > sync is a no-op. See the "Merging a branch-sync PR" section of CONTRIBUTING.md.
 
-          If there are conflicts, resolve them on \`$branch\` and push.
+          If there are conflicts, resolve them on \`$BRANCH\` and push; later syncs keep
+          those commits and merge master on top.
           BODY
           )"
