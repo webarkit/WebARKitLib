@@ -1,0 +1,76 @@
+name: Sync master into dev
+
+# WebARKitLib#70: after a release lands on master, open a master -> dev PR so the
+# two branches cannot silently drift apart. Silent when dev already contains master.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-master-into-dev
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      LABEL: branch-sync
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check whether dev already contains master
+        id: check
+        run: |
+          git fetch origin master dev
+          if git merge-base --is-ancestor origin/master origin/dev; then
+            echo "dev already contains master; nothing to do."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            sha=$(git rev-parse --short origin/master)
+            echo "dev is $(git rev-list --count origin/dev..origin/master) commit(s) behind master ($sha)."
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open master -> dev sync PR
+        if: steps.check.outputs.needed == 'true'
+        env:
+          SHA: ${{ steps.check.outputs.sha }}
+        run: |
+          branch="chore/sync-dev-$SHA"
+          gh label create "$LABEL" --color FBCA04 \
+            --description "master -> dev branch sync; merge with a merge commit" 2>/dev/null || true
+
+          if [ "$(gh pr list --head "$branch" --state open --json number --jq length)" != "0" ]; then
+            echo "Sync PR for $SHA already open."
+            exit 0
+          fi
+
+          # Supersede any older sync PR: the new branch contains everything it had.
+          for num in $(gh pr list --base dev --label "$LABEL" --state open --json number --jq '.[].number'); do
+            gh pr close "$num" --delete-branch \
+              --comment "Superseded by a newer master -> dev sync ($SHA)."
+          done
+
+          git push origin "origin/master:refs/heads/$branch"
+          gh pr create --base dev --head "$branch" --label "$LABEL" \
+            --title "chore: sync master into dev ($SHA)" \
+            --body "$(cat <<BODY
+          Automated sync of \`master\` ($SHA) into \`dev\` (WebARKitLib#70).
+
+          > [!IMPORTANT]
+          > Merge with **Create a merge commit** — never squash or rebase.
+          > Only a merge commit makes the master commits ancestors of \`dev\`, so the next
+          > sync is a no-op. See the "Merging a branch-sync PR" section of CONTRIBUTING.md.
+
+          If there are conflicts, resolve them on \`$branch\` and push.
+          BODY
+          )"
