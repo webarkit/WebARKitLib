@@ -97,8 +97,10 @@ int ARToolKitNFTCore::setupAR2() {
   ar2SetTemplateSize1(this->ar2Handle, 6);
   ar2SetTemplateSize2(this->ar2Handle, 6);
 
-  // The detector searches with the KPM handle replaced below: stop it first (its destructor
-  // waits for a running search). The next addNFTMarkers() creates one for the new handle.
+  // The detector searches with the KPM handle replaced below: drop a running search (as
+  // addNFTMarkers() does, so the detection interval restarts), then stop the detector.
+  // The next addNFTMarkers() creates one for the new handle.
+  dropRunningSearch();
   this->detector.reset();
 
   // Create KPM handle
@@ -183,7 +185,7 @@ int ARToolKitNFTCore::teardown() {
     ar2FreeSurfaceSet(&this->surfaceSet[i]);
   }
   this->surfaceSetCount = 0;
-  this->nftMarkers.clear();
+  // nftMarkers is kept, as in the bindings: getNFTData() still answers after teardown().
 
   if (this->paramLT != nullptr) {
     arParamLTFree(&(this->paramLT));

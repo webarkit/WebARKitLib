@@ -103,7 +103,10 @@ public:
     /** Decompresses a .zft archive into tempPath. @return 1 on success, -1 on failure */
     int decompressZFT(const std::string &path, const std::string &tempPath);
 
-    /** Data of a loaded marker; an out-of-range index aborts (std::vector::at). */
+    /**
+     * Data of a loaded marker, still available after teardown(), as in the bindings.
+     * An out-of-range index aborts (std::vector::at).
+     */
     nftMarker getNFTData(int index) const;
 
     /** The number of loaded markers. */

@@ -491,6 +491,21 @@ TEST(CoreLifecycleTest, TeardownThenDestroy) {
   EXPECT_EQ(core.teardown(), 0);
 }
 
+TEST(CoreLifecycleTest, TeardownKeepsMarkerData) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball", "data/kuva"}), std::vector<int>({0, 1}));
+  const nftMarker before = core.getNFTData(0);
+
+  // As in the bindings, getNFTData() still answers after teardown() (it does not abort).
+  EXPECT_EQ(core.teardown(), 0);
+  const nftMarker after = core.getNFTData(0);
+  EXPECT_EQ(after.id_NFT, before.id_NFT);
+  EXPECT_EQ(after.width_NFT, before.width_NFT);
+  EXPECT_EQ(after.height_NFT, before.height_NFT);
+  EXPECT_EQ(after.dpi_NFT, before.dpi_NFT);
+}
+
 #ifdef WEBARKIT_NFT_THREADS
 
 TEST(CoreMarkersTest, ThreadedPresetLoadsMarkersIncrementally) {
