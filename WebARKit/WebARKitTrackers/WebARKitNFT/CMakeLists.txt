@@ -53,6 +53,9 @@ set(NFT_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/trackingMod.c
   ${CMAKE_CURRENT_SOURCE_DIR}/trackingMod2d.c
   ${CMAKE_CURRENT_SOURCE_DIR}/markerDecompress.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/NFTClock.cpp
+  # the native logger (WebARKit/include/WebARKitLog.h) used by the tracking core
+  ${WEBARKITLIB_ROOT}/WebARKit/WebARKitLog.cpp
 )
 
 if(WEBARKIT_NFT_THREADS)
@@ -67,6 +70,7 @@ target_include_directories(WebARKitNFT
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${WEBARKITLIB_ROOT}/include
+    ${WEBARKITLIB_ROOT}/WebARKit/include
   PRIVATE
     ${ARTK_SRC}/KPM/FreakMatcher
 )
