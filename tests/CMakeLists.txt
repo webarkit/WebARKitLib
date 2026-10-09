@@ -40,7 +40,6 @@ target_link_libraries(webarkit_nft_test WebARKitNFT GTest::gtest_main)
 # The tracking core and its presets: the test data is copied next to the binary,
 # which runs with the build directory as its working directory.
 add_executable(webarkit_nft_core_test webarkit_nft_core_test.cc)
-target_compile_definitions(webarkit_nft_core_test PRIVATE WEBARKIT_NFT_THREADS)
 target_link_libraries(webarkit_nft_core_test WebARKitNFT GTest::gtest_main)
 add_custom_command(TARGET webarkit_nft_core_test POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory

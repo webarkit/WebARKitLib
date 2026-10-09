@@ -7,10 +7,15 @@
 #include <WebARKitTrackers/WebARKitNFT/NFTDetector.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
 #include <WebARKitTrackers/WebARKitNFT/SyncKpmDetector.h>
+#ifdef WEBARKIT_NFT_THREADS
+#include <WebARKitTrackers/WebARKitNFT/ThreadedKpmDetector.h>
+#endif
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <memory>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -174,3 +179,164 @@ TEST(SyncKpmDetectorTest, BlankFrameFindsNothing) {
   EXPECT_TRUE(detector.collect(out, resultNum));
   EXPECT_TRUE(out.empty());
 }
+
+#ifdef WEBARKIT_NFT_THREADS
+
+namespace {
+
+/** Polls collect() every 10 ms until it returns a pass or 10 s have gone by. */
+bool pollCollect(NFTDetector &detector, std::vector<NFTDetection> &out, int &resultNum) {
+  for (int i = 0; i < 1000; i++) {
+    if (detector.collect(out, resultNum)) return true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return false;
+}
+
+}  // namespace
+
+TEST(ThreadedKpmDetectorTest, FindsPinballOnALaterCollect) {
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  PinballKpm kpm;
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  EXPECT_TRUE(detector->idle());
+
+  // A threaded pass never finishes inside start().
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+  EXPECT_FALSE(detector->idle());
+
+  std::vector<NFTDetection> out;
+  int resultNum = 0;
+  ASSERT_TRUE(pollCollect(*detector, out, resultNum));
+  EXPECT_GE(resultNum, 1);
+  EXPECT_TRUE(containsPage(out, 0));
+  for (const NFTDetection &d : out) {
+    if (d.page != 0) continue;
+    EXPECT_NE(d.trans[2][3], 0.0f);
+  }
+  EXPECT_TRUE(detector->idle());
+
+  // The result is handed over once.
+  EXPECT_FALSE(detector->collect(out, resultNum));
+}
+
+TEST(ThreadedKpmDetectorTest, SkippedPageIsNotReported) {
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  PinballKpm kpm;
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  const int skipPages[] = {0};
+  EXPECT_FALSE(detector->start(luma.data(), skipPages, 1));
+
+  std::vector<NFTDetection> out;
+  int resultNum = 0;
+  ASSERT_TRUE(pollCollect(*detector, out, resultNum));
+  EXPECT_FALSE(containsPage(out, 0));
+}
+
+TEST(ThreadedKpmDetectorTest, BlankFrameFinishesWithNothing) {
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  PinballKpm kpm;
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+  std::fill(luma.begin(), luma.end(), 0);
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+
+  std::vector<NFTDetection> out;
+  int resultNum = 0;
+  ASSERT_TRUE(pollCollect(*detector, out, resultNum));
+  EXPECT_TRUE(out.empty());
+  EXPECT_TRUE(detector->idle());
+}
+
+TEST(ThreadedKpmDetectorTest, CollectWithoutAStartFindsNothing) {
+  PinballKpm kpm;
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  std::vector<NFTDetection> out;
+  int resultNum = 0;
+  EXPECT_FALSE(detector->collect(out, resultNum));
+}
+
+TEST(ThreadedKpmDetectorTest, CreateWithoutAHandleReturnsNull) {
+  EXPECT_EQ(ThreadedKpmDetector::create(nullptr), nullptr);
+}
+
+TEST(ThreadedKpmDetectorTest, WaitIdleDropsTheRunningSearch) {
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  PinballKpm kpm;
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+  detector->waitIdle();
+  EXPECT_TRUE(detector->idle());
+
+  std::vector<NFTDetection> out;
+  int resultNum = 0;
+  EXPECT_FALSE(detector->collect(out, resultNum));
+
+  // The worker is free again: a new search can start and finish.
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+  ASSERT_TRUE(pollCollect(*detector, out, resultNum));
+  EXPECT_TRUE(containsPage(out, 0));
+}
+
+TEST(ThreadedKpmDetectorTest, StartWhileSearchingIsRefused) {
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  PinballKpm kpm;
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+  EXPECT_FALSE(detector->idle());
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+  EXPECT_FALSE(detector->idle());
+
+  std::vector<NFTDetection> out;
+  int resultNum = 0;
+  ASSERT_TRUE(pollCollect(*detector, out, resultNum));
+  EXPECT_TRUE(containsPage(out, 0));
+}
+
+TEST(ThreadedKpmDetectorTest, DestroyWhileSearching) {
+  int width = 0, height = 0;
+  std::vector<ARUint8> luma = loadLuma("data/pinball-demo.jpg", width, height);
+  ASSERT_FALSE(luma.empty());
+  PinballKpm kpm;
+  ASSERT_TRUE(loadPinballKpm(kpm, width, height));
+
+  std::unique_ptr<ThreadedKpmDetector> detector = ThreadedKpmDetector::create(kpm.handle);
+  ASSERT_NE(detector, nullptr);
+  EXPECT_FALSE(detector->start(luma.data(), nullptr, 0));
+  detector.reset();  // waits for the search, then stops the worker
+
+  // The KPM handle is free to go: the worker no longer touches it (PinballKpm's destructor).
+  SUCCEED();
+}
+
+#endif  // WEBARKIT_NFT_THREADS

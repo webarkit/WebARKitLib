@@ -60,7 +60,9 @@ set(NFT_SOURCES
 )
 
 if(WEBARKIT_NFT_THREADS)
-  list(APPEND NFT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/trackingSub.c)
+  list(APPEND NFT_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/trackingSub.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThreadedKpmDetector.cpp)
 endif()
 
 add_library(WebARKitNFT STATIC
@@ -77,6 +79,10 @@ target_include_directories(WebARKitNFT
 )
 
 target_compile_definitions(WebARKitNFT PUBLIC HAVE_NFT)
+if(WEBARKIT_NFT_THREADS)
+  # Seen by everything that links the target, so the core selects the threaded detector.
+  target_compile_definitions(WebARKitNFT PUBLIC WEBARKIT_NFT_THREADS)
+endif()
 
 if(EMSCRIPTEN)
   # Emscripten has no fopen64/ftello64/fseeko64: let minizip use the plain calls.

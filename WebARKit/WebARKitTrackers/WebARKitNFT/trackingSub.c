@@ -166,6 +166,25 @@ int trackingInitGetResults( THREAD_HANDLE_T *threadHandle, TrackingInitResult re
     return 1;
 }
 
+int trackingInitDiscard( THREAD_HANDLE_T *threadHandle )
+{
+    TrackingInitHandle     *trackingInitHandle;
+
+    if (!threadHandle) {
+        ARLOGe("trackingInitDiscard(): Error: NULL threadHandle.\n");
+        return (-1);
+    }
+    trackingInitHandle = (TrackingInitHandle *)threadGetArg(threadHandle);
+    if (!trackingInitHandle) return (-1);
+    if (!trackingInitHandle->scanPending) return 0;
+
+    // Consume the end signal, as trackingInitGetResults() would, and clear scanPending
+    // so trackingInitStart() accepts the next search.
+    threadEndWait( threadHandle );
+    trackingInitHandle->scanPending = 0;
+    return 0;
+}
+
 int trackingInitGetResult( THREAD_HANDLE_T *threadHandle, float trans[3][4], int *page )
 {
     TrackingInitResult      results[TRACKING_INIT_MAX_RESULTS];
