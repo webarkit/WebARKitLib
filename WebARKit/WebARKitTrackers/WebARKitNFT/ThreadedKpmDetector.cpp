@@ -1,8 +1,14 @@
 #include <WebARKitLog.h>
+#include <WebARKitTrackers/WebARKitNFT/ARToolKitNFTCore.h>
 #include <WebARKitTrackers/WebARKitNFT/ThreadedKpmDetector.h>
 #include <WebARKitTrackers/WebARKitNFT/trackingSub.h>
 
 #include <cstring>
+
+// One worker result per page: the results buffer holds TRACKING_INIT_MAX_RESULTS entries,
+// so no page the core can load is ever cut from a pass.
+static_assert(PAGES_MAX == TRACKING_INIT_MAX_RESULTS,
+              "PAGES_MAX must equal TRACKING_INIT_MAX_RESULTS");
 
 ThreadedKpmDetector::ThreadedKpmDetector(KpmHandle *kpmHandle, THREAD_HANDLE_T *threadHandle)
     : m_kpmHandle(kpmHandle), m_threadHandle(threadHandle), m_searchRunning(false) {}

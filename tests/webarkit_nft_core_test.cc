@@ -4,6 +4,7 @@
 #include <AR2/imageFormat.h>
 #include <KPM/kpm.h>
 #include <WebARKitLog.h>
+#include <WebARKitTrackers/WebARKitNFT/ARToolKitNFTCore.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTDetector.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
 #include <WebARKitTrackers/WebARKitNFT/SyncKpmDetector.h>
@@ -15,6 +16,7 @@
 #include <chrono>
 #include <cstdio>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -337,6 +339,175 @@ TEST(ThreadedKpmDetectorTest, DestroyWhileSearching) {
 
   // The KPM handle is free to go: the worker no longer touches it (PinballKpm's destructor).
   SUCCEED();
+}
+
+#endif  // WEBARKIT_NFT_THREADS
+
+namespace {
+
+const int kFrameWidth = 2000;   // pinball-demo.jpg
+const int kFrameHeight = 1500;
+
+/**
+ * Makes a core ready for markers the way the bindings do: load the camera, setup() for the
+ * test frame, then setupAR2(). Returns false on failure.
+ */
+bool makeReady(ARToolKitNFTCore &core) {
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  if (cameraID < 0) return false;
+  if (core.setup(kFrameWidth, kFrameHeight, cameraID) < 0) return false;
+  return core.setupAR2() == 0;
+}
+
+}  // namespace
+
+TEST(CoreCameraTest, LoadSetupAndLens) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  EXPECT_GE(core.setup(kFrameWidth, kFrameHeight, cameraID), 0);
+  EXPECT_EQ(core.cameraParam().xsize, kFrameWidth);
+  EXPECT_EQ(core.cameraParam().ysize, kFrameHeight);
+  EXPECT_NE(core.cameraParamLT(), nullptr);
+
+  const ARdouble *lens = core.cameraLens();
+  ASSERT_NE(lens, nullptr);
+  EXPECT_TRUE(std::any_of(lens, lens + 16, [](ARdouble v) { return v != 0.0; }));
+}
+
+TEST(CoreCameraTest, MissingCameraFileFails) {
+  EXPECT_EQ(ARToolKitNFTCore::loadCamera("data/does-not-exist.dat"), -1);
+}
+
+TEST(CoreCameraTest, UnknownCameraIdFails) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  EXPECT_EQ(core.setCamera(0, 9999), -1);
+}
+
+TEST(CoreCameraTest, SetCameraTwice) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  const int id = core.setup(kFrameWidth, kFrameHeight, cameraID);
+  ASSERT_GE(id, 0);
+  ASSERT_EQ(core.setupAR2(), 0);
+
+  // A second setCamera frees paramLT and the AR2 handle and rebuilds them; setupAR2 recreates
+  // the handles from the new paramLT, and markers load against them.
+  EXPECT_EQ(core.setCamera(id, cameraID), 0);
+  EXPECT_NE(core.cameraParamLT(), nullptr);
+  EXPECT_EQ(core.setupAR2(), 0);
+  EXPECT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+}
+
+TEST(CoreCameraTest, ProjectionPlanes) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  EXPECT_EQ(core.getProjectionNearPlane(), 0.0001);
+  EXPECT_EQ(core.getProjectionFarPlane(), 1000.0);
+
+  ASSERT_TRUE(makeReady(core));
+  std::vector<ARdouble> before(core.cameraLens(), core.cameraLens() + 16);
+  core.setProjectionNearPlane(1.0);
+  core.setProjectionFarPlane(500.0);
+  EXPECT_EQ(core.getProjectionNearPlane(), 1.0);
+  EXPECT_EQ(core.getProjectionFarPlane(), 500.0);
+
+  // The lens follows the planes only once recalculated.
+  EXPECT_EQ(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), before);
+  core.recalculateCameraLens();
+  EXPECT_NE(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), before);
+}
+
+TEST(CoreMarkersTest, LoadsTwoMarkersInOneCall) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(core.addNFTMarkers({"data/pinball", "data/kuva"}), std::vector<int>({0, 1}));
+  EXPECT_EQ(core.markerCount(), 2);
+  const nftMarker marker = core.getNFTData(0);
+  EXPECT_EQ(marker.id_NFT, 0);
+  EXPECT_GT(marker.width_NFT, 0);
+  EXPECT_GT(marker.height_NFT, 0);
+  EXPECT_GT(marker.dpi_NFT, 0);
+  EXPECT_EQ(core.getNFTData(1).id_NFT, 1);
+}
+
+TEST(CoreMarkersTest, LoadsMarkersIncrementally) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
+  EXPECT_EQ(core.markerCount(), 2);
+}
+
+TEST(CoreMarkersTest, MissingMarkerReturnsEmpty) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+
+  EXPECT_TRUE(core.addNFTMarkers({"data/does-not-exist"}).empty());
+  EXPECT_EQ(core.markerCount(), 1);
+
+  // A failed batch leaves the earlier markers and the id sequence untouched.
+  EXPECT_TRUE(core.addNFTMarkers({"data/kuva", "data/does-not-exist"}).empty());
+  EXPECT_EQ(core.markerCount(), 1);
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
+}
+
+TEST(CoreMarkersTest, TooManyMarkersReturnsEmpty) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  const std::vector<std::string> paths(PAGES_MAX + 1, "data/pinball");
+  EXPECT_TRUE(core.addNFTMarkers(paths).empty());
+  EXPECT_EQ(core.markerCount(), 0);
+}
+
+TEST(CoreMarkersTest, MarkerStateOutOfRange) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(core.markerState(0), nullptr);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+
+  EXPECT_EQ(core.markerState(-1), nullptr);
+  EXPECT_EQ(core.markerState(core.markerCount()), nullptr);
+  ASSERT_NE(core.markerState(0), nullptr);
+  EXPECT_FALSE(core.markerState(0)->tracking);
+}
+
+TEST(CoreMarkersTest, DecompressMissingArchiveFails) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  EXPECT_EQ(core.decompressZFT("data/does-not-exist.zft", "data/zft-temp"), -1);
+}
+
+TEST(CoreLifecycleTest, TeardownThenDestroy) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball", "data/kuva"}), std::vector<int>({0, 1}));
+
+  EXPECT_EQ(core.teardown(), 0);
+  EXPECT_EQ(core.markerCount(), 0);
+  EXPECT_EQ(core.cameraParamLT(), nullptr);
+  EXPECT_EQ(core.markerState(0), nullptr);
+  // A second teardown (the destructor's) finds nothing left to free.
+  EXPECT_EQ(core.teardown(), 0);
+}
+
+#ifdef WEBARKIT_NFT_THREADS
+
+TEST(CoreMarkersTest, ThreadedPresetLoadsMarkersIncrementally) {
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
+  EXPECT_EQ(core.markerCount(), 2);
+  EXPECT_GT(core.getNFTData(1).width_NFT, 0);
+}
+
+TEST(CoreLifecycleTest, ThreadedTeardownThenDestroy) {
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  EXPECT_EQ(core.teardown(), 0);
+  EXPECT_EQ(core.markerCount(), 0);
 }
 
 #endif  // WEBARKIT_NFT_THREADS

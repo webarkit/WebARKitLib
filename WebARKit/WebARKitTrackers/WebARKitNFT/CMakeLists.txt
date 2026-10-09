@@ -55,14 +55,27 @@ set(NFT_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/markerDecompress.c
   ${CMAKE_CURRENT_SOURCE_DIR}/NFTClock.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/SyncKpmDetector.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ARToolKitNFTCore.cpp
   # the native logger (WebARKit/include/WebARKitLog.h) used by the tracking core
   ${WEBARKITLIB_ROOT}/WebARKit/WebARKitLog.cpp
+)
+
+# The tracking core builds without RTTI and exceptions, so native consumers may too.
+set(NFT_CORE_COMPILE_OPTIONS "-fno-rtti;-fno-exceptions")
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/ARToolKitNFTCore.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/SyncKpmDetector.cpp
+  PROPERTIES COMPILE_OPTIONS "${NFT_CORE_COMPILE_OPTIONS}"
 )
 
 if(WEBARKIT_NFT_THREADS)
   list(APPEND NFT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/trackingSub.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ThreadedKpmDetector.cpp)
+  set_source_files_properties(
+    ${CMAKE_CURRENT_SOURCE_DIR}/ThreadedKpmDetector.cpp
+    PROPERTIES COMPILE_OPTIONS "${NFT_CORE_COMPILE_OPTIONS}"
+  )
 endif()
 
 add_library(WebARKitNFT STATIC
