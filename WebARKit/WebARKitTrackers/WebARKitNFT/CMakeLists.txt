@@ -54,6 +54,7 @@ set(NFT_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/trackingMod2d.c
   ${CMAKE_CURRENT_SOURCE_DIR}/markerDecompress.c
   ${CMAKE_CURRENT_SOURCE_DIR}/NFTClock.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/SyncKpmDetector.cpp
   # the native logger (WebARKit/include/WebARKitLog.h) used by the tracking core
   ${WEBARKITLIB_ROOT}/WebARKit/WebARKitLog.cpp
 )
