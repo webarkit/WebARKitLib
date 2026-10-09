@@ -38,7 +38,9 @@ class NFTDetector {
    * @param luma 8-bit luma of the frame, as large as the KPM handle's frame; read during the pass
    * @param skipPages pages KPM must not report this pass (they are tracked already), may be null
    * @param skipNum number of entries of skipPages
-   * @return true when the pass started (or, for a synchronous detector, finished)
+   * @return true only when the pass has already finished inside start(): its result is ready,
+   *         so the caller collects at once. false when the pass runs asynchronously or was
+   *         refused; use idle() to tell whether a pass is running.
    */
   virtual bool start(ARUint8 *luma, const int *skipPages, int skipNum) = 0;
 

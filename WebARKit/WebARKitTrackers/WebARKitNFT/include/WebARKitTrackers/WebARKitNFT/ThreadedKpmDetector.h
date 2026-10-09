@@ -31,6 +31,12 @@ class ThreadedKpmDetector final : public NFTDetector {
 
   bool collect(std::vector<NFTDetection> &out, int &resultNum) override;
   bool idle() const override { return !m_searchRunning; }
+  /**
+   * Hands the frame to the worker. Never finishes a pass inside the call, so it never returns
+   * true: false means the pass is now running on the worker (idle() is false; take the result
+   * with collect()), or it was refused (a pass is already running, null luma). The frame is
+   * copied, so luma is free on return.
+   */
   bool start(ARUint8 *luma, const int *skipPages, int skipNum) override;
 
   /** Waits for the running pass and drops its result: the next collect() returns false. */
