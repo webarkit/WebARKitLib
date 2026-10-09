@@ -11,6 +11,7 @@
 #include <AR/paramGL.h>
 #include <ARUtil/thread_sub.h>
 
+#include <algorithm>
 #include <unordered_map>
 #include <utility>
 
@@ -38,6 +39,150 @@ ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFil
 
 ARToolKitNFTCore::~ARToolKitNFTCore() {
   teardown();
+}
+
+/*********
+ * Frames *
+ *********/
+
+void ARToolKitNFTCore::setVideoFrame(const ARUint8 *rgba, const ARUint8 *luma) {
+  // Copy data instead of just assigning pointers
+  if (this->videoFrame && rgba) {
+    std::copy(rgba, rgba + this->videoFrameSize, this->videoFrame.get());
+  }
+
+  if (this->videoLuma && luma) {
+    std::copy(luma, luma + (this->width * this->height), this->videoLuma.get());
+  }
+}
+
+/*************************
+ * Detection and tracking *
+ *************************/
+
+bool ARToolKitNFTCore::allMarkersTracked() const {
+  for (int i = 0; i < this->surfaceSetCount; i++) {
+    if (!markerStates[i].tracking) return false;
+  }
+  return true;
+}
+
+bool ARToolKitNFTCore::anyMarkerTracked() const {
+  for (int i = 0; i < this->surfaceSetCount; i++) {
+    if (markerStates[i].tracking) return true;
+  }
+  return false;
+}
+
+bool ARToolKitNFTCore::collectDetections(int &resultNum) {
+  std::vector<NFTDetection> detections;
+  int passResultNum = -1;
+  if (!this->detector->collect(detections, passResultNum)) return false;
+  // Finished, or failed (threaded, no detections): either way the pass is over.
+  this->lastKpmEndMs = this->config.clock();
+  resultNum = passResultNum;
+
+  for (NFTDetection &detection : detections) {
+    const int page = detection.page;
+    if (page < 0 || page >= this->surfaceSetCount) {
+      ARLOGe("KPM reported page %d, outside 0..%d.\n", page, this->surfaceSetCount - 1);
+      continue;
+    }
+    NFTMarkerState &state = markerStates[page];
+    if (state.tracking) continue;
+    ar2SetInitTrans(this->surfaceSet[page], detection.trans);
+    state.tracking = true;
+    state.filterNeedsReset = true;
+  }
+  return true;
+}
+
+int ARToolKitNFTCore::detectNFTMarker() {
+  int resultNum = -1;
+
+  // Without a detector (no addNFTMarkers() yet, or a setupAR2() since the last one) nothing
+  // is detected this frame, but the markers being tracked are still tracked.
+
+  // Collect a pass that finished since the last frame (threaded: on the worker; a sync pass
+  // is collected where it runs, below). Its markers then count as tracked when deciding
+  // whether to start a new pass.
+  if (this->detector) {
+    collectDetections(resultNum);
+  }
+
+  // Detect every frame while nothing is tracked. Once something is, detect
+  // at most once per detectionIntervalMs, counted from the END of the previous
+  // pass, or not at all without continuous detection. A pass costs the full
+  // KPM time on the frame where it runs; timing from its start would let a
+  // pass slower than the interval run again on every frame.
+  const double now = this->config.clock();
+  const bool detectionDue =
+      !anyMarkerTracked() ||
+      (this->continuousDetection &&
+       now - this->lastKpmEndMs >= this->detectionIntervalMs);
+
+  if (this->detector && this->detector->idle() && this->surfaceSetCount > 0 &&
+      !allMarkersTracked() && detectionDue) {
+
+    // Pages already being tracked need no pose from KPM this pass.
+    // kpmMatching() clears the skip flags again when it finishes.
+    int skipPages[PAGES_MAX];
+    int skipNum = 0;
+    for (int i = 0; i < this->surfaceSetCount; i++) {
+      if (markerStates[i].tracking) skipPages[skipNum++] = i;
+    }
+
+    // A sync pass has finished when start() returns true: apply it in this frame.
+    if (this->detector->start(this->videoLuma.get(), skipPages, skipNum)) {
+      collectDetections(resultNum);
+    }
+  }
+
+  trackMarkers();
+  return resultNum;
+}
+
+void ARToolKitNFTCore::trackMarkers() {
+  for (int page = 0; page < this->surfaceSetCount; page++) {
+    NFTMarkerState &state = markerStates[page];
+    if (!state.tracking) continue;
+
+    float trans[3][4];
+    float err = -1.0f;
+    int trackResult;
+    if (this->config.ar2Variant == NFTTrackingConfig::AR2Variant::SingleThread) {
+      trackResult = ar2TrackingMod(this->ar2Handle, this->surfaceSet[page],
+                                   this->videoFrame.get(), trans, &err);
+    } else {
+      trackResult = ar2Tracking(this->ar2Handle, this->surfaceSet[page],
+                                this->videoFrame.get(), trans, &err);
+    }
+    if (trackResult < 0) {
+      ARLOGi("Tracking lost on page %d. %d\n", page, trackResult);
+      state.tracking = false;
+      state.err = -1.0f;
+      continue;
+    }
+
+    for (int r = 0; r < 3; r++) {
+      for (int c = 0; c < 4; c++) {
+        state.pose[r][c] = trans[r][c];
+      }
+    }
+    // Without poseFilteringSupported (the threaded preset) poses are never filtered.
+    if (this->withFiltering && this->config.poseFilteringSupported) {
+      if (!state.ftmi) {
+        state.ftmi = arFilterTransMatInit(this->filterSampleRate, this->filterCutoffFrequency);
+        state.filterNeedsReset = true;
+      }
+      if (arFilterTransMat(state.ftmi, state.pose, state.filterNeedsReset ? 1 : 0) < 0) {
+        WEBARKIT_LOGe("arFilterTransMat error with marker %d.\n", page);
+      }
+      state.filterNeedsReset = false;
+    }
+    state.err = err;
+    ARLOGi("Tracked page %d (max %d).\n", page, this->surfaceSetCount - 1);
+  }
 }
 
 /*******************
@@ -439,13 +584,36 @@ int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
   this->height = height;
 
   this->videoFrameSize = width * height * 4 * sizeof(ARUint8);
-  // unique_ptr owns the frame buffers: exclusive ownership and automatic deallocation
-  this->videoFrame = std::unique_ptr<ARUint8[]>(new ARUint8[this->videoFrameSize]);
-  this->videoLuma = std::unique_ptr<ARUint8[]>(new ARUint8[this->width * this->height]);
+  // unique_ptr owns the frame buffers: exclusive ownership and automatic deallocation.
+  // Not in the bindings: the buffers start zeroed (a blank frame), so a detectNFTMarker()
+  // before the first setVideoFrame() does not search leftover heap memory, which can hold
+  // an earlier frame.
+  this->videoFrame = std::unique_ptr<ARUint8[]>(new ARUint8[this->videoFrameSize]());
+  this->videoLuma = std::unique_ptr<ARUint8[]>(new ARUint8[this->width * this->height]());
 
   setCamera(id, cameraID);
 
   WEBARKIT_LOGi("Allocated videoFrameSize %d\n", this->videoFrameSize);
 
   return this->id;
+}
+
+/*******************
+ * Detection policy *
+ *******************/
+
+void ARToolKitNFTCore::setFiltering(bool enableFiltering) {
+  this->withFiltering = enableFiltering;
+  WEBARKIT_LOGi("Filtering enabled with setFiltering: %s\n", enableFiltering ? "true" : "false");
+}
+
+void ARToolKitNFTCore::setContinuousDetection(bool enabled) {
+  this->continuousDetection = enabled;
+  WEBARKIT_LOGi("Continuous detection: %s\n", enabled ? "on" : "off");
+}
+
+void ARToolKitNFTCore::setDetectionInterval(double ms) {
+  // Negative (or NaN) means "every frame", as 0 does.
+  this->detectionIntervalMs = ms > 0.0 ? ms : 0.0;
+  WEBARKIT_LOGi("Detection interval: %f ms\n", this->detectionIntervalMs);
 }

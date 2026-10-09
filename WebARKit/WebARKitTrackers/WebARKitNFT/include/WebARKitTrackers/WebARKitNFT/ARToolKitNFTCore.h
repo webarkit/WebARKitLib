@@ -115,6 +115,36 @@ public:
     /** The tracking state of a loaded marker, or nullptr when index is out of range. */
     const NFTMarkerState *markerState(int index) const;
 
+    // Frames, detection and tracking
+
+    /**
+     * Copies a frame into the core: rgba is the width x height RGBA frame given to setup(),
+     * luma its 8-bit luma (width x height bytes). A null pointer leaves that buffer as it is.
+     * Does nothing before setup().
+     */
+    void setVideoFrame(const ARUint8 *rgba, const ARUint8 *luma);
+
+    /**
+     * Runs one frame: takes a finished KPM pass, starts a new one when the detection policy
+     * says so, then tracks every marker found. Call after setVideoFrame().
+     * @return the result count of the KPM pass collected during this call (single-thread:
+     *         the pass that ran in it; threaded: one that finished on the worker), or -1 when
+     *         none was collected
+     */
+    int detectNFTMarker();
+
+    /** Turns pose filtering on or off; it only applies when config.poseFilteringSupported. */
+    void setFiltering(bool enableFiltering);
+
+    /** Whether KPM keeps searching for untracked markers while some marker is tracked. */
+    void setContinuousDetection(bool enabled);
+
+    /**
+     * Minimum time between the end of a KPM pass and the start of the next while some marker
+     * is tracked. Negative values and NaN mean 0 (every frame).
+     */
+    void setDetectionInterval(double ms);
+
     /** Frees everything the core owns: detector first, then the handles and the markers. */
     int teardown();
 
@@ -123,6 +153,15 @@ private:
         void operator()(KpmHandle *handle) const;
     };
     using KpmHandlePtr = std::unique_ptr<KpmHandle, KpmHandleDeleter>;
+
+    bool allMarkersTracked() const;
+    bool anyMarkerTracked() const;
+    /**
+     * Takes a finished KPM pass from the detector, if there is one, and starts tracking the
+     * markers it found. @return true when a pass was collected; resultNum then holds its count
+     */
+    bool collectDetections(int &resultNum);
+    void trackMarkers();
 
     KpmHandlePtr createKpmHandle(ARParamLT *cparamLT);
     std::unique_ptr<NFTDetector> createDetector();
