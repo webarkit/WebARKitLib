@@ -33,10 +33,14 @@ struct nftMarker
  * from cameraParamLT() and cameraParam() by the caller, which must delete them before
  * setCamera() or teardown() frees paramLT.
  *
- * Not thread-safe: drive it from one thread. The only other thread is the threaded KPM
+ * Not thread-safe: drive each core from one thread. The only other thread is the threaded KPM
  * detector's worker, which the core waits for before it changes or frees what the worker uses.
+ * loadCamera() and setup() also use process-wide state shared by every core and not
+ * synchronised (the camera registry, the camera and controller id counters): cores driven
+ * from different threads must not call them concurrently.
  *
- * Typical use: loadCamera(), setup(), setupAR2(), then addNFTMarkers().
+ * Typical use: loadCamera(), setup() (check cameraParamLT() != nullptr), setupAR2(), then
+ * addNFTMarkers(); then, per frame, setVideoFrame() and detectNFTMarker().
  */
 class ARToolKitNFTCore
 {
@@ -54,28 +58,40 @@ public:
     // Camera
 
     /**
-     * Loads a camera parameter file into the process-wide camera registry.
+     * Loads a camera parameter file into the process-wide camera registry (not synchronised:
+     * see the class comment).
      * @return the camera id, valid for any core, or -1 when the file cannot be loaded
      */
     static int loadCamera(const std::string &path);
 
     /**
-     * Allocates the frame buffers for a width x height RGBA frame and applies the camera.
-     * @return this controller's id
+     * Allocates the frame buffers for a width x height RGBA frame and applies the camera with
+     * setCamera(). Takes the next id from a process-wide counter (see the class comment).
+     * @return this controller's id, also when the camera could not be applied (as in the
+     *         bindings): check cameraParamLT() != nullptr to know that it was
      */
     int setup(int width, int height, int cameraID);
 
     /**
      * Applies a camera from the registry: resizes it to the frame, frees and recreates
-     * paramLT (freeing the AR2 handle with it) and recomputes the lens. Call setupAR2() after it.
-     * @return 0, or -1 when the camera id is unknown or paramLT cannot be created
+     * paramLT and recomputes the lens. Everything built on the old paramLT is freed with it:
+     * the AR2 handle, the KPM handle and the detector (a running search is waited for and
+     * dropped). Call setupAR2() after it; until then nothing is detected and markers being
+     * tracked are lost on the next frame. The markers stay loaded.
+     * @return 0, or -1 when the camera id is unknown (nothing changes) or paramLT cannot be
+     *         created
      */
     int setCamera(int id, int cameraID);
 
     /**
      * Creates the AR2 tracking handle (variant and settings from the config) and the KPM
      * handle from paramLT. Call after setup() and after every setCamera().
-     * @return 0, or -1 on failure
+     *
+     * A second call (or the first after a setCamera()) replaces the KPM handle: the markers
+     * already loaded stay loaded and tracked, but are not detected again until the next
+     * addNFTMarkers() hands the new handle the reference data. addNFTMarkers({}) does that
+     * without adding markers, and returns an empty vector, as a failure does.
+     * @return 0, or -1 on failure (no camera, or a handle cannot be created)
      */
     int setupAR2();
 
@@ -95,8 +111,11 @@ public:
 
     /**
      * Loads a batch of NFT markers (paths without extension) after the ones already loaded.
+     * Needs setupAR2(); it also hands every loaded marker to the current KPM handle (see
+     * setupAR2()).
      * @return the ids of the new markers, or an empty vector when any of them fails to load
-     *         (the earlier markers stay loaded)
+     *         (the earlier markers stay loaded), when there is no KPM handle, or when paths
+     *         is empty
      */
     std::vector<int> addNFTMarkers(const std::vector<std::string> &paths);
 
@@ -104,7 +123,8 @@ public:
     int decompressZFT(const std::string &path, const std::string &tempPath);
 
     /**
-     * Data of a loaded marker, still available after teardown(), as in the bindings.
+     * Data of a loaded marker, still available after teardown(), as in the bindings, until
+     * markers are loaded again (their ids restart at 0 and replace the old entries).
      * An out-of-range index aborts (std::vector::at).
      */
     nftMarker getNFTData(int index) const;
@@ -145,7 +165,14 @@ public:
      */
     void setDetectionInterval(double ms);
 
-    /** Frees everything the core owns: detector first, then the handles and the markers. */
+    /**
+     * Frees what the core owns: the detector first (waiting for a running search), then the
+     * KPM and AR2 handles, the markers' surface sets and reference data, paramLT, the
+     * per-marker state and the frame buffers. markerCount() is then 0, but getNFTData() still
+     * returns the data of the markers loaded before. The core can be set up again with
+     * setup() and setupAR2(). Called by the destructor; a second call frees nothing.
+     * @return 0
+     */
     int teardown();
 
 private:
