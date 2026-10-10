@@ -72,10 +72,17 @@ webarkit-testing switching its WASM build over to this CMake config (away from
 
 ### NFT helpers (`WebARKit/WebARKitTrackers/WebARKitNFT`)
 
-The web-adapted NFT helpers formerly in jsartoolkitNFT live here (#75):
+The web-adapted NFT helpers formerly in jsartoolkitNFT live here (#75), together
+with the NFT tracking core that jsartoolkitNFT's bindings are thin adapters over:
 
 | Header (`<WebARKitTrackers/WebARKitNFT/...>`) | Provides |
 |---|---|
+| `ARToolKitNFTCore.h` | `ARToolKitNFTCore` — the NFT tracking core: camera, markers, frames, KPM detection policy, AR2 tracking (C++, no Embind) |
+| `NFTTrackingConfig.h` | `NFTTrackingConfig` and its presets `singleThreadPreset()` / `threadedPreset()` — the core's variant settings |
+| `NFTDetector.h` | `NFTDetector` — interface of a KPM detection pass (`start()` / `collect()`) |
+| `SyncKpmDetector.h` | `SyncKpmDetector` — KPM detection on the calling thread |
+| `ThreadedKpmDetector.h` | `ThreadedKpmDetector` — KPM detection on a worker thread (only with `WEBARKIT_NFT_THREADS`) |
+| `KpmRefDataSetCopy.h` | `kpmCopyRefDataSet()` — deep copy of a KPM reference data set |
 | `trackingMod.h` | `ar2TrackingMod()`, `ar2CreateHandleMod()`, `ar2DeleteHandleMod()` — single-threaded AR2 tracking |
 | `markerDecompress.h` | `decompressMarkers()` — unpacks a `.zft` into `.iset`/`.fset`/`.fset3` (returns `-1` on error) |
 | `trackingSub.h` | `trackingInit*()` — KPM detection on a worker thread (pthreads) |
@@ -87,7 +94,35 @@ OpenCV. CMake options in `WebARKit/CMakeLists.txt`:
 
 - `WEBARKIT_BUILD_OPTICAL` (ON) — the OpenCV `WebARKitLib` target
 - `WEBARKIT_BUILD_NFT` (OFF) — the `WebARKitNFT` target (needs libjpeg and zlib)
-- `WEBARKIT_NFT_THREADS` (OFF) — adds `trackingSub` (pthreads)
+- `WEBARKIT_NFT_THREADS` (OFF) — adds `trackingSub` and `ThreadedKpmDetector`
+  (pthreads), and defines `WEBARKIT_NFT_THREADS` as a **PUBLIC** compile definition,
+  so everything that links `WebARKitNFT` sees it (the core then supports the
+  threaded detector)
+
+`WebARKit/WebARKitLog.cpp` (the native logger the core uses) is compiled into both
+the `WebARKitLib` and the `WebARKitNFT` libraries. That is fine for static archives,
+where the linker takes the first copy; linking both with `--whole-archive`, or as
+shared libraries, would define its symbols twice.
+
+#### Using `ARToolKitNFTCore` natively
+
+- Call `loadCamera()`, `setup()`, `setupAR2()`, then `addNFTMarkers()`; then, per
+  frame, `setVideoFrame()` and `detectNFTMarker()`, and read `markerState(i)`.
+- `setup()` returns the controller id even when the camera could not be applied (as
+  the JS bindings do). On the first `setup()`, check `cameraParamLT() != nullptr`
+  afterwards; on a later one a failed camera keeps the previous `paramLT`, so call
+  `setCamera()` and check its return value instead.
+- `setCamera()` frees the KPM handle and the detector with the old camera; call
+  `setupAR2()` after it. After a second `setupAR2()` the markers already loaded are
+  not detected until the next `addNFTMarkers()`, which hands the new KPM handle every
+  loaded marker; `addNFTMarkers({})` does that without adding markers and, like a
+  failure, returns an empty vector.
+- `teardown()` frees the handles, the markers and the frame buffers, but
+  `getNFTData()` keeps returning the old markers' data until markers are loaded again.
+- Threads: drive each core from one thread (the threaded detector's worker is the
+  only other one). `loadCamera()`, `setup()` and `setCamera()` use a process-wide
+  camera registry and id counters that are not synchronised, so cores on different
+  threads must not call them concurrently.
 
 ```bash
 emcmake cmake -S WebARKit -B build-nft -DWEBARKIT_BUILD_OPTICAL=OFF -DWEBARKIT_BUILD_NFT=ON -DWEBARKIT_NFT_THREADS=ON
@@ -97,7 +132,8 @@ cmake --build build-nft
 ## Tests
 
 C++ unit tests (GoogleTest) live in [`tests/`](tests/) (`webarkit_test.cc`, `webarkit_nft_test.cc`,
-`CMakeLists.txt`, `pinball.jpg`) and run in CI via
+`webarkit_nft_limit_test.cc`, `webarkit_nft_core_test.cc` — the NFT tracking core, with the
+markers and frames in `tests/data` — `CMakeLists.txt`, `pinball.jpg`) and run in CI via
 [`.github/workflows/test.yml`](https://github.com/webarkit/WebARKitLib/actions/workflows/test.yml).
 Build them standalone with CMake:
 
