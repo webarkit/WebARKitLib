@@ -85,6 +85,14 @@ static auto convert2Grayscale(cv::Mat& refData, size_t refCols, size_t refRows, 
         refGray.create(refRows, refCols, CV_8UC1);
         cv::cvtColor(refData, refGray, cv::COLOR_RGB2GRAY);
     } break;
+    case ColorSpace::BGRA: {
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(refData, refGray, cv::COLOR_BGRA2GRAY);
+    } break;
+    case ColorSpace::BGR: {
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(refData, refGray, cv::COLOR_BGR2GRAY);
+    } break;
     case ColorSpace::GRAY: {
         refGray = refData;
     } break;
@@ -111,6 +119,18 @@ static auto convert2Grayscale(uchar* refData, size_t refCols, size_t refRows, Co
         refGray.create(refRows, refCols, CV_8UC1);
         cv::cvtColor(colorFrame, refGray, cv::COLOR_RGB2GRAY);
         WEBARKIT_LOGd("convert to GRAY from RGB !!\n");
+    } break;
+    case ColorSpace::BGRA: {
+        cv::Mat colorFrame(refRows, refCols, CV_8UC4, refData);
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(colorFrame, refGray, cv::COLOR_BGRA2GRAY);
+        WEBARKIT_LOGd("convert to GRAY from BGRA !!\n");
+    } break;
+    case ColorSpace::BGR: {
+        cv::Mat colorFrame(refRows, refCols, CV_8UC3, refData);
+        refGray.create(refRows, refCols, CV_8UC1);
+        cv::cvtColor(colorFrame, refGray, cv::COLOR_BGR2GRAY);
+        WEBARKIT_LOGd("convert to GRAY from BGR !!\n");
     } break;
     case ColorSpace::GRAY: {
         refGray = cv::Mat(refRows, refCols, CV_8UC1, refData);
