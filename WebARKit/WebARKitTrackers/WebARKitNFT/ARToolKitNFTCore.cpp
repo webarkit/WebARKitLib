@@ -34,6 +34,10 @@ ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFil
       nearPlane(0.0001), farPlane(1000.0),
       cameraLens_(), pixFormat(AR_PIXEL_FORMAT_RGBA)
 {
+  // A config without a clock gets the default one, so detectNFTMarker() never calls null.
+  if (this->config.clock == nullptr) {
+    this->config.clock = &nftDefaultClockMs;
+  }
   WEBARKIT_LOGi("init ARToolKitNFTCore...\n");
 }
 

@@ -118,6 +118,17 @@ TEST(NFTTrackingConfigTest, ThreadedPresetMatchesTheThreadedBinding) {
   EXPECT_EQ(config.clock, &nftDefaultClockMs);
 }
 
+TEST(NFTTrackingConfigTest, ValueInitialisedConfigIsTheSingleThreadPreset) {
+  const NFTTrackingConfig config{};
+  const NFTTrackingConfig preset = singleThreadPreset();
+  EXPECT_EQ(config.detector, preset.detector);
+  EXPECT_EQ(config.ar2Variant, preset.ar2Variant);
+  EXPECT_EQ(config.cpuDependentSearchSize, preset.cpuDependentSearchSize);
+  EXPECT_EQ(config.defaultDetectionIntervalMs, preset.defaultDetectionIntervalMs);
+  EXPECT_EQ(config.poseFilteringSupported, preset.poseFilteringSupported);
+  EXPECT_EQ(config.clock, preset.clock);
+}
+
 TEST(NFTTrackingConfigTest, LoggerIsNative) {
   WEBARKIT_LOGi("core logger test");
   SUCCEED();
@@ -738,6 +749,28 @@ TEST(CoreFrameTest, DetectBetweenSetCameraAndSetupAR2) {
   EXPECT_EQ(feed(core, frames.both), -1);  // no detector before addNFTMarkers()
   EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
   EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
+}
+
+TEST(CoreFrameTest, ValueInitialisedConfigDetects) {
+  ARToolKitNFTCore core(NFTTrackingConfig{});
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
+TEST(CoreFrameTest, NullClockFallsBackToTheDefault) {
+  NFTTrackingConfig config{};
+  config.clock = nullptr;
+  ARToolKitNFTCore core(config);
+  ASSERT_TRUE(makeReady(core));
+  // detectNFTMarker() reads the clock on every call, markers or not.
+  EXPECT_EQ(core.detectNFTMarker(), -1);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
 }
 
 TEST(CoreTrackingTest, SyncFindsBothMarkers) {

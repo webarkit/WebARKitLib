@@ -211,7 +211,10 @@ void webarkitLogv(const char *tag, const int logLevel, const char *format, va_li
 #elif defined(__EMSCRIPTEN__)
         // stderr would reach the browser as console.error whatever the level, so
         // pick the console method by level (ARUtil's arLogv also writes to the
-        // console directly).
+        // console directly). The console ends each call with its own line break,
+        // so one trailing '\n' of the message is dropped, or it would print a
+        // blank line after every message.
+        if (len > 0 && buf[len - 1] == '\n') buf[len - 1] = '\0';
         switch (logLevel) {
             case WEBARKIT_LOG_LEVEL_ERROR:            emscripten_console_error(buf); break;
             case WEBARKIT_LOG_LEVEL_WARN:             emscripten_console_warn(buf);  break;
