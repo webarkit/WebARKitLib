@@ -35,12 +35,12 @@ struct nftMarker
  *
  * Not thread-safe: drive each core from one thread. The only other thread is the threaded KPM
  * detector's worker, which the core waits for before it changes or frees what the worker uses.
- * loadCamera() and setup() also use process-wide state shared by every core and not
- * synchronised (the camera registry, the camera and controller id counters): cores driven
+ * loadCamera(), setup() and setCamera() also use process-wide state shared by every core and
+ * not synchronised (the camera registry, the camera and controller id counters): cores driven
  * from different threads must not call them concurrently.
  *
- * Typical use: loadCamera(), setup() (check cameraParamLT() != nullptr), setupAR2(), then
- * addNFTMarkers(); then, per frame, setVideoFrame() and detectNFTMarker().
+ * Typical use: loadCamera(), setup() (on the first setup, check cameraParamLT() != nullptr),
+ * setupAR2(), then addNFTMarkers(); then, per frame, setVideoFrame() and detectNFTMarker().
  */
 class ARToolKitNFTCore
 {
@@ -68,12 +68,15 @@ public:
      * Allocates the frame buffers for a width x height RGBA frame and applies the camera with
      * setCamera(). Takes the next id from a process-wide counter (see the class comment).
      * @return this controller's id, also when the camera could not be applied (as in the
-     *         bindings): check cameraParamLT() != nullptr to know that it was
+     *         bindings). On the first setup(), cameraParamLT() != nullptr tells that it was.
+     *         On a later setup() a failed camera leaves the previous paramLT in place, so that
+     *         check proves nothing; call setCamera() and check its return value instead.
      */
     int setup(int width, int height, int cameraID);
 
     /**
-     * Applies a camera from the registry: resizes it to the frame, frees and recreates
+     * Applies a camera from the process-wide registry (not synchronised: see the class
+     * comment): resizes it to the frame, frees and recreates
      * paramLT and recomputes the lens. Everything built on the old paramLT is freed with it:
      * the AR2 handle, the KPM handle and the detector (a running search is waited for and
      * dropped). Call setupAR2() after it; until then nothing is detected and markers being

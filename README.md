@@ -109,7 +109,9 @@ shared libraries, would define its symbols twice.
 - Call `loadCamera()`, `setup()`, `setupAR2()`, then `addNFTMarkers()`; then, per
   frame, `setVideoFrame()` and `detectNFTMarker()`, and read `markerState(i)`.
 - `setup()` returns the controller id even when the camera could not be applied (as
-  the JS bindings do): check `cameraParamLT() != nullptr` afterwards.
+  the JS bindings do). On the first `setup()`, check `cameraParamLT() != nullptr`
+  afterwards; on a later one a failed camera keeps the previous `paramLT`, so call
+  `setCamera()` and check its return value instead.
 - `setCamera()` frees the KPM handle and the detector with the old camera; call
   `setupAR2()` after it. After a second `setupAR2()` the markers already loaded are
   not detected until the next `addNFTMarkers()`, which hands the new KPM handle every
@@ -118,9 +120,9 @@ shared libraries, would define its symbols twice.
 - `teardown()` frees the handles, the markers and the frame buffers, but
   `getNFTData()` keeps returning the old markers' data until markers are loaded again.
 - Threads: drive each core from one thread (the threaded detector's worker is the
-  only other one). `loadCamera()` and `setup()` use a process-wide camera registry
-  and id counters that are not synchronised, so cores on different threads must not
-  call them concurrently.
+  only other one). `loadCamera()`, `setup()` and `setCamera()` use a process-wide
+  camera registry and id counters that are not synchronised, so cores on different
+  threads must not call them concurrently.
 
 ```bash
 emcmake cmake -S WebARKit -B build-nft -DWEBARKIT_BUILD_OPTICAL=OFF -DWEBARKIT_BUILD_NFT=ON -DWEBARKIT_NFT_THREADS=ON
