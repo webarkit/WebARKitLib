@@ -507,6 +507,27 @@ TEST(CoreLifecycleTest, TeardownKeepsMarkerData) {
   EXPECT_EQ(after.dpi_NFT, before.dpi_NFT);
 }
 
+TEST(CoreLifecycleTest, MarkersLoadedAfterTeardownReplaceTheOldData) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball", "data/kuva"}), std::vector<int>({0, 1}));
+  const nftMarker pinball = core.getNFTData(0);
+  const nftMarker kuva = core.getNFTData(1);
+  ASSERT_TRUE(pinball.width_NFT != kuva.width_NFT || pinball.height_NFT != kuva.height_NFT);
+
+  // After teardown() the ids restart at 0: getNFTData(0) is then the new marker, not the old
+  // one still stored at that index.
+  ASSERT_EQ(core.teardown(), 0);
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({0}));
+  EXPECT_EQ(core.markerCount(), 1);
+  const nftMarker reloaded = core.getNFTData(0);
+  EXPECT_EQ(reloaded.id_NFT, 0);
+  EXPECT_EQ(reloaded.width_NFT, kuva.width_NFT);
+  EXPECT_EQ(reloaded.height_NFT, kuva.height_NFT);
+  EXPECT_EQ(reloaded.dpi_NFT, kuva.dpi_NFT);
+}
+
 #ifdef WEBARKIT_NFT_THREADS
 
 TEST(CoreMarkersTest, ThreadedPresetLoadsMarkersIncrementally) {
@@ -688,6 +709,37 @@ TEST(CoreFrameTest, DetectWithoutDetectorStillTracks) {
   EXPECT_FALSE(isTracking(core, 0));
 }
 
+TEST(CoreFrameTest, DetectBetweenSetCameraAndSetupAR2) {
+  ARToolKitNFTCore core(withFakeClock(singleThreadPreset()));
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  const int id = core.setup(kFrameWidth, kFrameHeight, cameraID);
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+
+  // setCamera() frees the detector and the KPM and AR2 handles with the old paramLT. Until
+  // setupAR2() nothing is detected, and the marker being tracked is lost (no AR2 handle).
+  ASSERT_EQ(core.setCamera(id, cameraID), 0);
+  for (int i = 0; i < 3; i++) {
+    gFakeNowMs += 100.0;
+    EXPECT_EQ(feed(core, frames.both), -1) << "KPM ran on frame " << i;
+    EXPECT_FALSE(isTracking(core, 0));
+  }
+  // Markers cannot be added without a KPM handle either.
+  EXPECT_TRUE(core.addNFTMarkers({"data/kuva"}).empty());
+  EXPECT_EQ(core.markerCount(), 1);
+
+  // setupAR2() creates the handles; the next addNFTMarkers() hands KPM every loaded marker.
+  ASSERT_EQ(core.setupAR2(), 0);
+  gFakeNowMs += 100.0;
+  EXPECT_EQ(feed(core, frames.both), -1);  // no detector before addNFTMarkers()
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
+}
+
 TEST(CoreTrackingTest, SyncFindsBothMarkers) {
   // The fake clock moves 100 ms per frame, so a marker one KPM pass misses is searched for
   // again 300 ms later, however fast the machine runs the frames.
@@ -859,7 +911,34 @@ TEST(CoreLifecycleTest, AddMarkersWhileSearching) {
   EXPECT_EQ(feed(core, frames.both), -1);
   // The search is awaited and its result dropped; the next frame searches both markers.
   EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
+  // Nothing to collect: the dropped search does not report. This frame starts the new one.
+  EXPECT_EQ(feed(core, frames.both), -1);
   EXPECT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
+}
+
+TEST(CoreLifecycleTest, ThreadedSetCameraWhileSearching) {
+  ARToolKitNFTCore core(threadedPreset());
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  const int id = core.setup(kFrameWidth, kFrameHeight, cameraID);
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+
+  EXPECT_EQ(feed(core, frames.both), -1);  // starts a search on the worker
+  // Waits for the search and drops it, then frees the detector and the KPM handle with the
+  // old paramLT: nothing is detected until setupAR2().
+  ASSERT_EQ(core.setCamera(id, cameraID), 0);
+  EXPECT_EQ(feed(core, frames.both), -1);
+  EXPECT_FALSE(isTracking(core, 0));
+
+  // The new KPM handle has no reference data: an empty batch hands it the loaded markers
+  // (and returns an empty vector, as a failure does).
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_TRUE(core.addNFTMarkers({}).empty());
+  EXPECT_EQ(core.markerCount(), 1);
+  EXPECT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
 }
 
 TEST(CoreLifecycleTest, TeardownWhileSearching) {

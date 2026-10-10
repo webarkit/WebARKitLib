@@ -100,13 +100,15 @@ bool ARToolKitNFTCore::collectDetections(int &resultNum) {
 int ARToolKitNFTCore::detectNFTMarker() {
   int resultNum = -1;
 
-  // Without a detector (no addNFTMarkers() yet, or a setupAR2() since the last one) nothing
-  // is detected this frame, but the markers being tracked are still tracked.
+  // Without a detector or a KPM handle (no addNFTMarkers() yet, or a setCamera() or
+  // setupAR2() since the last one) nothing is detected this frame, but the markers being
+  // tracked are still tracked.
+  const bool canDetect = this->detector && this->kpmHandle;
 
   // Collect a pass that finished since the last frame (threaded: on the worker; a sync pass
   // is collected where it runs, below). Its markers then count as tracked when deciding
   // whether to start a new pass.
-  if (this->detector) {
+  if (canDetect) {
     collectDetections(resultNum);
   }
 
@@ -121,7 +123,7 @@ int ARToolKitNFTCore::detectNFTMarker() {
       (this->continuousDetection &&
        now - this->lastKpmEndMs >= this->detectionIntervalMs);
 
-  if (this->detector && this->detector->idle() && this->surfaceSetCount > 0 &&
+  if (canDetect && this->detector->idle() && this->surfaceSetCount > 0 &&
       !allMarkersTracked() && detectionDue) {
 
     // Pages already being tracked need no pose from KPM this pass.
@@ -379,7 +381,11 @@ int ARToolKitNFTCore::setCamera(int /*id*/, int cameraID) {
   arParamDisp(&(this->param));
 
   // A running KPM search reads paramLT through the KPM handle: let it end before freeing.
+  // Not in the bindings: the detector and the KPM handle go too, as both point at the
+  // paramLT freed below; until setupAR2() creates new ones nothing is detected.
   dropRunningSearch();
+  this->detector.reset();
+  this->kpmHandle.reset();
   deleteHandle();
 
   this->paramLT = arParamLTCreate(&(this->param), AR_PARAM_LT_DEFAULT_OFFSET);
@@ -439,8 +445,16 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
     return {};
   }
 
+  // No KPM handle before setupAR2(), or after a setCamera() until the next setupAR2(). The
+  // bindings fail here too (kpmSetRefDataSet() refuses a null handle); refuse before a
+  // detector is created over it.
+  if (!this->kpmHandle) {
+    WEBARKIT_LOGe("Error: addNFTMarkers() needs a KPM handle; call setupAR2() first.\n");
+    return {};
+  }
+
   // One detector for the KPM handle's lifetime, created by the first call.
-  // teardown() (and a new KPM handle from setupAR2()) stops it.
+  // teardown(), setCamera() and a new KPM handle from setupAR2() stop it.
   if (!this->detector) {
     this->detector = createDetector();
     if (!this->detector) {
@@ -533,6 +547,11 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
   }
   kpmDeleteRefDataSet(&this->refDataSetAll);
   this->refDataSetAll = combined;
+
+  // nftMarkers[id] must hold marker id. teardown() keeps the old entries (getNFTData() still
+  // answers after it) but restarts the ids at 0, so drop the entries the new ids replace.
+  // Only ever shrinks: nftMarkers has at least surfaceSetCount (= firstId) entries.
+  this->nftMarkers.resize(firstId);
 
   std::vector<int> markerIds;
   for (int i = 0; i < batchSize; i++) {
