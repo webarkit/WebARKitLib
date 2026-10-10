@@ -34,7 +34,7 @@ ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFil
       nearPlane(0.0001), farPlane(1000.0),
       cameraLens_(), pixFormat(AR_PIXEL_FORMAT_RGBA)
 {
-  WEBARKIT_LOGi("init ARToolKitNFT constructor...\n");
+  WEBARKIT_LOGi("init ARToolKitNFTCore...\n");
 }
 
 ARToolKitNFTCore::~ARToolKitNFTCore() {

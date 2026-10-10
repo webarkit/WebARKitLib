@@ -51,6 +51,10 @@
 #  define snprintf _snprintf
 #endif
 
+#ifdef __EMSCRIPTEN__
+#  include <emscripten/console.h>
+#endif
+
 //
 // Global required for logging functions.
 //
@@ -203,6 +207,15 @@ void webarkitLogv(const char *tag, const int logLevel, const char *format, va_li
                 case WEBARKIT_LOG_LEVEL_DEBUG: default:   type = OS_LOG_TYPE_DEBUG; break;
             }
             os_log_with_type(OS_LOG_DEFAULT, type, "%{public}s", buf);
+        }
+#elif defined(__EMSCRIPTEN__)
+        // stderr would reach the browser as console.error whatever the level, so
+        // pick the console method by level (ARUtil's arLogv also writes to the
+        // console directly).
+        switch (logLevel) {
+            case WEBARKIT_LOG_LEVEL_ERROR:            emscripten_console_error(buf); break;
+            case WEBARKIT_LOG_LEVEL_WARN:             emscripten_console_warn(buf);  break;
+            default:                                  emscripten_console_log(buf);   break;
         }
 #else
         fprintf(stderr, "%s", buf);
