@@ -27,6 +27,12 @@ the following sync a no-op.
 This is not hypothetical: `dev` drifted 14 commits behind `master` and had to be
 repaired in #68, and consumers could not build against `dev` in the meantime.
 
+You no longer need to remember to open these PRs: the
+[`Sync master into dev`](.github/workflows/sync-master-into-dev.yml) workflow (#70)
+opens one, labelled `branch-sync`, every time `master` moves ahead of `dev`. It can
+also be run by hand from the Actions tab. Merging it still needs the merge-commit
+button above.
+
 ## Commit messages — Conventional Commits
 
 All commit messages **must** follow

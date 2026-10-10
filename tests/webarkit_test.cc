@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <WebARKitManager.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 #include <WebARKitCamera.h>
 #include <opencv2/imgcodecs.hpp>
 
@@ -16,7 +17,9 @@ TEST_P(WebARKitEnumTest, TestEnumValues) {
               tracker_value == webarkit::TRACKER_TYPE::TEBLID_TRACKER);
   EXPECT_TRUE(color_value == webarkit::ColorSpace::RGB ||
               color_value == webarkit::ColorSpace::RGBA ||
-              color_value == webarkit::ColorSpace::GRAY);
+              color_value == webarkit::ColorSpace::GRAY ||
+              color_value == webarkit::ColorSpace::BGR ||
+              color_value == webarkit::ColorSpace::BGRA);
 }
 
 INSTANTIATE_TEST_SUITE_P(WebARKitEnumTestSuite, WebARKitEnumTest,
@@ -26,11 +29,49 @@ INSTANTIATE_TEST_SUITE_P(WebARKitEnumTestSuite, WebARKitEnumTest,
                                                              webarkit::TRACKER_TYPE::TEBLID_TRACKER}),
                                           testing::ValuesIn({webarkit::ColorSpace::RGB,
                                                              webarkit::ColorSpace::RGBA,
-                                                             webarkit::ColorSpace::GRAY})));
+                                                             webarkit::ColorSpace::GRAY,
+                                                             webarkit::ColorSpace::BGR,
+                                                             webarkit::ColorSpace::BGRA})));
+
+// WebARKitLib#25: the enum values are part of the JS/C ABI, so new entries must be
+// appended rather than renumbering the existing ones.
+TEST(WebARKitEnumTest, ColorSpaceValuesAreStable) {
+  EXPECT_EQ(webarkit::ColorSpace::RGB, 0);
+  EXPECT_EQ(webarkit::ColorSpace::RGBA, 1);
+  EXPECT_EQ(webarkit::ColorSpace::GRAY, 2);
+  EXPECT_EQ(webarkit::ColorSpace::BGR, 3);
+  EXPECT_EQ(webarkit::ColorSpace::BGRA, 4);
+}
+
+// WebARKitLib#25: the same picture handed over in RGB(A) or BGR(A) order must give
+// the same grayscale image, for both convert2Grayscale overloads.
+TEST(WebARKitColorSpaceTest, BgrAndRgbOrdersGiveSameGray) {
+  // Distinct R/G/B values per pixel so a channel swap would change the luma.
+  cv::Mat rgb(4, 4, CV_8UC3);
+  cv::randu(rgb, cv::Scalar::all(0), cv::Scalar::all(255));
+  cv::Mat bgr, rgba, bgra;
+  cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
+  cv::cvtColor(rgb, rgba, cv::COLOR_RGB2RGBA);
+  cv::cvtColor(rgb, bgra, cv::COLOR_RGB2BGRA);
+
+  cv::Mat expected = webarkit::convert2Grayscale(rgb, rgb.cols, rgb.rows, webarkit::ColorSpace::RGB);
+
+  auto expectSame = [&](cv::Mat gray) {
+    ASSERT_EQ(gray.type(), CV_8UC1);
+    EXPECT_EQ(cv::norm(gray, expected, cv::NORM_INF), 0.0);
+  };
+  expectSame(webarkit::convert2Grayscale(bgr, bgr.cols, bgr.rows, webarkit::ColorSpace::BGR));
+  expectSame(webarkit::convert2Grayscale(rgba, rgba.cols, rgba.rows, webarkit::ColorSpace::RGBA));
+  expectSame(webarkit::convert2Grayscale(bgra, bgra.cols, bgra.rows, webarkit::ColorSpace::BGRA));
+  expectSame(webarkit::convert2Grayscale(bgr.data, bgr.cols, bgr.rows, webarkit::ColorSpace::BGR).clone());
+  expectSame(webarkit::convert2Grayscale(bgra.data, bgra.cols, bgra.rows, webarkit::ColorSpace::BGRA).clone());
+}
                                                           
 TEST(WebARKitConfigTest, TestConfigValues) {
-  EXPECT_EQ(DEFAULT_NN_MATCH_RATIO, 0.7f);
-  EXPECT_EQ(TEBLID_NN_MATCH_RATIO, 0.8f);
+  EXPECT_DOUBLE_EQ(DEFAULT_NN_MATCH_RATIO, 0.7);
+  EXPECT_DOUBLE_EQ(TEBLID_NN_MATCH_RATIO, 0.8);
+  EXPECT_DOUBLE_EQ(AKAZE_NN_MATCH_RATIO, 0.8);
+  EXPECT_DOUBLE_EQ(FREAK_NN_MATCH_RATIO, 0.8);
   EXPECT_EQ(DEFAULT_MAX_FEATURES, 800);
   EXPECT_EQ(TEBLID_MAX_FEATURES, 1000);
   EXPECT_EQ(N, 10);
@@ -38,7 +79,7 @@ TEST(WebARKitConfigTest, TestConfigValues) {
   EXPECT_EQ(maxLevel, 3);
   EXPECT_EQ(featureDetectPyramidLevel, 1.05f);
   EXPECT_EQ(featureBorder, 8);
-  EXPECT_EQ(WEBARKIT_HEADER_VERSION_STRING, "0.10.0");
+  EXPECT_EQ(WEBARKIT_HEADER_VERSION_STRING, "0.10.1");
 }
 
 TEST(WebARKitConfigTest, TestWinSize) {
@@ -136,7 +177,7 @@ TEST(WebARKitTest, CheckWebARKitVersion) {
   // Init the manager with the Akaze tracker
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Check if the WebARKit version is correct
-  EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "0.10.0");
+  EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "0.10.1");
 }
 
 // Check cameraProjectionMatrix from manager
@@ -206,6 +247,17 @@ TEST(WebARKitTest, InitTrackerTest2) {
   EXPECT_EQ(image.rows, 2048);
   // Check if initTracker returns sucessfully
   EXPECT_TRUE(manager.initTracker(image, width, height, webarkit::ColorSpace::GRAY));
+}
+
+// WebARKitLib#25: cv::imread decodes to BGR, so a native caller can now hand the
+// reference image straight to initTracker without converting it first.
+TEST(WebARKitTest, InitTrackerBGRTest) {
+  webarkit::WebARKitManager manager;
+  manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
+  cv::Mat image = cv::imread("../pinball.jpg", cv::IMREAD_COLOR);
+  ASSERT_FALSE(image.empty());
+  ASSERT_EQ(image.type(), CV_8UC3);
+  EXPECT_TRUE(manager.initTracker(image.data, image.cols, image.rows, webarkit::ColorSpace::BGR));
 }
 
 

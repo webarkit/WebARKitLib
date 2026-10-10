@@ -1,7 +1,9 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 
-extern const double DEFAULT_NN_MATCH_RATIO = 0.7f;
-extern const double TEBLID_NN_MATCH_RATIO = 0.8f;
+extern const double DEFAULT_NN_MATCH_RATIO = 0.7;
+extern const double TEBLID_NN_MATCH_RATIO = 0.8;
+extern const double AKAZE_NN_MATCH_RATIO = 0.8; ///< artoolkitX OCVT parity (OCVConfig nn_match_ratio).
+extern const double FREAK_NN_MATCH_RATIO = 0.8; ///< WebARKitLib#53: 0.7 rejects small markers even at full resolution.
 extern const int DEFAULT_MAX_FEATURES = 800;
 extern const int TEBLID_MAX_FEATURES = 1000;
 extern const int N = 10;
@@ -21,7 +23,7 @@ extern const cv::Size blurSize(3, 3);
 extern const double ransac_thresh = 2.5f; 
 extern cv::RNG rng( 0xFFFFFFFF );
 extern const double m_pi = 3.14159265358979323846;
-extern const std::string WEBARKIT_HEADER_VERSION_STRING = "0.10.0";
+extern const std::string WEBARKIT_HEADER_VERSION_STRING = "0.10.1";
 /*@
     The MAJOR version number defines non-backwards compatible
     changes in the ARToolKit API. Range: [0-99].
@@ -39,7 +41,7 @@ extern const int WEBARKIT_HEADER_VERSION_MINOR = 10;
     The TINY version number defines bug-fixes to existing
     functionality. Range: [0-99].
  */
-extern const int WEBARKIT_HEADER_VERSION_TINY = 0;
+extern const int WEBARKIT_HEADER_VERSION_TINY = 1;
 
 /*@
     The BUILD version number will always be zero in releases,
