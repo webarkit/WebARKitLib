@@ -13,7 +13,9 @@ enum TRACKER_TYPE {
 enum ColorSpace {
     RGB = 0,
     RGBA = 1,
-    GRAY = 2
+    GRAY = 2,
+    BGR = 3,
+    BGRA = 4
 };
 
 enum BLUR_TYPE {
