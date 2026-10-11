@@ -39,7 +39,7 @@ struct nftMarker
  * not synchronised (the camera registry, the camera and controller id counters): cores driven
  * from different threads must not call them concurrently.
  *
- * Typical use: loadCamera(), setup() (on the first setup, check cameraParamLT() != nullptr),
+ * Typical use: loadCamera(), setup() (then check cameraParamLT() != nullptr),
  * setupAR2(), then addNFTMarkers(); then, per frame, setVideoFrame() and detectNFTMarker().
  */
 class ARToolKitNFTCore
@@ -67,10 +67,12 @@ public:
     /**
      * Allocates the frame buffers for a width x height RGBA frame and applies the camera with
      * setCamera(). Takes the next id from a process-wide counter (see the class comment).
+     * When the camera cannot be applied, paramLT and everything built on it (the AR2 and KPM
+     * handles, the detector) are freed, as they may be sized for an earlier frame: nothing is
+     * detected or tracked until setCamera() and setupAR2() succeed.
      * @return this controller's id, also when the camera could not be applied (as in the
-     *         bindings). On the first setup(), cameraParamLT() != nullptr tells that it was.
-     *         On a later setup() a failed camera leaves the previous paramLT in place, so that
-     *         check proves nothing; call setCamera() and check its return value instead.
+     *         bindings): cameraParamLT() != nullptr tells that it was. -1 when width or height
+     *         is not positive or the RGBA frame does not fit an int; nothing changes then.
      */
     int setup(int width, int height, int cameraID);
 
@@ -201,6 +203,11 @@ private:
     void deleteAR2Handle();
     /** Frees paramLT and the AR2 handle (what setCamera() recreates). */
     void deleteHandle();
+    /**
+     * Frees paramLT and everything built on it: waits for and drops a running search, then
+     * frees the detector, the KPM handle and the AR2 handle.
+     */
+    void deleteCamera();
 
     NFTTrackingConfig config;
 

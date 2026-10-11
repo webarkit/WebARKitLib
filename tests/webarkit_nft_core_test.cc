@@ -396,6 +396,26 @@ TEST(CoreCameraTest, UnknownCameraIdFails) {
   EXPECT_EQ(core.setCamera(0, 9999), -1);
 }
 
+TEST(CoreCameraTest, SetupRejectsInvalidFrameSizes) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+
+  // Rejected before anything changes: no frame buffers and no camera.
+  EXPECT_EQ(core.setup(0, kFrameHeight, cameraID), -1);
+  EXPECT_EQ(core.setup(kFrameWidth, -1, cameraID), -1);
+  // The RGBA frame, 4 * 30000 * 30000 bytes, does not fit an int.
+  EXPECT_EQ(core.setup(30000, 30000, cameraID), -1);
+  EXPECT_EQ(core.cameraParamLT(), nullptr);
+
+  // After a valid setup() an invalid one keeps the camera.
+  ASSERT_GE(core.setup(kFrameWidth, kFrameHeight, cameraID), 0);
+  ARParamLT *paramLT = core.cameraParamLT();
+  ASSERT_NE(paramLT, nullptr);
+  EXPECT_EQ(core.setup(-kFrameWidth, kFrameHeight, cameraID), -1);
+  EXPECT_EQ(core.cameraParamLT(), paramLT);
+}
+
 TEST(CoreCameraTest, SetCameraTwice) {
   ARToolKitNFTCore core(singleThreadPreset());
   const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
@@ -751,6 +771,37 @@ TEST(CoreFrameTest, DetectBetweenSetCameraAndSetupAR2) {
   EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
 }
 
+TEST(CoreFrameTest, SetupWithUnknownCameraDropsTheCamera) {
+  ARToolKitNFTCore core(withFakeClock(singleThreadPreset()));
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  ASSERT_GE(core.setup(kFrameWidth, kFrameHeight, cameraID), 0);
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+
+  // A second setup() for a smaller frame resizes the frame buffers, but cannot apply an
+  // unknown camera: paramLT and everything built on it, sized for the old frame, are freed
+  // so that nothing reads the new buffers with the old size.
+  const int width = kFrameWidth / 2;
+  const int height = kFrameHeight / 2;
+  const int id = core.setup(width, height, 9999);
+  EXPECT_GE(id, 0);
+  ASSERT_EQ(core.cameraParamLT(), nullptr);
+
+  // Nothing is detected or tracked until a camera is applied and setupAR2() is called again.
+  const size_t pixels = static_cast<size_t>(width) * height;
+  const Frame small{std::vector<ARUint8>(pixels * 4, 0), std::vector<ARUint8>(pixels, 0)};
+  gFakeNowMs += 100.0;
+  EXPECT_EQ(feed(core, small), -1);
+  EXPECT_FALSE(isTracking(core, 0));
+  EXPECT_EQ(core.setupAR2(), -1);
+  EXPECT_EQ(core.setCamera(id, cameraID), 0);
+  EXPECT_EQ(core.setupAR2(), 0);
+}
+
 TEST(CoreFrameTest, ValueInitialisedConfigDetects) {
   ARToolKitNFTCore core(NFTTrackingConfig{});
   ASSERT_TRUE(makeReady(core));
@@ -839,6 +890,22 @@ TEST(CorePolicyTest, NaNIntervalMeansEveryFrame) {
   // NaN is taken as 0, like a negative value: with the clock stopped, KPM still runs on every
   // frame while kuva is untracked (an interval of NaN itself would never be due).
   core.setDetectionInterval(std::numeric_limits<double>::quiet_NaN());
+  for (int i = 0; i < 3; i++) {
+    EXPECT_NE(feed(core, frames.pinballOnly), -1) << "KPM did not run on frame " << i;
+  }
+}
+
+TEST(CorePolicyTest, NaNDefaultIntervalMeansEveryFrame) {
+  // The config's default interval is taken as setDetectionInterval() takes an interval.
+  NFTTrackingConfig config = singleThreadPreset();
+  config.defaultDetectionIntervalMs = std::numeric_limits<double>::quiet_NaN();
+  ARToolKitNFTCore core(withFakeClock(config));
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball", "data/kuva"}), std::vector<int>({0, 1}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.pinballOnly.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.pinballOnly, [&] { return isTracking(core, 0); }));
+
   for (int i = 0; i < 3; i++) {
     EXPECT_NE(feed(core, frames.pinballOnly), -1) << "KPM did not run on frame " << i;
   }

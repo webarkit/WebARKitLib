@@ -109,9 +109,11 @@ shared libraries, would define its symbols twice.
 - Call `loadCamera()`, `setup()`, `setupAR2()`, then `addNFTMarkers()`; then, per
   frame, `setVideoFrame()` and `detectNFTMarker()`, and read `markerState(i)`.
 - `setup()` returns the controller id even when the camera could not be applied (as
-  the JS bindings do). On the first `setup()`, check `cameraParamLT() != nullptr`
-  afterwards; on a later one a failed camera keeps the previous `paramLT`, so call
-  `setCamera()` and check its return value instead.
+  the JS bindings do), so check `cameraParamLT() != nullptr` afterwards. A failed
+  camera frees `paramLT` and the handles built on it: nothing is detected or tracked
+  until `setCamera()` and `setupAR2()` succeed. A frame size that is not positive, or
+  whose RGBA buffer does not fit an `int`, makes `setup()` return -1 without changing
+  anything.
 - `setCamera()` frees the KPM handle and the detector with the old camera; call
   `setupAR2()` after it. After a second `setupAR2()` the markers already loaded are
   not detected until the next `addNFTMarkers()`, which hands the new KPM handle every

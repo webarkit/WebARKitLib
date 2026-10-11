@@ -27,7 +27,8 @@ ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFil
       videoLuma(nullptr), width(0), height(0),
       kpmHandle(nullptr), ar2Handle(nullptr), detector(nullptr),
       continuousDetection(true),
-      detectionIntervalMs(config.defaultDetectionIntervalMs),
+      // As setDetectionInterval(): negative values and NaN mean 0.
+      detectionIntervalMs(config.defaultDetectionIntervalMs > 0.0 ? config.defaultDetectionIntervalMs : 0.0),
       lastKpmEndMs(-std::numeric_limits<double>::infinity()),
       surfaceSetCount(0), // Running NFT marker id
       surfaceSet(), refDataSetAll(nullptr),
@@ -323,6 +324,16 @@ void ARToolKitNFTCore::deleteHandle() {
   deleteAR2Handle();
 }
 
+void ARToolKitNFTCore::deleteCamera() {
+  // A running KPM search reads paramLT through the KPM handle: let it end before freeing.
+  // Not in the bindings: the detector and the KPM handle go too, as both point at paramLT;
+  // until setupAR2() creates new ones nothing is detected.
+  dropRunningSearch();
+  this->detector.reset();
+  this->kpmHandle.reset();
+  deleteHandle();
+}
+
 int ARToolKitNFTCore::teardown() {
   // Stop the detector first: a threaded search uses the KPM handle (and, through it,
   // paramLT) until it ends. Its destructor waits for the search, then lets the worker exit.
@@ -384,13 +395,7 @@ int ARToolKitNFTCore::setCamera(int /*id*/, int cameraID) {
   ARLOGi("*** Camera Parameter ***\n");
   arParamDisp(&(this->param));
 
-  // A running KPM search reads paramLT through the KPM handle: let it end before freeing.
-  // Not in the bindings: the detector and the KPM handle go too, as both point at the
-  // paramLT freed below; until setupAR2() creates new ones nothing is detected.
-  dropRunningSearch();
-  this->detector.reset();
-  this->kpmHandle.reset();
-  deleteHandle();
+  deleteCamera();
 
   this->paramLT = arParamLTCreate(&(this->param), AR_PARAM_LT_DEFAULT_OFFSET);
   if (!this->paramLT) {
@@ -600,6 +605,14 @@ ARdouble ARToolKitNFTCore::getProjectionFarPlane() const { return this->farPlane
  ********/
 
 int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
+  // Not in the bindings: the frame sizes below are ints, so reject a frame they cannot hold
+  // before changing anything.
+  if (width <= 0 || height <= 0 ||
+      static_cast<long long>(width) * height * 4 > std::numeric_limits<int>::max()) {
+    WEBARKIT_LOGe("setup(): Error: invalid frame size %d x %d.\n", width, height);
+    return -1;
+  }
+
   int id = gARControllerID++;
   this->id = id;
 
@@ -614,7 +627,12 @@ int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
   this->videoFrame = std::unique_ptr<ARUint8[]>(new ARUint8[this->videoFrameSize]());
   this->videoLuma = std::unique_ptr<ARUint8[]>(new ARUint8[this->width * this->height]());
 
-  setCamera(id, cameraID);
+  if (setCamera(id, cameraID) != 0) {
+    // Not in the bindings: paramLT and the handles built on it are still sized for the
+    // previous frame, if any, and would read past the new buffers. Free them: nothing is
+    // detected or tracked until setCamera() and setupAR2().
+    deleteCamera();
+  }
 
   WEBARKIT_LOGi("Allocated videoFrameSize %d\n", this->videoFrameSize);
 
