@@ -251,6 +251,7 @@ int threadWaitQuit( THREAD_HANDLE_T *flag )
     while (flag->endF != 2) {
         pthread_cond_wait(&(flag->cond2), &(flag->mut));
     }
+    pthread_mutex_unlock(&(flag->mut));
     return 0;
 }
 

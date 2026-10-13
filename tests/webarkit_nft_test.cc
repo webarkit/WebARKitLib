@@ -6,12 +6,14 @@
 #ifdef WEBARKIT_NFT_THREADS
 #include <WebARKitTrackers/WebARKitNFT/trackingSub.h>
 #endif
+#include <ARUtil/thread_sub.h>
 
 #include <zlib.h>
 
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <future>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -166,6 +168,41 @@ TEST(TrackingModTest, CreatesAndDeletesHandle) {
   AR2HandleT *handle = ar2CreateHandleSubMod(AR_PIXEL_FORMAT_MONO, 640, 480);
   ASSERT_NE(handle, nullptr);
   EXPECT_EQ(ar2DeleteHandleMod(&handle), 0);
+  EXPECT_EQ(handle, nullptr);
+}
+
+namespace {
+
+void *quitWhenAsked(THREAD_HANDLE_T *handle) {
+  while (threadStartWait(handle) == 0) {
+    threadEndSignal(handle);
+  }
+  return nullptr;
+}
+
+} // namespace
+
+// The handle stays usable between threadWaitQuit() and threadFree(), so threadWaitQuit()
+// must return with the handle's mutex unlocked (#85).
+TEST(ThreadSubTest, WaitQuitLeavesTheMutexUnlocked) {
+  THREAD_HANDLE_T *handle = threadInit(0, nullptr, quitWhenAsked);
+  ASSERT_NE(handle, nullptr);
+
+  // On a thread of its own, so that a threadGetStatus() blocked on a mutex left locked
+  // fails the test instead of hanging it.
+  std::promise<int> status;
+  std::future<int> statusResult = status.get_future();
+  std::thread client([handle, &status] {
+    threadWaitQuit(handle);
+    status.set_value(threadGetStatus(handle));
+  });
+  if (statusResult.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+    client.detach();
+    FAIL() << "threadGetStatus() blocked after threadWaitQuit(): the mutex is still locked";
+  }
+  client.join();
+  EXPECT_EQ(statusResult.get(), 2);
+  threadFree(&handle);
   EXPECT_EQ(handle, nullptr);
 }
 
