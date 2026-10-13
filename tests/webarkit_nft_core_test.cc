@@ -4,6 +4,9 @@
 #include <AR2/imageFormat.h>
 #include <KPM/kpm.h>
 #include <WebARKitLog.h>
+// The Emscripten logger that the jsartoolkitNFT bindings use, after the native one: see
+// LogHeadersTest.
+#include <WebARKit/WebARKitLog.h>
 #include <WebARKitTrackers/WebARKitNFT/ARToolKitNFTCore.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTDetector.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
@@ -19,7 +22,18 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
+
+// The native logger (WebARKit/include/WebARKitLog.h, used by the core) and the Emscripten
+// one (include/WebARKit/WebARKitLog.h, used by the bindings) are both included above. They
+// shared an include guard, so the second one was skipped and its functions were undeclared
+// (#84). This file compiles only if each declares its API.
+TEST(LogHeadersTest, BothLoggersAreDeclaredInOneFile) {
+  static_assert(std::is_same<decltype(webarkitLOGi(std::string())), void>::value,
+                "include/WebARKit/WebARKitLog.h declares webarkitLOGi()");
+  EXPECT_EQ(WEBARKIT_LOG_LEVEL_DEBUG, 0);
+}
 
 namespace {
 
