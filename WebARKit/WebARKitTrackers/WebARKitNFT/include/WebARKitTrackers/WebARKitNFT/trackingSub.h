@@ -59,7 +59,7 @@ extern "C" {
 
 THREAD_HANDLE_T *trackingInitInit( KpmHandle *kpmHandle );
 int trackingInitStart( THREAD_HANDLE_T *threadHandle, ARUint8 *imagePtrLuma );
-/* Most pages one search can report. Must equal PAGES_MAX in ARToolKitNFT_js_td.h. */
+/* Most pages one search can report. Must equal PAGES_MAX in ARToolKitNFTCore.h. */
 #define TRACKING_INIT_MAX_RESULTS 20
 
 typedef struct {
@@ -76,6 +76,13 @@ typedef struct {
  * *resultNum set, possibly to 0), or -1 on error.
  */
 int trackingInitGetResults( THREAD_HANDLE_T *threadHandle, TrackingInitResult results[], int maxResults, int *resultNum );
+
+/*
+ * Blocks until the search started by trackingInitStart() has finished and drops its results,
+ * so trackingInitStart() can be called again. Returns at once when no search is pending.
+ * Returns 0, or -1 on error.
+ */
+int trackingInitDiscard( THREAD_HANDLE_T *threadHandle );
 
 /*
  * Single-page form, kept for the legacy threaded binding (ARToolKitJS_td.cpp).
