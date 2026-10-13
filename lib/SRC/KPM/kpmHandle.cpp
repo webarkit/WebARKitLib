@@ -243,6 +243,11 @@ int kpmDeleteHandle( KpmHandle **kpmHandle )
         free( (*kpmHandle)->refDataSet.refPoint );
     }
     if( (*kpmHandle)->refDataSet.pageInfo != NULL ) {
+        for( int i = 0; i < (*kpmHandle)->refDataSet.pageNum; i++ ) {
+            if( (*kpmHandle)->refDataSet.pageInfo[i].imageInfo != NULL ) {
+                free( (*kpmHandle)->refDataSet.pageInfo[i].imageInfo );
+            }
+        }
         free( (*kpmHandle)->refDataSet.pageInfo );
     }
 #if !BINARY_FEATURE

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <KPM/kpm.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTMarkerState.h>
 #include <WebARKitTrackers/WebARKitNFT/markerDecompress.h>
 #include <WebARKitTrackers/WebARKitNFT/trackingMod.h>
@@ -243,3 +244,45 @@ TEST(TrackingSubTest, RejectsStartUntilResultsAreCollected) {
   kpmDeleteHandle(&kpmHandle);
 }
 #endif
+
+// kpmSetRefDataSet() copies each page's imageInfo into the handle, which owns the copy
+// and frees it on replacement and in kpmDeleteHandle() (#86). A page without images has
+// no imageInfo to copy: the handle's copy must be NULL, and the source must not change.
+TEST(KpmRefDataSetTest, CopyOfAPageWithoutImagesLeavesTheSourceUnchanged) {
+  KpmRefData point = {};
+  KpmImageInfo unused = {};
+  KpmPageInfo page = {};
+  page.imageInfo = &unused;
+  page.imageNum = 0;
+  KpmRefDataSet set = {};
+  set.refPoint = &point;
+  set.num = 1;
+  set.pageInfo = &page;
+  set.pageNum = 1;
+
+  KpmHandle *kpmHandle = kpmCreateHandle2(64, 48);
+  ASSERT_NE(kpmHandle, nullptr);
+  EXPECT_EQ(kpmSetRefDataSet(kpmHandle, &set), 0);
+  EXPECT_EQ(page.imageInfo, &unused);
+  kpmDeleteHandle(&kpmHandle);
+}
+
+// Replacing the set frees the handle's copy of each page's imageInfo, and so does
+// kpmDeleteHandle(); with a page without images that copy must be NULL, not left
+// uninitialised (AddressSanitizer reports a free of a non-malloc()-ed address).
+TEST(KpmRefDataSetTest, ReplacesAndDeletesASetWithAPageWithoutImages) {
+  KpmRefData point = {};
+  KpmPageInfo page = {};
+  KpmRefDataSet set = {};
+  set.refPoint = &point;
+  set.num = 1;
+  set.pageInfo = &page;
+  set.pageNum = 1;
+
+  KpmHandle *kpmHandle = kpmCreateHandle2(64, 48);
+  ASSERT_NE(kpmHandle, nullptr);
+  EXPECT_EQ(kpmSetRefDataSet(kpmHandle, &set), 0);
+  EXPECT_EQ(kpmSetRefDataSet(kpmHandle, &set), 0);
+  EXPECT_EQ(kpmDeleteHandle(&kpmHandle), 0);
+  EXPECT_EQ(kpmHandle, nullptr);
+}
