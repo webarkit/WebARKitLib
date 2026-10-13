@@ -146,7 +146,7 @@ void Image::alloc(ImageType type,
 
         // Allocate image data
         if (mSize != size) {
-            mData.reset(new unsigned char[size]);
+            mData.reset(new unsigned char[size], std::default_delete<unsigned char[]>());
             ASSERT(mData.get(), "Data pointer is NULL");
 
             if (mData.get() == NULL) {

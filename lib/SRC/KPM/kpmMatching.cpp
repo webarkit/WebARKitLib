@@ -246,7 +246,7 @@ int kpmSetRefDataSet( KpmHandle *kpmHandle, KpmRefDataSet *refDataSet )
                 }
             }
             else {
-                refDataSet->pageInfo[i].imageInfo = NULL;
+                kpmHandle->refDataSet.pageInfo[i].imageInfo = NULL;
             }
         }
     }
