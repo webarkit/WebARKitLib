@@ -1,17 +1,20 @@
 #include <gtest/gtest.h>
 
+#include <KPM/kpm.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTMarkerState.h>
 #include <WebARKitTrackers/WebARKitNFT/markerDecompress.h>
 #include <WebARKitTrackers/WebARKitNFT/trackingMod.h>
 #ifdef WEBARKIT_NFT_THREADS
 #include <WebARKitTrackers/WebARKitNFT/trackingSub.h>
 #endif
+#include <ARUtil/thread_sub.h>
 
 #include <zlib.h>
 
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <future>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -169,6 +172,41 @@ TEST(TrackingModTest, CreatesAndDeletesHandle) {
   EXPECT_EQ(handle, nullptr);
 }
 
+namespace {
+
+void *quitWhenAsked(THREAD_HANDLE_T *handle) {
+  while (threadStartWait(handle) == 0) {
+    threadEndSignal(handle);
+  }
+  return nullptr;
+}
+
+} // namespace
+
+// The handle stays usable between threadWaitQuit() and threadFree(), so threadWaitQuit()
+// must return with the handle's mutex unlocked (#85).
+TEST(ThreadSubTest, WaitQuitLeavesTheMutexUnlocked) {
+  THREAD_HANDLE_T *handle = threadInit(0, nullptr, quitWhenAsked);
+  ASSERT_NE(handle, nullptr);
+
+  // On a thread of its own, so that a threadGetStatus() blocked on a mutex left locked
+  // fails the test instead of hanging it.
+  std::promise<int> status;
+  std::future<int> statusResult = status.get_future();
+  std::thread client([handle, &status] {
+    threadWaitQuit(handle);
+    status.set_value(threadGetStatus(handle));
+  });
+  if (statusResult.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+    client.detach();
+    FAIL() << "threadGetStatus() blocked after threadWaitQuit(): the mutex is still locked";
+  }
+  client.join();
+  EXPECT_EQ(statusResult.get(), 2);
+  threadFree(&handle);
+  EXPECT_EQ(handle, nullptr);
+}
+
 #ifdef WEBARKIT_NFT_THREADS
 TEST(TrackingSubTest, StartsAndQuitsWorkerThread) {
   KpmHandle *kpmHandle = kpmCreateHandle2(640, 480);
@@ -206,3 +244,45 @@ TEST(TrackingSubTest, RejectsStartUntilResultsAreCollected) {
   kpmDeleteHandle(&kpmHandle);
 }
 #endif
+
+// kpmSetRefDataSet() copies each page's imageInfo into the handle, which owns the copy
+// and frees it on replacement and in kpmDeleteHandle() (#86). A page without images has
+// no imageInfo to copy: the handle's copy must be NULL, and the source must not change.
+TEST(KpmRefDataSetTest, CopyOfAPageWithoutImagesLeavesTheSourceUnchanged) {
+  KpmRefData point = {};
+  KpmImageInfo unused = {};
+  KpmPageInfo page = {};
+  page.imageInfo = &unused;
+  page.imageNum = 0;
+  KpmRefDataSet set = {};
+  set.refPoint = &point;
+  set.num = 1;
+  set.pageInfo = &page;
+  set.pageNum = 1;
+
+  KpmHandle *kpmHandle = kpmCreateHandle2(64, 48);
+  ASSERT_NE(kpmHandle, nullptr);
+  EXPECT_EQ(kpmSetRefDataSet(kpmHandle, &set), 0);
+  EXPECT_EQ(page.imageInfo, &unused);
+  kpmDeleteHandle(&kpmHandle);
+}
+
+// Replacing the set frees the handle's copy of each page's imageInfo, and so does
+// kpmDeleteHandle(); with a page without images that copy must be NULL, not left
+// uninitialised (AddressSanitizer reports a free of a non-malloc()-ed address).
+TEST(KpmRefDataSetTest, ReplacesAndDeletesASetWithAPageWithoutImages) {
+  KpmRefData point = {};
+  KpmPageInfo page = {};
+  KpmRefDataSet set = {};
+  set.refPoint = &point;
+  set.num = 1;
+  set.pageInfo = &page;
+  set.pageNum = 1;
+
+  KpmHandle *kpmHandle = kpmCreateHandle2(64, 48);
+  ASSERT_NE(kpmHandle, nullptr);
+  EXPECT_EQ(kpmSetRefDataSet(kpmHandle, &set), 0);
+  EXPECT_EQ(kpmSetRefDataSet(kpmHandle, &set), 0);
+  EXPECT_EQ(kpmDeleteHandle(&kpmHandle), 0);
+  EXPECT_EQ(kpmHandle, nullptr);
+}
