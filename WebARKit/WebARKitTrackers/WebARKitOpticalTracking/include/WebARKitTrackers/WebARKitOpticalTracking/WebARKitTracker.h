@@ -40,6 +40,9 @@ class WebARKitTracker {
 
     std::array<double, 16> getCameraProjectionMatrix();
 
+    // Load real camera calibration from an ArtoolkitX camera_para.dat buffer.
+    bool loadCameraParam(const void* buffer, int size);
+
     bool isValid();
 
     // WebARKitLib#38: pose origin = marker centre when true (default false).
