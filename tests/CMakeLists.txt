@@ -60,6 +60,27 @@ target_include_directories(webarkit_nft_limit_test PRIVATE
 )
 target_link_libraries(webarkit_nft_limit_test ZLIB::ZLIB GTest::gtest_main)
 
+# The camera parameter file I/O, with paramFile.c compiled at -O3 whatever the build
+# type: its byte swap used to write through unions (a strict-aliasing violation),
+# which GCC miscompiled at -O3 only (#101). Source properties are per directory, so
+# the AR library built in ../WebARKit keeps its own flags.
+add_executable(webarkit_param_test
+  webarkit_param_test.cc
+  ../lib/SRC/AR/paramFile.c
+  ../lib/SRC/ARUtil/log.c
+)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  set_source_files_properties(../lib/SRC/AR/paramFile.c PROPERTIES COMPILE_OPTIONS "-O3")
+endif()
+target_include_directories(webarkit_param_test PRIVATE ../include)
+target_link_libraries(webarkit_param_test GTest::gtest_main)
+add_custom_command(TARGET webarkit_param_test POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:webarkit_param_test>/data
+  COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_SOURCE_DIR}/data/camera_para.dat
+    $<TARGET_FILE_DIR:webarkit_param_test>/data/camera_para.dat
+)
+
 add_executable(
   webarkit_test
   webarkit_test.cc
@@ -111,3 +132,4 @@ gtest_discover_tests(webarkit_test)
 gtest_discover_tests(webarkit_nft_test)
 gtest_discover_tests(webarkit_nft_core_test)
 gtest_discover_tests(webarkit_nft_limit_test)
+gtest_discover_tests(webarkit_param_test)
