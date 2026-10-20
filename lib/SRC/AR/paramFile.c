@@ -68,30 +68,19 @@ const arParamVersionInfo_t arParamVersionInfo[AR_DIST_FUNCTION_VERSION_MAX] = {
 };
 
 #ifdef AR_LITTLE_ENDIAN
-typedef union {
-	int  x;
-	unsigned char y[4];
-} SwapIntT;
-
-typedef union {
-	float  x;
-	unsigned char y[4];
-} SwapFloatT;
-
-typedef union {
-	double   x;
-	unsigned char y[8];
-} SwapDoubleT;
-
+// The byte swaps go through unsigned char pointers, which may access any object.
+// They used to go through pointers to unions (SwapIntT, SwapFloatT, SwapDoubleT):
+// accessing an int or a double through a union type breaks C's strict-aliasing
+// rule, and GCC 13 at -O3 then vectorised the dist_factor loop of byteswap() so
+// that arParamLoad() returned garbage distortion factors (#101).
 static void byteSwapInt( const int *from, int *to )
 {
-    SwapIntT   *w1, *w2;
-    int        i;
+    const unsigned char *w1 = (const unsigned char *)from;
+    unsigned char       *w2 = (unsigned char *)to;
+    int                  i;
 
-    w1 = (SwapIntT *)from;
-    w2 = (SwapIntT *)to;
     for( i = 0; i < 4; i++ ) {
-        w2->y[i] = w1->y[3-i];
+        w2[i] = w1[3-i];
     }
 
     return;
@@ -99,27 +88,25 @@ static void byteSwapInt( const int *from, int *to )
 
 /*static void byteSwapFloat( const float *from, float *to )
 {
-    SwapFloatT   *w1, *w2;
-    int           i;
-    
-    w1 = (SwapFloatT *)from;
-    w2 = (SwapFloatT *)to;
+    const unsigned char *w1 = (const unsigned char *)from;
+    unsigned char       *w2 = (unsigned char *)to;
+    int                  i;
+
     for( i = 0; i < 4; i++ ) {
-        w2->y[i] = w1->y[3-i];
+        w2[i] = w1[3-i];
     }
-    
+
     return;
 }*/
 
 static void byteSwapDouble( const double *from, double *to )
 {
-    SwapDoubleT   *w1, *w2;
-    int           i;
+    const unsigned char *w1 = (const unsigned char *)from;
+    unsigned char       *w2 = (unsigned char *)to;
+    int                  i;
 
-    w1 = (SwapDoubleT *)from;
-    w2 = (SwapDoubleT *)to;
     for( i = 0; i < 8; i++ ) {
-        w2->y[i] = w1->y[7-i];
+        w2[i] = w1[7-i];
     }
 
     return;
