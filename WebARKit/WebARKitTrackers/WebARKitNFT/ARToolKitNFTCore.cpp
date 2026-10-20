@@ -606,9 +606,11 @@ ARdouble ARToolKitNFTCore::getProjectionFarPlane() const { return this->farPlane
 
 int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
   // Not in the bindings: the frame sizes below are ints, so reject a frame they cannot hold
-  // before changing anything.
+  // before changing anything. (max) in parentheses: on Windows <AR/config.h> includes
+  // <windows.h>, whose max() macro would otherwise break this line (MSVC C2589) unless
+  // NOMINMAX is defined (#101).
   if (width <= 0 || height <= 0 ||
-      static_cast<long long>(width) * height * 4 > std::numeric_limits<int>::max()) {
+      static_cast<long long>(width) * height * 4 > (std::numeric_limits<int>::max)()) {
     WEBARKIT_LOGe("setup(): Error: invalid frame size %d x %d.\n", width, height);
     return -1;
   }
