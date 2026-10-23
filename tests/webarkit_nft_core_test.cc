@@ -1219,3 +1219,142 @@ TEST(NFTRuntimeSettingsTest, LogLevelIsTheGlobal) {
   arLogLevel = savedAr;
   webarkitLogLevel = savedWebarkit;
 }
+
+// The AR2 parameters come from the settings (D6), are applied live, and a template-size
+// change recreates only the AR2 handle (D12).
+
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2UsesStoredSettings) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.trackingThresh = 7.0f;
+  s.ar2.simThresh = 0.6f;
+  s.ar2.searchFeatureNum = 20;
+  ASSERT_EQ(core.configure(s), 0);  // no handle yet: only stored
+  EXPECT_EQ(core.ar2HandleForTest(), nullptr);
+
+  ASSERT_TRUE(makeReady(core));
+  const AR2HandleT *handle = core.ar2HandleForTest();
+  ASSERT_NE(handle, nullptr);
+  EXPECT_FLOAT_EQ(handle->trackingThresh, 7.0f);
+  EXPECT_FLOAT_EQ(handle->simThresh, 0.6f);
+  EXPECT_EQ(handle->searchFeatureNum, 20);
+  EXPECT_EQ(handle->templateSize1, 6);
+  EXPECT_EQ(handle->templateSize2, 6);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, ConfigureUpdatesLiveHandle) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  const AR2HandleT *handle = core.ar2HandleForTest();
+  ASSERT_NE(handle, nullptr);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.trackingThresh = 9.0f;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.ar2HandleForTest(), handle);  // not recreated
+  EXPECT_FLOAT_EQ(handle->trackingThresh, 9.0f);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, TemplateSizeRecreatesOnlyAR2) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const AR2HandleT *oldHandle = core.ar2HandleForTest();
+  const KpmHandle *kpm = core.kpmHandleForTest();
+  ASSERT_NE(oldHandle, nullptr);
+  ASSERT_NE(kpm, nullptr);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize1 = 8;
+  ASSERT_EQ(core.configure(s), 0);
+  // The new handle is created before the old one is freed, so the address differs.
+  const AR2HandleT *newHandle = core.ar2HandleForTest();
+  ASSERT_NE(newHandle, nullptr);
+  EXPECT_NE(newHandle, oldHandle);
+  EXPECT_EQ(newHandle->templateSize1, 8);
+  EXPECT_EQ(newHandle->templateSize2, 6);
+  EXPECT_FLOAT_EQ(newHandle->trackingThresh, 5.0f);  // the other settings are applied too
+  EXPECT_EQ(core.kpmHandleForTest(), kpm);
+  EXPECT_EQ(core.markerCount(), 1);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, TrackingSurvivesTemplateChange) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize1 = 8;
+  s.ar2.templateSize2 = 8;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.ar2HandleForTest()->templateSize1, 8);
+
+  // The marker's tracking state is in its surface set, so it is tracked again on the same
+  // image with the new handle within a few frames.
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }, 5));
+  EXPECT_NE(core.markerState(0)->err, -1.0f);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, TemplateChangeKeepsTrackingWithoutKpm) {
+  // Stricter than TrackingSurvivesTemplateChange: the very next frame is tracked by the new
+  // handle from the surface set's pose, with no KPM pass (feed() returns -1 when none ran;
+  // KPM does not start while every marker is tracked).
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize1 = 8;
+  s.ar2.templateSize2 = 8;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(feed(core, frames.both), -1);
+  EXPECT_TRUE(isTracking(core, 0));
+}
+
+TEST(NFTRuntimeSettingsAR2Test, SearchSizeZeroFollowsPreset) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  // The sentinel 0 is resolved through the preset: 6 without cpuDependentSearchSize.
+  EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 6);
+  ASSERT_TRUE(makeReady(core));
+  const AR2HandleT *handle = core.ar2HandleForTest();
+  ASSERT_NE(handle, nullptr);
+  EXPECT_EQ(handle->searchSize, 6);
+  EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 6);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.searchSize = 10;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.ar2HandleForTest(), handle);
+  EXPECT_EQ(handle->searchSize, 10);
+  EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 10);
+}
+
+#ifdef WEBARKIT_NFT_THREADS
+
+TEST(NFTRuntimeSettingsAR2Test, ThreadedTemplateSizeRecreatesOnlyAR2) {
+  // The threaded AR2 variant (ar2CreateHandle / ar2DeleteHandle, with tracking threads).
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const AR2HandleT *oldHandle = core.ar2HandleForTest();
+  const KpmHandle *kpm = core.kpmHandleForTest();
+  ASSERT_NE(oldHandle, nullptr);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize2 = 9;
+  ASSERT_EQ(core.configure(s), 0);
+  const AR2HandleT *newHandle = core.ar2HandleForTest();
+  ASSERT_NE(newHandle, nullptr);
+  EXPECT_NE(newHandle, oldHandle);
+  EXPECT_EQ(newHandle->templateSize2, 9);
+  EXPECT_EQ(newHandle->searchSize, s.ar2.searchSize);  // 6 or 12, resolved by the preset
+  EXPECT_EQ(core.kpmHandleForTest(), kpm);
+}
+
+#endif  // WEBARKIT_NFT_THREADS

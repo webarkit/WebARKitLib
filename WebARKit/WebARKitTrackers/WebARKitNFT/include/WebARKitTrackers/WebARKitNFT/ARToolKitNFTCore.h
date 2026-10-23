@@ -90,7 +90,8 @@ public:
     int setCamera(int id, int cameraID);
 
     /**
-     * Creates the AR2 tracking handle (variant and settings from the config) and the KPM
+     * Creates the AR2 tracking handle (variant from the config, parameters from the runtime
+     * settings, see configure()) and the KPM
      * handle from paramLT. Call after setup() and after every setCamera().
      *
      * A second call (or the first after a setCamera()) replaces the KPM handle: the markers
@@ -123,15 +124,19 @@ public:
      * changes nothing on failure (D7). A new plane rebuilds the lens when a camera is loaded;
      * before that the values are only stored. The log level is written to the process-wide
      * arLogLevel and webarkitLogLevel (D9). detectionIntervalMs -1 resolves to the preset's.
-     * The AR2 fields are stored and validated here; applying them to the AR2 handle is not
-     * done yet.
-     * @return 0, or -1 with nothing changed
+     * Changed AR2 fields are applied to the live AR2 handle (D6); a template-size change
+     * recreates the AR2 handle instead, keeping the KPM handle, the detector and the markers
+     * (D12). Without an AR2 handle they are only stored, and setupAR2() applies them.
+     * On the threaded build, call it between frames, on the thread that calls
+     * detectNFTMarker().
+     * @return 0, or -1 with nothing changed (also when a new AR2 handle cannot be created)
      */
     int configure(const NFTRuntimeSettings &settings);
 
     /**
-     * The current settings with the effective values: the interval is the resolved one, and
-     * logLevel is read from arLogLevel (D9), not from a copy held by the core.
+     * The current settings with the effective values: the interval and ar2.searchSize are the
+     * resolved ones, and logLevel is read from arLogLevel (D9), not from a copy held by the
+     * core.
      */
     NFTRuntimeSettings getRuntimeSettings() const;
 
@@ -203,6 +208,11 @@ public:
      */
     int teardown();
 
+    // Test-only: the current AR2 and KPM handles, or nullptr. Not part of the API; the tests
+    // use them to check what configure() and setupAR2() apply.
+    const AR2HandleT *ar2HandleForTest() const { return ar2Handle; }
+    const KpmHandle *kpmHandleForTest() const { return kpmHandle.get(); }
+
 private:
     struct KpmHandleDeleter {
         void operator()(KpmHandle *handle) const;
@@ -224,6 +234,24 @@ private:
     void dropRunningSearch();
     /** Frees the AR2 handle with the call matching the config's AR2 variant. */
     void deleteAR2Handle();
+    /**
+     * Creates an AR2 handle from paramLT with the call matching the config's AR2 variant, with
+     * AR2's own defaults (applyAR2Settings() sets ours). @return the handle, or nullptr
+     */
+    AR2HandleT *createAR2Handle();
+    /** Applies the AR2 settings to a handle, in the order setupAR2() always used. */
+    static void applyAR2Settings(AR2HandleT *handle, const NFTAR2Settings &ar2);
+    /** ar2 with searchSize 0 resolved to the preset's choice (D6). */
+    NFTAR2Settings resolveAR2(const NFTAR2Settings &ar2) const;
+    /** The stored AR2 settings, resolved: what an AR2 handle gets. */
+    NFTAR2Settings effectiveAR2() const { return resolveAR2(settings_.ar2); }
+    /**
+     * Replaces the AR2 handle with a new one carrying effectiveAR2(), for a template-size
+     * change (D12). Touches neither the KPM handle nor the detector; the markers stay loaded
+     * and tracked. Needs an existing handle (and so paramLT).
+     * @return 0, or -1 when the new handle cannot be created (the old one is kept)
+     */
+    int recreateAR2Handle();
     /** Frees paramLT and the AR2 handle (what setCamera() recreates). */
     void deleteHandle();
     /**

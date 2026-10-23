@@ -221,12 +221,7 @@ int ARToolKitNFTCore::setupAR2() {
     return -1;
   }
 
-  AR2HandleT *tempHandle;
-  if (this->config.ar2Variant == NFTTrackingConfig::AR2Variant::SingleThread) {
-    tempHandle = ar2CreateHandleMod(this->paramLT, this->pixFormat);
-  } else {
-    tempHandle = ar2CreateHandle(this->paramLT, this->pixFormat, AR2_TRACKING_DEFAULT_THREAD_NUM);
-  }
+  AR2HandleT *tempHandle = createAR2Handle();
   if (tempHandle == nullptr) {
     WEBARKIT_LOGe("Error: ar2CreateHandle.\n");
     return -1;  // Return error code if handle creation failed
@@ -235,23 +230,16 @@ int ARToolKitNFTCore::setupAR2() {
   // Store the handle
   this->ar2Handle = tempHandle;
 
-  // Settings for devices with single-core CPUs; the threaded build searches a larger
-  // area when it has more than one CPU.
-  int searchSize = 6;
-  if (this->config.cpuDependentSearchSize) {
+  // D6: the parameters come from the runtime settings (defaults: the constants this used to
+  // hard-code), with searchSize 0 resolved to the preset's choice.
+  if (this->settings_.ar2.searchSize == 0 && this->config.cpuDependentSearchSize) {
     if (threadGetCPU() <= 1) {
       WEBARKIT_LOGi("Using NFT tracking settings for a single CPU.\n");
     } else {
       WEBARKIT_LOGi("Using NFT tracking settings for more than one CPU.\n");
-      searchSize = 12;
     }
   }
-  ar2SetTrackingThresh(this->ar2Handle, 5.0);
-  ar2SetSimThresh(this->ar2Handle, 0.50);
-  ar2SetSearchFeatureNum(this->ar2Handle, 16);
-  ar2SetSearchSize(this->ar2Handle, searchSize);
-  ar2SetTemplateSize1(this->ar2Handle, 6);
-  ar2SetTemplateSize2(this->ar2Handle, 6);
+  applyAR2Settings(this->ar2Handle, effectiveAR2());
 
   // The detector searches with the KPM handle replaced below: drop a running search (as
   // addNFTMarkers() does, so the detection interval restarts), then stop the detector.
@@ -267,6 +255,58 @@ int ARToolKitNFTCore::setupAR2() {
   }
 
   return 0;  // Success
+}
+
+AR2HandleT *ARToolKitNFTCore::createAR2Handle() {
+  if (this->config.ar2Variant == NFTTrackingConfig::AR2Variant::SingleThread) {
+    return ar2CreateHandleMod(this->paramLT, this->pixFormat);
+  }
+  return ar2CreateHandle(this->paramLT, this->pixFormat, AR2_TRACKING_DEFAULT_THREAD_NUM);
+}
+
+void ARToolKitNFTCore::applyAR2Settings(AR2HandleT *handle, const NFTAR2Settings &ar2) {
+  ar2SetTrackingThresh(handle, ar2.trackingThresh);
+  ar2SetSimThresh(handle, ar2.simThresh);
+  ar2SetSearchFeatureNum(handle, ar2.searchFeatureNum);
+  ar2SetSearchSize(handle, ar2.searchSize);
+  ar2SetTemplateSize1(handle, ar2.templateSize1);
+  ar2SetTemplateSize2(handle, ar2.templateSize2);
+}
+
+// D6: searchSize 0 means "the preset's choice": 6 (settings for devices with single-core
+// CPUs), or 12 when config.cpuDependentSearchSize and more than one CPU, as setupAR2()
+// hard-coded before. The sentinel exists because the threaded preset already varied the
+// search size, and leaving it out of the settings would hard-code that choice again. It is
+// stored unresolved, so every setupAR2() resolves it again.
+NFTAR2Settings ARToolKitNFTCore::resolveAR2(const NFTAR2Settings &ar2) const {
+  NFTAR2Settings resolved = ar2;
+  if (resolved.searchSize == 0) {
+    resolved.searchSize = (this->config.cpuDependentSearchSize && threadGetCPU() > 1) ? 12 : 6;
+  }
+  return resolved;
+}
+
+// D12: AR2 builds each tracking thread's template once, on the first tracked frame
+// (lib/SRC/AR2/tracking2d.c:106, trackingMod2d.c:81: `if (*templ == NULL) *templ =
+// ar2GenTemplate(...)`), and keeps it in the handle. A later ar2SetTemplateSize1/2 only stores
+// the number, with no effect. So a template-size change needs a new handle. Only the AR2
+// handle is replaced: the per-marker tracking state (the last poses trans1..3, contNum,
+// prevFeature) lives in each marker's AR2SurfaceSetT, and what the handle holds besides the
+// templates (wtrans, candidates, usedFeature, pos) is per-frame scratch recomputed from the
+// surface set on every ar2Tracking*() call. So the markers stay loaded and keep tracking. The
+// KPM handle and the detector do not use the AR2 handle and are not touched. It is the only
+// option that makes the change take effect live without reaching into AR2's internals.
+int ARToolKitNFTCore::recreateAR2Handle() {
+  if (this->ar2Handle == nullptr || this->paramLT == nullptr) return -1;
+  AR2HandleT *newHandle = createAR2Handle();
+  if (newHandle == nullptr) {
+    WEBARKIT_LOGe("Error: ar2CreateHandle; the AR2 handle is unchanged.\n");
+    return -1;
+  }
+  applyAR2Settings(newHandle, effectiveAR2());
+  deleteAR2Handle();  // the delete call matching the variant
+  this->ar2Handle = newHandle;
+  return 0;
 }
 
 std::unique_ptr<NFTDetector> ARToolKitNFTCore::createDetector() {
@@ -678,6 +718,12 @@ void ARToolKitNFTCore::setDetectionInterval(double ms) {
 // D7: configure() validates everything before it changes anything, so a patch that is invalid
 // in one field applies none of it. The setters above stay lenient (for example a negative
 // interval means 0) so existing callers do not break; only the new entry point rejects.
+//
+// Threading: on the threaded build, configure() is called between frames on the thread that
+// calls detectNFTMarker(). AR2 tracking runs inside that call (its tracking threads only work
+// within ar2Tracking()), so changing or replacing the AR2 handle between frames is safe. The
+// threaded KPM search, which may still be running on the detector's worker, does not use the
+// AR2 handle.
 int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
   if (!nftRuntimeSettingsValid(settings)) {
     WEBARKIT_LOGe("configure(): invalid settings, nothing changed.\n");
@@ -691,8 +737,31 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
   const double interval = settings.detectionIntervalMs < 0 ? this->config.defaultDetectionIntervalMs
                                                            : settings.detectionIntervalMs;
 
+  const NFTRuntimeSettings previous = this->settings_;
   this->settings_ = settings;
-  this->settings_.detectionIntervalMs = 0.0;  // set below through setDetectionInterval()
+  this->settings_.detectionIntervalMs = previous.detectionIntervalMs;  // set below
+
+  // D6 / D12: the AR2 fields go to the live handle. Done first, because recreating the handle
+  // can fail, and then nothing may have changed (D7). Without a handle (before setupAR2(), or
+  // after a setCamera()) they are only stored, and the next setupAR2() applies them.
+  if (this->ar2Handle != nullptr) {
+    const NFTAR2Settings before = resolveAR2(previous.ar2);
+    const NFTAR2Settings after = effectiveAR2();
+    if (after.templateSize1 != before.templateSize1 || after.templateSize2 != before.templateSize2) {
+      // The templates are built once per handle (D12): a new handle, with every AR2 field.
+      if (recreateAR2Handle() != 0) {
+        this->settings_ = previous;
+        WEBARKIT_LOGe("configure(): could not recreate the AR2 handle, nothing changed.\n");
+        return -1;
+      }
+    } else {
+      if (after.trackingThresh != before.trackingThresh) ar2SetTrackingThresh(this->ar2Handle, after.trackingThresh);
+      if (after.simThresh != before.simThresh) ar2SetSimThresh(this->ar2Handle, after.simThresh);
+      if (after.searchFeatureNum != before.searchFeatureNum) ar2SetSearchFeatureNum(this->ar2Handle, after.searchFeatureNum);
+      if (after.searchSize != before.searchSize) ar2SetSearchSize(this->ar2Handle, after.searchSize);
+    }
+  }
+
   setDetectionInterval(interval);
 
   if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
@@ -705,6 +774,7 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
 
 NFTRuntimeSettings ARToolKitNFTCore::getRuntimeSettings() const {
   NFTRuntimeSettings settings = this->settings_;
+  settings.ar2 = effectiveAR2();  // searchSize 0 resolved (D6, D7)
   settings.logLevel = arLogLevel;
   return settings;
 }
