@@ -1,4 +1,14 @@
 #include <WebARKit/WebARKitLog.h>
+// The native logger owns webarkitLogLevel and the WEBARKIT_LOG_LEVEL_* constants. Its include
+// guard differs from this logger's (#84), so both headers can be included. webarkitLogLevel is
+// declared extern "C" there, matching its definition in WebARKit/WebARKitLog.cpp.
+#include <WebARKitLog.h>
+
+// Weak default for builds that link this logger without the native one (the legacy
+// jsartoolkitNFT builds compile only this file, so WebARKit/WebARKitLog.cpp, which owns the
+// strong definition, is absent and the gate below would not link). When both are linked the
+// strong definition wins; when alone, INFO is the default, as before the gate existed.
+int webarkitLogLevel __attribute__((weak)) = WEBARKIT_LOG_LEVEL_DEFAULT;
 
 const char * WARKTinfo = "%cℹ️[webarkit-info:]";
 const char * WARKTinfoStyle = "color: #664400; background-color: #ffff99; border-radius: 4px; padding: 2px";
@@ -9,7 +19,15 @@ const char * WARKTwarnStyle = "color: #774400; background-color: #ffff99; border
 const char * WARKTdebug = "%c🐞[webarkit-debug:]";
 const char * WARKTdebugStyle = "color: #000000; background-color: #ffcc00; border-radius: 4px; padding: 2px";
 
+// jsartoolkitNFT#677: this logger used to print regardless of webarkitLogLevel, so the adapter's
+// start-up lines could not be silenced. Same comparison as the native logger: a message is
+// skipped when its level is below the current level.
+static inline bool logSuppressed(int level) {
+    return level < webarkitLogLevel;
+}
+
 void webarkitLOGi(const std::string &message) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_INFO)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -23,6 +41,7 @@ void webarkitLOGi(const std::string &message) {
 }
 
 void webarkitLOGi(const std::string &message, double * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_INFO)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -38,6 +57,7 @@ void webarkitLOGi(const std::string &message, double * format) {
 }
 
 void webarkitLOGi(const std::string &message, float * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_INFO)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -53,6 +73,7 @@ void webarkitLOGi(const std::string &message, float * format) {
 }
 
 void webarkitLOGi(const std::string &message, char * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_INFO)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -68,6 +89,7 @@ void webarkitLOGi(const std::string &message, char * format) {
 }
 
 void webarkitLOGi(const std::string &message, const char * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_INFO)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -83,6 +105,7 @@ void webarkitLOGi(const std::string &message, const char * format) {
 }
 
 void webarkitLOGi(const std::string &message, int  format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_INFO)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -97,6 +120,7 @@ void webarkitLOGi(const std::string &message, int  format) {
 }
 
 void webarkitLOGe(const std::string &message) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_ERROR)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -110,6 +134,7 @@ void webarkitLOGe(const std::string &message) {
 }
 
 void webarkitLOGe(const std::string &message, double * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_ERROR)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -125,6 +150,7 @@ void webarkitLOGe(const std::string &message, double * format) {
 }
 
 void webarkitLOGe(const std::string &message, float * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_ERROR)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -140,6 +166,7 @@ void webarkitLOGe(const std::string &message, float * format) {
 }
 
 void webarkitLOGe(const std::string &message, char * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_ERROR)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -155,6 +182,7 @@ void webarkitLOGe(const std::string &message, char * format) {
 }
 
 void webarkitLOGe(const std::string &message, const char * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_ERROR)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -170,6 +198,7 @@ void webarkitLOGe(const std::string &message, const char * format) {
 }
 
 void webarkitLOGe(const std::string &message, int  format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_ERROR)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -184,6 +213,7 @@ void webarkitLOGe(const std::string &message, int  format) {
 }
 
 void webarkitLOGw(const std::string &message) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_WARN)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var infoHead =  UTF8ToString($1);
@@ -197,6 +227,7 @@ void webarkitLOGw(const std::string &message) {
 }
 
 void webarkitLOGw(const std::string &message, double * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_WARN)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -212,6 +243,7 @@ void webarkitLOGw(const std::string &message, double * format) {
 }
 
 void webarkitLOGw(const std::string &message, float * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_WARN)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -227,6 +259,7 @@ void webarkitLOGw(const std::string &message, float * format) {
 }
 
 void webarkitLOGw(const std::string &message, char * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_WARN)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -242,6 +275,7 @@ void webarkitLOGw(const std::string &message, char * format) {
 }
 
 void webarkitLOGw(const std::string &message, const char * format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_WARN)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -257,6 +291,7 @@ void webarkitLOGw(const std::string &message, const char * format) {
 }
 
 void webarkitLOGw(const std::string &message, int  format) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_WARN)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var errorHead =  UTF8ToString($1);
@@ -273,6 +308,7 @@ void webarkitLOGw(const std::string &message, int  format) {
 #if defined WEBARKIT_DEBUG
 
 void webarkitLOGd(const std::string &message) {
+    if (logSuppressed(WEBARKIT_LOG_LEVEL_DEBUG)) return;
     EM_ASM ({
         var message = UTF8ToString($0);
         var debugHead =  UTF8ToString($1);

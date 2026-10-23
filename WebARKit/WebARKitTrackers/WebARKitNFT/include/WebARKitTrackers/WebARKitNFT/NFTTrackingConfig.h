@@ -42,7 +42,7 @@ inline NFTTrackingConfig threadedPreset() {
   config.ar2Variant = NFTTrackingConfig::AR2Variant::Threaded;
   config.cpuDependentSearchSize = true;
   config.defaultDetectionIntervalMs = 0.0;
-  config.poseFilteringSupported = false;
+  config.poseFilteringSupported = true;  // #692: the threaded build used to never filter
   config.clock = &nftDefaultClockMs;
   return config;
 }
