@@ -4,6 +4,12 @@
 // declared extern "C" there, matching its definition in WebARKit/WebARKitLog.cpp.
 #include <WebARKitLog.h>
 
+// Weak default for builds that link this logger without the native one (the legacy
+// jsartoolkitNFT builds compile only this file, so WebARKit/WebARKitLog.cpp, which owns the
+// strong definition, is absent and the gate below would not link). When both are linked the
+// strong definition wins; when alone, INFO is the default, as before the gate existed.
+int webarkitLogLevel __attribute__((weak)) = WEBARKIT_LOG_LEVEL_DEFAULT;
+
 const char * WARKTinfo = "%cℹ️[webarkit-info:]";
 const char * WARKTinfoStyle = "color: #664400; background-color: #ffff99; border-radius: 4px; padding: 2px";
 const char * WARKTerror = "%c🚩[webarkit-error:]";
