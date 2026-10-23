@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <limits>
 #include <memory>
@@ -1335,7 +1336,36 @@ TEST(NFTRuntimeSettingsAR2Test, SearchSizeZeroFollowsPreset) {
   EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 10);
 }
 
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2TwiceReplacesTheHandleAndKeepsTracking) {
+  // setupAR2() is documented as callable again; the previous handle must be freed, not leaked.
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));  // the first setupAR2()
+  const AR2HandleT *first = core.ar2HandleForTest();
+  ASSERT_NE(first, nullptr);
+
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_NE(core.ar2HandleForTest(), nullptr);
+  EXPECT_NE(core.ar2HandleForTest(), first);  // the new handle exists before the old is freed
+
+  // setupAR2() drops the detector; addNFTMarkers() creates one for the new KPM handle.
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
 #ifdef WEBARKIT_NFT_THREADS
+
+TEST(NFTRuntimeSettingsAR2Test, ThreadedSetupAR2TwiceKeepsTracking) {
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
+}
 
 TEST(NFTRuntimeSettingsAR2Test, ThreadedTemplateSizeRecreatesOnlyAR2) {
   // The threaded AR2 variant (ar2CreateHandle / ar2DeleteHandle, with tracking threads).

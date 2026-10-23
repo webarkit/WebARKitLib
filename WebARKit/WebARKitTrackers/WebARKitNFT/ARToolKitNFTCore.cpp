@@ -227,7 +227,10 @@ int ARToolKitNFTCore::setupAR2() {
     return -1;  // Return error code if handle creation failed
   }
 
-  // Store the handle
+  // A second setupAR2() replaces the handle: free the previous one only now that the new one
+  // exists, so a failed creation leaves the old handle usable. Without this the old handle,
+  // and on the threaded build its tracking threads, leaked.
+  if (this->ar2Handle != nullptr) deleteAR2Handle();
   this->ar2Handle = tempHandle;
 
   // D6: the parameters come from the runtime settings (defaults: the constants this used to
@@ -287,7 +290,7 @@ NFTAR2Settings ARToolKitNFTCore::resolveAR2(const NFTAR2Settings &ar2) const {
 }
 
 // D12: AR2 builds each tracking thread's template once, on the first tracked frame
-// (lib/SRC/AR2/tracking2d.c:106, trackingMod2d.c:81: `if (*templ == NULL) *templ =
+// (lib/SRC/AR2/tracking2d.c:106, WebARKitTrackers/WebARKitNFT/trackingMod2d.c:81: `if (*templ == NULL) *templ =
 // ar2GenTemplate(...)`), and keeps it in the handle. A later ar2SetTemplateSize1/2 only stores
 // the number, with no effect. So a template-size change needs a new handle. Only the AR2
 // handle is replaced: the per-marker tracking state (the last poses trans1..3, contNum,
