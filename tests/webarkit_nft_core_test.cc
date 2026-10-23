@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <AR/ar.h>
+#include <AR/paramGL.h>
 #include <AR2/imageFormat.h>
 #include <KPM/kpm.h>
 #include <WebARKitLog.h>
@@ -9,6 +10,7 @@
 #include <WebARKit/WebARKitLog.h>
 #include <WebARKitTrackers/WebARKitNFT/ARToolKitNFTCore.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTDetector.h>
+#include <WebARKitTrackers/WebARKitNFT/NFTRuntimeSettings.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
 #include <WebARKitTrackers/WebARKitNFT/SyncKpmDetector.h>
 #ifdef WEBARKIT_NFT_THREADS
@@ -17,6 +19,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <limits>
 #include <memory>
@@ -128,7 +131,7 @@ TEST(NFTTrackingConfigTest, ThreadedPresetMatchesTheThreadedBinding) {
   EXPECT_EQ(config.ar2Variant, NFTTrackingConfig::AR2Variant::Threaded);
   EXPECT_TRUE(config.cpuDependentSearchSize);
   EXPECT_EQ(config.defaultDetectionIntervalMs, 0.0);
-  EXPECT_FALSE(config.poseFilteringSupported);
+  EXPECT_TRUE(config.poseFilteringSupported);  // #692: the threaded build used to never filter
   EXPECT_EQ(config.clock, &nftDefaultClockMs);
 }
 
@@ -448,7 +451,7 @@ TEST(CoreCameraTest, SetCameraTwice) {
 
 TEST(CoreCameraTest, ProjectionPlanes) {
   ARToolKitNFTCore core(singleThreadPreset());
-  EXPECT_EQ(core.getProjectionNearPlane(), 0.0001);
+  EXPECT_EQ(core.getProjectionNearPlane(), 0.1);
   EXPECT_EQ(core.getProjectionFarPlane(), 1000.0);
 
   ASSERT_TRUE(makeReady(core));
@@ -458,10 +461,11 @@ TEST(CoreCameraTest, ProjectionPlanes) {
   EXPECT_EQ(core.getProjectionNearPlane(), 1.0);
   EXPECT_EQ(core.getProjectionFarPlane(), 500.0);
 
-  // The lens follows the planes only once recalculated.
-  EXPECT_EQ(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), before);
-  core.recalculateCameraLens();
+  // The plane setters rebuild the lens (D5); recalculating again changes nothing.
   EXPECT_NE(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), before);
+  const std::vector<ARdouble> after(core.cameraLens(), core.cameraLens() + 16);
+  core.recalculateCameraLens();
+  EXPECT_EQ(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), after);
 }
 
 TEST(CoreMarkersTest, LoadsTwoMarkersInOneCall) {
@@ -972,6 +976,76 @@ TEST(CoreFilterTest, SetFilteringTurnsItOnInTheSingleThreadPreset) {
   EXPECT_NE(core.markerState(0)->ftmi, nullptr);
 }
 
+// Re-enabling filtering must restart each marker's filter (review of #106). The marker keeps
+// its filter state while filtering is off, so without a reset the first filtered pose is pulled
+// toward the sample from before it was switched off. A marker that moved while filtering was
+// off is simulated by overwriting that stale sample with a position far from the real one: a
+// reset leaves the pose on the raw one, a stale filter drags it most of the way to the sample.
+// (Two real frames cannot tell them apart: AR2's pose jitters by more than the filter moves it.)
+namespace {
+
+/** Distance from the raw translation, and from the stale sample, of the pose after re-enabling. */
+struct FilterRestart {
+  bool ok = false;
+  double fromRaw = 0.0;
+  double staleOffset = 0.0;
+};
+
+template <typename Enable>
+FilterRestart filterRestart(Enable enable) {
+  FilterRestart out;
+  const TestFrames &frames = testFrames();
+  if (frames.both.rgba.empty()) return out;
+  ARToolKitNFTCore core(singleThreadPreset());
+  if (!makeReady(core)) return out;
+  if (core.addNFTMarkers({"data/pinball"}) != std::vector<int>({0})) return out;
+  if (!feedUntil(core, frames.both, [&] { return isTracking(core, 0); })) return out;
+
+  core.setFiltering(true);
+  for (int i = 0; i < 3; i++) feed(core, frames.both);
+  core.setFiltering(false);
+  feed(core, frames.both);  // unfiltered: markerState(0)->pose is the raw pose
+  if (!isTracking(core, 0) || core.markerState(0)->ftmi == nullptr) return out;
+  const ARdouble rawX = core.markerState(0)->pose[0][3];
+
+  // Overwrite the stale sample through the public API: a reset call seeds it from the matrix.
+  ARdouble far[3][4];
+  std::copy(&core.markerState(0)->pose[0][0], &core.markerState(0)->pose[0][0] + 12, &far[0][0]);
+  const ARdouble stale = rawX + 10000.0;
+  far[0][3] = stale;
+  if (arFilterTransMat(core.markerState(0)->ftmi, far, 1) < 0) return out;
+
+  enable(core);
+  feed(core, frames.both);
+  if (!isTracking(core, 0)) return out;
+  out.ok = true;
+  out.fromRaw = std::fabs(core.markerState(0)->pose[0][3] - rawX);
+  out.staleOffset = std::fabs(stale - rawX);
+  return out;
+}
+
+template <typename Enable>
+void expectFilterRestarts(Enable enable) {
+  const FilterRestart r = filterRestart(enable);
+  ASSERT_TRUE(r.ok);
+  // Tracking jitter between two frames is a few units; the stale sample would pull ~85% of 10000.
+  EXPECT_LT(r.fromRaw, r.staleOffset * 0.05);
+}
+
+}  // namespace
+
+TEST(CoreFilterTest, SetFilteringRestartsTheFilter) {
+  expectFilterRestarts([](ARToolKitNFTCore &core) { core.setFiltering(true); });
+}
+
+TEST(CoreFilterTest, ConfigureRestartsTheFilter) {
+  expectFilterRestarts([](ARToolKitNFTCore &core) {
+    NFTRuntimeSettings s = core.getRuntimeSettings();
+    s.filtering = true;
+    ASSERT_EQ(core.configure(s), 0);
+  });
+}
+
 #ifdef WEBARKIT_NFT_THREADS
 
 namespace {
@@ -1001,9 +1075,39 @@ TEST(CoreTrackingTest, ThreadedFindsBothMarkers) {
   EXPECT_LT(core.markerState(0)->pose[0][3], core.markerState(1)->pose[0][3]);
 }
 
-TEST(CoreFilterTest, ThreadedPresetNeverFilters) {
+// #692: the threaded build never filtered poses; the core makes it a preset flag. Two real
+// frames cannot show a filter (AR2's pose jitters by more than the filter moves it, and two
+// cores start from different KPM poses), so one core is probed with a planted sample: the
+// filter's state is overwritten with a position far from the real one, and the next pose must
+// be pulled most of the way toward it. An unfiltered pose stays on the raw one.
+TEST(NFTRuntimeSettingsTest, ThreadedPresetFilters) {
+  EXPECT_TRUE(threadedPreset().poseFilteringSupported);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+
+  ARToolKitNFTCore core(threadedPreset(), true);
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  ASSERT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
+  for (int i = 0; i < 3; i++) feed(core, frames.both);
+  ASSERT_TRUE(isTracking(core, 0));
+  ASSERT_NE(core.markerState(0)->ftmi, nullptr);
+
+  // A reset call seeds the filter with the matrix, through the public API.
+  ARdouble planted[3][4];
+  std::copy(&core.markerState(0)->pose[0][0], &core.markerState(0)->pose[0][0] + 12, &planted[0][0]);
+  const ARdouble before = planted[0][3];
+  planted[0][3] = before + 10000.0;
+  ASSERT_GE(arFilterTransMat(core.markerState(0)->ftmi, planted, 1), 0);
+
+  feed(core, frames.both);
+  ASSERT_TRUE(isTracking(core, 0));
+  // Tracking jitter is a few units; the planted sample pulls the pose by ~85% of 10000.
+  EXPECT_GT(core.markerState(0)->pose[0][3] - before, 1000.0);
+}
+
+TEST(NFTRuntimeSettingsTest, ThreadedPresetFilteringFollowsSetFiltering) {
   ARToolKitNFTCore core(threadedPreset());
-  core.setFiltering(true);
   ASSERT_TRUE(makeReady(core));
   ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
   const TestFrames &frames = testFrames();
@@ -1011,7 +1115,12 @@ TEST(CoreFilterTest, ThreadedPresetNeverFilters) {
   ASSERT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
   feed(core, frames.both);
   ASSERT_TRUE(isTracking(core, 0));
-  EXPECT_EQ(core.markerState(0)->ftmi, nullptr);
+  EXPECT_EQ(core.markerState(0)->ftmi, nullptr);  // off by default
+
+  core.setFiltering(true);
+  feed(core, frames.both);
+  ASSERT_TRUE(isTracking(core, 0));
+  EXPECT_NE(core.markerState(0)->ftmi, nullptr);
 }
 
 TEST(CoreLifecycleTest, AddMarkersWhileSearching) {
@@ -1066,6 +1175,451 @@ TEST(CoreLifecycleTest, TeardownWhileSearching) {
   // Waits for the search before freeing the KPM handle it uses; the destructor follows.
   EXPECT_EQ(core.teardown(), 0);
   EXPECT_EQ(core.detectNFTMarker(), -1);
+}
+
+#endif  // WEBARKIT_NFT_THREADS
+
+// Runtime settings (#720).
+
+namespace {
+
+std::vector<ARdouble> lensOf(const ARToolKitNFTCore &core) {
+  return std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16);
+}
+
+std::vector<ARdouble> frustumFor(const ARToolKitNFTCore &core, ARdouble nearPlane, ARdouble farPlane) {
+  std::vector<ARdouble> lens(16);
+  arglCameraFrustumRH(&core.cameraParamLT()->param, nearPlane, farPlane, lens.data());
+  return lens;
+}
+
+bool sameSettings(const NFTRuntimeSettings &a, const NFTRuntimeSettings &b) {
+  return a.nearPlane == b.nearPlane && a.farPlane == b.farPlane &&
+         a.continuousDetection == b.continuousDetection &&
+         a.detectionIntervalMs == b.detectionIntervalMs && a.filtering == b.filtering &&
+         a.logLevel == b.logLevel && a.ar2.trackingThresh == b.ar2.trackingThresh &&
+         a.ar2.simThresh == b.ar2.simThresh && a.ar2.searchFeatureNum == b.ar2.searchFeatureNum &&
+         a.ar2.templateSize1 == b.ar2.templateSize1 && a.ar2.templateSize2 == b.ar2.templateSize2 &&
+         a.ar2.searchSize == b.ar2.searchSize;
+}
+
+}  // namespace
+
+TEST(NFTRuntimeSettingsTest, DefaultsMatchTheOldConstants) {
+  const NFTRuntimeSettings s;
+  EXPECT_EQ(s.nearPlane, 0.1);  // was 0.0001 (D4)
+  EXPECT_EQ(s.farPlane, 1000.0);
+  EXPECT_TRUE(s.continuousDetection);
+  EXPECT_EQ(s.detectionIntervalMs, -1);
+  EXPECT_FALSE(s.filtering);
+  EXPECT_EQ(s.logLevel, -1);  // leave the level unchanged (D9)
+  EXPECT_EQ(s.ar2.trackingThresh, 5.0f);
+  EXPECT_EQ(s.ar2.simThresh, 0.5f);
+  EXPECT_EQ(s.ar2.searchFeatureNum, 16);
+  EXPECT_EQ(s.ar2.templateSize1, 6);
+  EXPECT_EQ(s.ar2.templateSize2, 6);
+  EXPECT_EQ(s.ar2.searchSize, 0);
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+}
+
+TEST(NFTRuntimeSettingsTest, GetResolvesSentinels) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 300.0);
+  // configure() with the -1 sentinel resolves it to the preset's interval too.
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.detectionIntervalMs = -1;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 300.0);
+}
+
+TEST(NFTRuntimeSettingsTest, InvalidSettingsChangeNothing) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const NFTRuntimeSettings before = core.getRuntimeSettings();
+
+  std::vector<NFTRuntimeSettings> bad;
+  auto add = [&](void (*mutate)(NFTRuntimeSettings &)) {
+    NFTRuntimeSettings s = before;
+    // A valid change first, so a half-applied patch would be visible.
+    s.nearPlane = 2.0;
+    s.farPlane = 50.0;
+    s.continuousDetection = !before.continuousDetection;
+    mutate(s);
+    bad.push_back(s);
+  };
+  add([](NFTRuntimeSettings &s) { s.nearPlane = 0; });
+  add([](NFTRuntimeSettings &s) { s.farPlane = s.nearPlane; });
+  add([](NFTRuntimeSettings &s) { s.farPlane = 1.0; });
+  add([](NFTRuntimeSettings &s) { s.detectionIntervalMs = -2; });
+  add([](NFTRuntimeSettings &s) { s.logLevel = 99; });
+  add([](NFTRuntimeSettings &s) { s.logLevel = -2; });
+  add([](NFTRuntimeSettings &s) { s.ar2.searchFeatureNum = 2; });
+  add([](NFTRuntimeSettings &s) { s.ar2.searchFeatureNum = 41; });
+  add([](NFTRuntimeSettings &s) { s.ar2.simThresh = 1.5f; });
+  add([](NFTRuntimeSettings &s) { s.ar2.templateSize1 = 0; });
+  add([](NFTRuntimeSettings &s) { s.ar2.searchSize = 65; });
+
+  for (size_t i = 0; i < bad.size(); i++) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(core.configure(bad[i]), -1);
+    EXPECT_TRUE(sameSettings(core.getRuntimeSettings(), before));
+  }
+}
+
+TEST(NFTRuntimeSettingsTest, ConfigureRoundTrip) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const NFTRuntimeSettings before = core.getRuntimeSettings();
+  EXPECT_EQ(core.configure(before), 0);
+  EXPECT_TRUE(sameSettings(core.getRuntimeSettings(), before));
+
+  NFTRuntimeSettings s = before;
+  s.nearPlane = 1;
+  s.farPlane = 500;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_TRUE(sameSettings(core.getRuntimeSettings(), s));
+}
+
+TEST(NFTRuntimeSettingsTest, PlaneSetterRebuildsLensAfterSetCamera) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  // The first lens already uses the default near plane (D4).
+  EXPECT_EQ(lensOf(core), frustumFor(core, 0.1, 1000.0));
+
+  core.setProjectionNearPlane(5.0);
+  EXPECT_EQ(lensOf(core), frustumFor(core, 5.0, 1000.0));
+  core.setProjectionFarPlane(200.0);
+  EXPECT_EQ(lensOf(core), frustumFor(core, 5.0, 200.0));
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.nearPlane = 2.0;
+  s.farPlane = 300.0;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(lensOf(core), frustumFor(core, 2.0, 300.0));
+}
+
+TEST(NFTRuntimeSettingsTest, PlanesBeforeCameraOnlyStore) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  core.setProjectionNearPlane(5.0);  // no paramLT yet: must not crash
+  core.setProjectionFarPlane(400.0);
+  EXPECT_EQ(core.getProjectionNearPlane(), 5.0);
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(lensOf(core), frustumFor(core, 5.0, 400.0));
+}
+
+TEST(NFTRuntimeSettingsTest, LogLevelIsTheGlobal) {
+  const int savedAr = arLogLevel;
+  const int savedWebarkit = webarkitLogLevel;
+  {
+    ARToolKitNFTCore core(singleThreadPreset());
+    NFTRuntimeSettings s = core.getRuntimeSettings();
+    s.logLevel = AR_LOG_LEVEL_ERROR;
+    ASSERT_EQ(core.configure(s), 0);
+    EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);
+
+    // A second core does not reset the level (D9).
+    ARToolKitNFTCore other(singleThreadPreset());
+    EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(other.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);
+  }
+  arLogLevel = savedAr;
+  webarkitLogLevel = savedWebarkit;
+}
+
+namespace {
+
+/** Restores the process-wide log levels, which these tests change on purpose. */
+struct LogLevelGuard {
+  int ar = arLogLevel;
+  int webarkit = webarkitLogLevel;
+  ~LogLevelGuard() {
+    arLogLevel = ar;
+    webarkitLogLevel = webarkit;
+  }
+};
+
+}  // namespace
+
+// logLevel -1 leaves the level alone (review of #106).
+
+TEST(NFTRuntimeSettingsTest, LogLevelMinusOneIsValidAndMinusTwoIsNot) {
+  NFTRuntimeSettings s;
+  s.logLevel = -1;
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+  s.logLevel = -2;
+  EXPECT_FALSE(nftRuntimeSettingsValid(s));
+  s.logLevel = AR_LOG_LEVEL_DEBUG;
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+  s.logLevel = AR_LOG_LEVEL_REL_INFO;
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+}
+
+TEST(NFTRuntimeSettingsTest, FreshStructChangingThePlanesLeavesTheLevelAlone) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_ERROR;
+  webarkitLogLevel = AR_LOG_LEVEL_ERROR;
+
+  NFTRuntimeSettings fresh;  // logLevel is the default, -1
+  fresh.nearPlane = 2.0;
+  fresh.farPlane = 300.0;
+  ASSERT_EQ(core.configure(fresh), 0);
+  EXPECT_EQ(core.getProjectionNearPlane(), 2.0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+  EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);  // the effective level, never -1
+}
+
+TEST(NFTRuntimeSettingsTest, RoundTripKeepsAnIndependentWebarkitLogLevel) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;  // as WebARKitManager::setLogLevel() would leave it
+
+  ASSERT_EQ(core.configure(core.getRuntimeSettings()), 0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_WARN);
+}
+
+TEST(NFTRuntimeSettingsTest, AnExplicitLevelIsWrittenToBothGlobals) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.logLevel = AR_LOG_LEVEL_ERROR;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+}
+
+namespace {
+
+std::vector<std::string> gCapturedLog;
+void captureLog(const char *message) { gCapturedLog.push_back(message); }
+
+}  // namespace
+
+// The level a configure() sets must already apply to the messages configure() itself logs
+// (review of #106). With the level written last, the interval setter still logged "Detection
+// interval" at INFO under a call that asks for WARN.
+TEST(NFTRuntimeSettingsTest, ConfigureAppliesTheLevelBeforeItLogs) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.detectionIntervalMs = 123.0;  // changed, so setDetectionInterval() logs it
+  s.logLevel = AR_LOG_LEVEL_WARN;
+  const int result = core.configure(s);
+  webarkitLogSetLogger(nullptr, 0);
+
+  ASSERT_EQ(result, 0);
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 123.0);
+  for (const std::string &line : gCapturedLog) {
+    EXPECT_EQ(line.find("Detection interval"), std::string::npos) << "logged at the old level: " << line;
+  }
+
+  // Control: at INFO the same message is logged, so the check above can fail.
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+  core.setDetectionInterval(321.0);
+  webarkitLogSetLogger(nullptr, 0);
+  EXPECT_TRUE(gCapturedLog.empty());  // still WARN: the global stays
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogSetLogger(&captureLog, 0);
+  core.setDetectionInterval(111.0);
+  webarkitLogSetLogger(nullptr, 0);
+  ASSERT_FALSE(gCapturedLog.empty());
+  EXPECT_NE(gCapturedLog.back().find("Detection interval"), std::string::npos);
+}
+
+// A rejected configure() changes nothing, the level included. (The AR2 recreate failure that
+// the write's placement protects against cannot be provoked from here.)
+TEST(NFTRuntimeSettingsTest, FailedConfigureLeavesTheLevelAlone) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.logLevel = AR_LOG_LEVEL_ERROR;
+  s.nearPlane = -1.0;  // invalid
+  EXPECT_EQ(core.configure(s), -1);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_INFO);
+}
+
+// The AR2 parameters come from the settings (D6), are applied live, and a template-size
+// change recreates only the AR2 handle (D12).
+
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2UsesStoredSettings) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.trackingThresh = 7.0f;
+  s.ar2.simThresh = 0.6f;
+  s.ar2.searchFeatureNum = 20;
+  ASSERT_EQ(core.configure(s), 0);  // no handle yet: only stored
+  EXPECT_EQ(core.ar2HandleForTest(), nullptr);
+
+  ASSERT_TRUE(makeReady(core));
+  const AR2HandleT *handle = core.ar2HandleForTest();
+  ASSERT_NE(handle, nullptr);
+  EXPECT_FLOAT_EQ(handle->trackingThresh, 7.0f);
+  EXPECT_FLOAT_EQ(handle->simThresh, 0.6f);
+  EXPECT_EQ(handle->searchFeatureNum, 20);
+  EXPECT_EQ(handle->templateSize1, 6);
+  EXPECT_EQ(handle->templateSize2, 6);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, ConfigureUpdatesLiveHandle) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  const AR2HandleT *handle = core.ar2HandleForTest();
+  ASSERT_NE(handle, nullptr);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.trackingThresh = 9.0f;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.ar2HandleForTest(), handle);  // not recreated
+  EXPECT_FLOAT_EQ(handle->trackingThresh, 9.0f);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, TemplateSizeRecreatesOnlyAR2) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const AR2HandleT *oldHandle = core.ar2HandleForTest();
+  const KpmHandle *kpm = core.kpmHandleForTest();
+  ASSERT_NE(oldHandle, nullptr);
+  ASSERT_NE(kpm, nullptr);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize1 = 8;
+  ASSERT_EQ(core.configure(s), 0);
+  // The new handle is created before the old one is freed, so the address differs.
+  const AR2HandleT *newHandle = core.ar2HandleForTest();
+  ASSERT_NE(newHandle, nullptr);
+  EXPECT_NE(newHandle, oldHandle);
+  EXPECT_EQ(newHandle->templateSize1, 8);
+  EXPECT_EQ(newHandle->templateSize2, 6);
+  EXPECT_FLOAT_EQ(newHandle->trackingThresh, 5.0f);  // the other settings are applied too
+  EXPECT_EQ(core.kpmHandleForTest(), kpm);
+  EXPECT_EQ(core.markerCount(), 1);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, TrackingSurvivesTemplateChange) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize1 = 8;
+  s.ar2.templateSize2 = 8;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.ar2HandleForTest()->templateSize1, 8);
+
+  // The marker's tracking state is in its surface set, so it is tracked again on the same
+  // image with the new handle within a few frames.
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }, 5));
+  EXPECT_NE(core.markerState(0)->err, -1.0f);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, TemplateChangeKeepsTrackingWithoutKpm) {
+  // Stricter than TrackingSurvivesTemplateChange: the very next frame is tracked by the new
+  // handle from the surface set's pose, with no KPM pass (feed() returns -1 when none ran;
+  // KPM does not start while every marker is tracked).
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  ASSERT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize1 = 8;
+  s.ar2.templateSize2 = 8;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(feed(core, frames.both), -1);
+  EXPECT_TRUE(isTracking(core, 0));
+}
+
+TEST(NFTRuntimeSettingsAR2Test, SearchSizeZeroFollowsPreset) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  // The sentinel 0 is resolved through the preset: 6 without cpuDependentSearchSize.
+  EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 6);
+  ASSERT_TRUE(makeReady(core));
+  const AR2HandleT *handle = core.ar2HandleForTest();
+  ASSERT_NE(handle, nullptr);
+  EXPECT_EQ(handle->searchSize, 6);
+  EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 6);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.searchSize = 10;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.ar2HandleForTest(), handle);
+  EXPECT_EQ(handle->searchSize, 10);
+  EXPECT_EQ(core.getRuntimeSettings().ar2.searchSize, 10);
+}
+
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2TwiceReplacesTheHandleAndKeepsTracking) {
+  // setupAR2() is documented as callable again; the previous handle must be freed, not leaked.
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));  // the first setupAR2()
+  const AR2HandleT *first = core.ar2HandleForTest();
+  ASSERT_NE(first, nullptr);
+
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_NE(core.ar2HandleForTest(), nullptr);
+  EXPECT_NE(core.ar2HandleForTest(), first);  // the new handle exists before the old is freed
+
+  // setupAR2() drops the detector; addNFTMarkers() creates one for the new KPM handle.
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
+#ifdef WEBARKIT_NFT_THREADS
+
+TEST(NFTRuntimeSettingsAR2Test, ThreadedSetupAR2TwiceKeepsTracking) {
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
+TEST(NFTRuntimeSettingsAR2Test, ThreadedTemplateSizeRecreatesOnlyAR2) {
+  // The threaded AR2 variant (ar2CreateHandle / ar2DeleteHandle, with tracking threads).
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  const AR2HandleT *oldHandle = core.ar2HandleForTest();
+  const KpmHandle *kpm = core.kpmHandleForTest();
+  ASSERT_NE(oldHandle, nullptr);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.ar2.templateSize2 = 9;
+  ASSERT_EQ(core.configure(s), 0);
+  const AR2HandleT *newHandle = core.ar2HandleForTest();
+  ASSERT_NE(newHandle, nullptr);
+  EXPECT_NE(newHandle, oldHandle);
+  EXPECT_EQ(newHandle->templateSize2, 9);
+  EXPECT_EQ(newHandle->searchSize, s.ar2.searchSize);  // 6 or 12, resolved by the preset
+  EXPECT_EQ(core.kpmHandleForTest(), kpm);
 }
 
 #endif  // WEBARKIT_NFT_THREADS
