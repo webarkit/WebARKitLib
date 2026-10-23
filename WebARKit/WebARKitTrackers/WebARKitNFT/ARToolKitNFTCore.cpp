@@ -782,9 +782,15 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
 
   if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
 
-  // D9: the level is process-wide (module-wide in JS), not held by the core.
-  arLogLevel = settings.logLevel;
-  webarkitLogLevel = settings.logLevel;
+  // D9: the level is process-wide (module-wide in JS), not held by the core. -1 leaves it
+  // alone, so a struct built to change something else does not reset it. An unchanged level
+  // is not written either: arLogLevel and webarkitLogLevel can differ (WebARKitManager::
+  // setLogLevel() sets only the latter), and a getRuntimeSettings() round trip, which reports
+  // arLogLevel, must not overwrite it.
+  if (settings.logLevel != -1 && settings.logLevel != arLogLevel) {
+    arLogLevel = settings.logLevel;
+    webarkitLogLevel = settings.logLevel;
+  }
   return 0;
 }
 

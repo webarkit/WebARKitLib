@@ -43,7 +43,14 @@ struct NFTRuntimeSettings {
   /** -1 means "the preset's defaultDetectionIntervalMs". getRuntimeSettings() resolves it. */
   double detectionIntervalMs = -1;
   bool filtering = false;
-  int logLevel = AR_LOG_LEVEL_INFO;
+  /**
+   * -1 leaves the current level alone (D9). The level is process-wide, not owned by the core,
+   * so a caller that builds a fresh struct to change something else (the planes, say) must not
+   * reset a level that was set elsewhere. It is the default for that reason. Otherwise one of
+   * the AR_LOG_LEVEL_* values, written to arLogLevel and webarkitLogLevel.
+   * getRuntimeSettings() reports the effective level, never -1.
+   */
+  int logLevel = -1;
   NFTAR2Settings ar2;
 };
 
@@ -66,8 +73,9 @@ inline bool nftRuntimeSettingsValid(const NFTRuntimeSettings &s) {
   if (!std::isfinite(s.detectionIntervalMs)) return false;
   if (s.detectionIntervalMs != -1 && s.detectionIntervalMs < 0) return false;
 
-  // The levels of ARUtil/log.h, which WebARKit's logger shares numerically.
-  if (s.logLevel < AR_LOG_LEVEL_DEBUG || s.logLevel > AR_LOG_LEVEL_REL_INFO) return false;
+  // -1 leaves the level unchanged; otherwise the levels of ARUtil/log.h, which WebARKit's
+  // logger shares numerically.
+  if (s.logLevel != -1 && (s.logLevel < AR_LOG_LEVEL_DEBUG || s.logLevel > AR_LOG_LEVEL_REL_INFO)) return false;
 
   const NFTAR2Settings &a = s.ar2;
   // The tracking threshold is a template-matching score cutoff; the presets use 5.0.

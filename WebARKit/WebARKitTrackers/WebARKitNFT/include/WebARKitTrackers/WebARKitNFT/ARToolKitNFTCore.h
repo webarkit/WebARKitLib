@@ -121,9 +121,14 @@ public:
 
     /**
      * Applies every runtime setting at once. Validates first (nftRuntimeSettingsValid()) and
-     * changes nothing on failure (D7). A new plane rebuilds the lens when a camera is loaded;
-     * before that the values are only stored. The log level is written to the process-wide
-     * arLogLevel and webarkitLogLevel (D9). detectionIntervalMs -1 resolves to the preset's.
+     * changes nothing on failure (D7). Every field is replaced, except logLevel -1, so start
+     * from getRuntimeSettings() and change what you need; a default-built struct also resets
+     * the planes, the AR2 parameters and the rest to their defaults. A new plane rebuilds the
+     * lens when a camera is loaded; before that the values are only stored. logLevel -1 (the
+     * default) leaves the level alone; any other value is written to the process-wide
+     * arLogLevel and webarkitLogLevel (D9), and only when it differs from arLogLevel, so a
+     * getRuntimeSettings() round trip never touches a webarkitLogLevel that was set on its
+     * own. detectionIntervalMs -1 resolves to the preset's.
      * Changed AR2 fields are applied to the live AR2 handle (D6); a template-size change
      * recreates the AR2 handle instead, keeping the KPM handle, the detector and the markers
      * (D12). Without an AR2 handle they are only stored, and setupAR2() applies them.
@@ -135,8 +140,8 @@ public:
 
     /**
      * The current settings with the effective values: the interval and ar2.searchSize are the
-     * resolved ones, and logLevel is read from arLogLevel (D9), not from a copy held by the
-     * core.
+     * resolved ones, and logLevel is the effective level read from arLogLevel (D9), never
+     * -1, not a copy held by the core.
      */
     NFTRuntimeSettings getRuntimeSettings() const;
 
@@ -306,9 +311,9 @@ private:
     std::vector<nftMarker> nftMarkers;
 
     // The runtime settings: planes, continuousDetection, detectionIntervalMs, filtering and
-    // the AR2 parameters. logLevel is not authoritative here: the level lives in the
-    // process-wide arLogLevel / webarkitLogLevel (D9), and getRuntimeSettings() reads it
-    // from there.
+    // the AR2 parameters. logLevel is not authoritative here (it may be -1, "leave
+    // unchanged"): the level lives in the process-wide arLogLevel / webarkitLogLevel (D9),
+    // and getRuntimeSettings() reads it from there.
     NFTRuntimeSettings settings_;
 
     ARdouble cameraLens_[16];

@@ -1250,7 +1250,7 @@ TEST(NFTRuntimeSettingsTest, DefaultsMatchTheOldConstants) {
   EXPECT_TRUE(s.continuousDetection);
   EXPECT_EQ(s.detectionIntervalMs, -1);
   EXPECT_FALSE(s.filtering);
-  EXPECT_EQ(s.logLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(s.logLevel, -1);  // leave the level unchanged (D9)
   EXPECT_EQ(s.ar2.trackingThresh, 5.0f);
   EXPECT_EQ(s.ar2.simThresh, 0.5f);
   EXPECT_EQ(s.ar2.searchFeatureNum, 16);
@@ -1289,6 +1289,7 @@ TEST(NFTRuntimeSettingsTest, InvalidSettingsChangeNothing) {
   add([](NFTRuntimeSettings &s) { s.farPlane = 1.0; });
   add([](NFTRuntimeSettings &s) { s.detectionIntervalMs = -2; });
   add([](NFTRuntimeSettings &s) { s.logLevel = 99; });
+  add([](NFTRuntimeSettings &s) { s.logLevel = -2; });
   add([](NFTRuntimeSettings &s) { s.ar2.searchFeatureNum = 2; });
   add([](NFTRuntimeSettings &s) { s.ar2.searchFeatureNum = 41; });
   add([](NFTRuntimeSettings &s) { s.ar2.simThresh = 1.5f; });
@@ -1362,6 +1363,74 @@ TEST(NFTRuntimeSettingsTest, LogLevelIsTheGlobal) {
   }
   arLogLevel = savedAr;
   webarkitLogLevel = savedWebarkit;
+}
+
+namespace {
+
+/** Restores the process-wide log levels, which these tests change on purpose. */
+struct LogLevelGuard {
+  int ar = arLogLevel;
+  int webarkit = webarkitLogLevel;
+  ~LogLevelGuard() {
+    arLogLevel = ar;
+    webarkitLogLevel = webarkit;
+  }
+};
+
+}  // namespace
+
+// logLevel -1 leaves the level alone (review of #106).
+
+TEST(NFTRuntimeSettingsTest, LogLevelMinusOneIsValidAndMinusTwoIsNot) {
+  NFTRuntimeSettings s;
+  s.logLevel = -1;
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+  s.logLevel = -2;
+  EXPECT_FALSE(nftRuntimeSettingsValid(s));
+  s.logLevel = AR_LOG_LEVEL_DEBUG;
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+  s.logLevel = AR_LOG_LEVEL_REL_INFO;
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+}
+
+TEST(NFTRuntimeSettingsTest, FreshStructChangingThePlanesLeavesTheLevelAlone) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_ERROR;
+  webarkitLogLevel = AR_LOG_LEVEL_ERROR;
+
+  NFTRuntimeSettings fresh;  // logLevel is the default, -1
+  fresh.nearPlane = 2.0;
+  fresh.farPlane = 300.0;
+  ASSERT_EQ(core.configure(fresh), 0);
+  EXPECT_EQ(core.getProjectionNearPlane(), 2.0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+  EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);  // the effective level, never -1
+}
+
+TEST(NFTRuntimeSettingsTest, RoundTripKeepsAnIndependentWebarkitLogLevel) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;  // as WebARKitManager::setLogLevel() would leave it
+
+  ASSERT_EQ(core.configure(core.getRuntimeSettings()), 0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_WARN);
+}
+
+TEST(NFTRuntimeSettingsTest, AnExplicitLevelIsWrittenToBothGlobals) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.logLevel = AR_LOG_LEVEL_ERROR;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
 }
 
 // The AR2 parameters come from the settings (D6), are applied live, and a template-size
