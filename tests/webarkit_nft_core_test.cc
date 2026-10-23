@@ -1433,6 +1433,67 @@ TEST(NFTRuntimeSettingsTest, AnExplicitLevelIsWrittenToBothGlobals) {
   EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
 }
 
+namespace {
+
+std::vector<std::string> gCapturedLog;
+void captureLog(const char *message) { gCapturedLog.push_back(message); }
+
+}  // namespace
+
+// The level a configure() sets must already apply to the messages configure() itself logs
+// (review of #106). With the level written last, the interval setter still logged "Detection
+// interval" at INFO under a call that asks for WARN.
+TEST(NFTRuntimeSettingsTest, ConfigureAppliesTheLevelBeforeItLogs) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.detectionIntervalMs = 123.0;  // changed, so setDetectionInterval() logs it
+  s.logLevel = AR_LOG_LEVEL_WARN;
+  const int result = core.configure(s);
+  webarkitLogSetLogger(nullptr, 0);
+
+  ASSERT_EQ(result, 0);
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 123.0);
+  for (const std::string &line : gCapturedLog) {
+    EXPECT_EQ(line.find("Detection interval"), std::string::npos) << "logged at the old level: " << line;
+  }
+
+  // Control: at INFO the same message is logged, so the check above can fail.
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+  core.setDetectionInterval(321.0);
+  webarkitLogSetLogger(nullptr, 0);
+  EXPECT_TRUE(gCapturedLog.empty());  // still WARN: the global stays
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogSetLogger(&captureLog, 0);
+  core.setDetectionInterval(111.0);
+  webarkitLogSetLogger(nullptr, 0);
+  ASSERT_FALSE(gCapturedLog.empty());
+  EXPECT_NE(gCapturedLog.back().find("Detection interval"), std::string::npos);
+}
+
+// A rejected configure() changes nothing, the level included. (The AR2 recreate failure that
+// the write's placement protects against cannot be provoked from here.)
+TEST(NFTRuntimeSettingsTest, FailedConfigureLeavesTheLevelAlone) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.logLevel = AR_LOG_LEVEL_ERROR;
+  s.nearPlane = -1.0;  // invalid
+  EXPECT_EQ(core.configure(s), -1);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_INFO);
+}
+
 // The AR2 parameters come from the settings (D6), are applied live, and a template-size
 // change recreates only the AR2 handle (D12).
 

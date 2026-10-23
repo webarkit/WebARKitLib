@@ -776,12 +776,10 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
     }
   }
 
-  if (settings.filtering && !previous.filtering) resetMarkerFilters();  // off to on: see above
-
-  setDetectionInterval(interval);
-
-  if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
-
+  // Written here, after the AR2 block (which can fail and roll back, so nothing may have
+  // changed before it) and before everything below that logs: setDetectionInterval() and
+  // recalculateCameraLens() would otherwise log at the old level, so a call that asks for a
+  // quieter one still printed its own INFO lines (review of #106).
   // D9: the level is process-wide (module-wide in JS), not held by the core. -1 leaves it
   // alone, so a struct built to change something else does not reset it. An unchanged level
   // is not written either: arLogLevel and webarkitLogLevel can differ (WebARKitManager::
@@ -791,6 +789,12 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
     arLogLevel = settings.logLevel;
     webarkitLogLevel = settings.logLevel;
   }
+
+  if (settings.filtering && !previous.filtering) resetMarkerFilters();  // off to on: see above
+
+  setDetectionInterval(interval);
+
+  if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
   return 0;
 }
 
