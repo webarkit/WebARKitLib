@@ -180,7 +180,9 @@ void ARToolKitNFTCore::trackMarkers() {
         state.pose[r][c] = trans[r][c];
       }
     }
-    // Without poseFilteringSupported (the threaded preset) poses are never filtered.
+    // Per-marker filter, reset on (re)acquisition. Both presets support it (#692: the threaded
+    // build never filtered before the core); poseFilteringSupported is kept for a preset that
+    // cannot filter.
     if (this->settings_.filtering && this->config.poseFilteringSupported) {
       if (!state.ftmi) {
         state.ftmi = arFilterTransMatInit(this->filterSampleRate, this->filterCutoffFrequency);

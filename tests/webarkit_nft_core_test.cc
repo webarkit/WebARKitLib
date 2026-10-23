@@ -131,7 +131,7 @@ TEST(NFTTrackingConfigTest, ThreadedPresetMatchesTheThreadedBinding) {
   EXPECT_EQ(config.ar2Variant, NFTTrackingConfig::AR2Variant::Threaded);
   EXPECT_TRUE(config.cpuDependentSearchSize);
   EXPECT_EQ(config.defaultDetectionIntervalMs, 0.0);
-  EXPECT_FALSE(config.poseFilteringSupported);
+  EXPECT_TRUE(config.poseFilteringSupported);  // #692: the threaded build used to never filter
   EXPECT_EQ(config.clock, &nftDefaultClockMs);
 }
 
@@ -1005,9 +1005,73 @@ TEST(CoreTrackingTest, ThreadedFindsBothMarkers) {
   EXPECT_LT(core.markerState(0)->pose[0][3], core.markerState(1)->pose[0][3]);
 }
 
-TEST(CoreFilterTest, ThreadedPresetNeverFilters) {
+namespace {
+
+/** The frame moved dx pixels to the right (edge pixels repeated); a second, different view. */
+Frame shiftedRight(const Frame &src, int dx) {
+  Frame out = src;
+  for (int y = 0; y < kFrameHeight; y++) {
+    for (int x = 0; x < kFrameWidth; x++) {
+      const int sx = std::max(0, x - dx);
+      const ARUint8 *from = &src.rgba[(static_cast<size_t>(y) * kFrameWidth + sx) * 4];
+      std::copy(from, from + 4, &out.rgba[(static_cast<size_t>(y) * kFrameWidth + x) * 4]);
+    }
+  }
+  computeLuma(out);
+  return out;
+}
+
+double poseDistance(const ARdouble a[3][4], const ARdouble b[3][4]) {
+  double sum = 0.0;
+  for (int r = 0; r < 3; r++) {
+    for (int c = 0; c < 4; c++) sum += std::fabs(a[r][c] - b[r][c]);
+  }
+  return sum;
+}
+
+/**
+ * Tracks pinball on `base` until the pose settles, then feeds `moved` once and returns how far
+ * the pose of marker 0 travelled. The filter low-passes this step; the raw pose follows it.
+ * Returns a negative value when tracking failed.
+ */
+double poseStepOnAChangedFrame(ARToolKitNFTCore &core, const Frame &base, const Frame &moved) {
+  if (!makeReady(core)) return -1.0;
+  if (core.addNFTMarkers({"data/pinball"}) != std::vector<int>({0})) return -1.0;
+  if (!feedUntilThreaded(core, base, [&] { return isTracking(core, 0); })) return -1.0;
+  for (int i = 0; i < 5; i++) feed(core, base);
+  if (!isTracking(core, 0)) return -1.0;
+  ARdouble before[3][4];
+  std::copy(&core.markerState(0)->pose[0][0], &core.markerState(0)->pose[0][0] + 12, &before[0][0]);
+  feed(core, moved);
+  if (!isTracking(core, 0)) return -1.0;
+  return poseDistance(before, core.markerState(0)->pose);
+}
+
+}  // namespace
+
+// #692: the threaded build never filtered poses; the core makes it a preset flag. Frames of a
+// static image give the same raw pose, so filtered == raw proves nothing. The test feeds a
+// second, shifted view and compares the pose step with a core that does not filter.
+TEST(NFTRuntimeSettingsTest, ThreadedPresetFilters) {
+  EXPECT_TRUE(threadedPreset().poseFilteringSupported);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  const Frame moved = shiftedRight(frames.both, 6);
+
+  ARToolKitNFTCore raw(threadedPreset());
+  const double rawStep = poseStepOnAChangedFrame(raw, frames.both, moved);
+  ASSERT_GT(rawStep, 0.0) << "the unfiltered core must follow the shifted view";
+  EXPECT_EQ(raw.markerState(0)->ftmi, nullptr);
+
+  ARToolKitNFTCore filtered(threadedPreset(), true);
+  const double filteredStep = poseStepOnAChangedFrame(filtered, frames.both, moved);
+  ASSERT_GE(filteredStep, 0.0);
+  EXPECT_NE(filtered.markerState(0)->ftmi, nullptr);
+  EXPECT_LT(filteredStep, rawStep * 0.95);
+}
+
+TEST(NFTRuntimeSettingsTest, ThreadedPresetFilteringFollowsSetFiltering) {
   ARToolKitNFTCore core(threadedPreset());
-  core.setFiltering(true);
   ASSERT_TRUE(makeReady(core));
   ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
   const TestFrames &frames = testFrames();
@@ -1015,7 +1079,12 @@ TEST(CoreFilterTest, ThreadedPresetNeverFilters) {
   ASSERT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
   feed(core, frames.both);
   ASSERT_TRUE(isTracking(core, 0));
-  EXPECT_EQ(core.markerState(0)->ftmi, nullptr);
+  EXPECT_EQ(core.markerState(0)->ftmi, nullptr);  // off by default
+
+  core.setFiltering(true);
+  feed(core, frames.both);
+  ASSERT_TRUE(isTracking(core, 0));
+  EXPECT_NE(core.markerState(0)->ftmi, nullptr);
 }
 
 TEST(CoreLifecycleTest, AddMarkersWhileSearching) {
