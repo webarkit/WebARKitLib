@@ -976,32 +976,6 @@ TEST(CoreFilterTest, SetFilteringTurnsItOnInTheSingleThreadPreset) {
   EXPECT_NE(core.markerState(0)->ftmi, nullptr);
 }
 
-namespace {
-
-/** The frame moved dx pixels to the right (edge pixels repeated); a second, different view. */
-Frame shiftedRight(const Frame &src, int dx) {
-  Frame out = src;
-  for (int y = 0; y < kFrameHeight; y++) {
-    for (int x = 0; x < kFrameWidth; x++) {
-      const int sx = std::max(0, x - dx);
-      const ARUint8 *from = &src.rgba[(static_cast<size_t>(y) * kFrameWidth + sx) * 4];
-      std::copy(from, from + 4, &out.rgba[(static_cast<size_t>(y) * kFrameWidth + x) * 4]);
-    }
-  }
-  computeLuma(out);
-  return out;
-}
-
-double poseDistance(const ARdouble a[3][4], const ARdouble b[3][4]) {
-  double sum = 0.0;
-  for (int r = 0; r < 3; r++) {
-    for (int c = 0; c < 4; c++) sum += std::fabs(a[r][c] - b[r][c]);
-  }
-  return sum;
-}
-
-}  // namespace
-
 // Re-enabling filtering must restart each marker's filter (review of #106). The marker keeps
 // its filter state while filtering is off, so without a reset the first filtered pose is pulled
 // toward the sample from before it was switched off. A marker that moved while filtering was
@@ -1101,47 +1075,35 @@ TEST(CoreTrackingTest, ThreadedFindsBothMarkers) {
   EXPECT_LT(core.markerState(0)->pose[0][3], core.markerState(1)->pose[0][3]);
 }
 
-namespace {
-
-/**
- * Tracks pinball on `base` until the pose settles, then feeds `moved` once and returns how far
- * the pose of marker 0 travelled. The filter low-passes this step; the raw pose follows it.
- * Returns a negative value when tracking failed.
- */
-double poseStepOnAChangedFrame(ARToolKitNFTCore &core, const Frame &base, const Frame &moved) {
-  if (!makeReady(core)) return -1.0;
-  if (core.addNFTMarkers({"data/pinball"}) != std::vector<int>({0})) return -1.0;
-  if (!feedUntilThreaded(core, base, [&] { return isTracking(core, 0); })) return -1.0;
-  for (int i = 0; i < 5; i++) feed(core, base);
-  if (!isTracking(core, 0)) return -1.0;
-  ARdouble before[3][4];
-  std::copy(&core.markerState(0)->pose[0][0], &core.markerState(0)->pose[0][0] + 12, &before[0][0]);
-  feed(core, moved);
-  if (!isTracking(core, 0)) return -1.0;
-  return poseDistance(before, core.markerState(0)->pose);
-}
-
-}  // namespace
-
-// #692: the threaded build never filtered poses; the core makes it a preset flag. Frames of a
-// static image give the same raw pose, so filtered == raw proves nothing. The test feeds a
-// second, shifted view and compares the pose step with a core that does not filter.
+// #692: the threaded build never filtered poses; the core makes it a preset flag. Two real
+// frames cannot show a filter (AR2's pose jitters by more than the filter moves it, and two
+// cores start from different KPM poses), so one core is probed with a planted sample: the
+// filter's state is overwritten with a position far from the real one, and the next pose must
+// be pulled most of the way toward it. An unfiltered pose stays on the raw one.
 TEST(NFTRuntimeSettingsTest, ThreadedPresetFilters) {
   EXPECT_TRUE(threadedPreset().poseFilteringSupported);
   const TestFrames &frames = testFrames();
   ASSERT_FALSE(frames.both.rgba.empty());
-  const Frame moved = shiftedRight(frames.both, 6);
 
-  ARToolKitNFTCore raw(threadedPreset());
-  const double rawStep = poseStepOnAChangedFrame(raw, frames.both, moved);
-  ASSERT_GT(rawStep, 0.0) << "the unfiltered core must follow the shifted view";
-  EXPECT_EQ(raw.markerState(0)->ftmi, nullptr);
+  ARToolKitNFTCore core(threadedPreset(), true);
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  ASSERT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
+  for (int i = 0; i < 3; i++) feed(core, frames.both);
+  ASSERT_TRUE(isTracking(core, 0));
+  ASSERT_NE(core.markerState(0)->ftmi, nullptr);
 
-  ARToolKitNFTCore filtered(threadedPreset(), true);
-  const double filteredStep = poseStepOnAChangedFrame(filtered, frames.both, moved);
-  ASSERT_GE(filteredStep, 0.0);
-  EXPECT_NE(filtered.markerState(0)->ftmi, nullptr);
-  EXPECT_LT(filteredStep, rawStep * 0.95);
+  // A reset call seeds the filter with the matrix, through the public API.
+  ARdouble planted[3][4];
+  std::copy(&core.markerState(0)->pose[0][0], &core.markerState(0)->pose[0][0] + 12, &planted[0][0]);
+  const ARdouble before = planted[0][3];
+  planted[0][3] = before + 10000.0;
+  ASSERT_GE(arFilterTransMat(core.markerState(0)->ftmi, planted, 1), 0);
+
+  feed(core, frames.both);
+  ASSERT_TRUE(isTracking(core, 0));
+  // Tracking jitter is a few units; the planted sample pulls the pose by ~85% of 10000.
+  EXPECT_GT(core.markerState(0)->pose[0][3] - before, 1000.0);
 }
 
 TEST(NFTRuntimeSettingsTest, ThreadedPresetFilteringFollowsSetFiltering) {
