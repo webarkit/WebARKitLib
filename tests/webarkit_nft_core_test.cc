@@ -976,6 +976,102 @@ TEST(CoreFilterTest, SetFilteringTurnsItOnInTheSingleThreadPreset) {
   EXPECT_NE(core.markerState(0)->ftmi, nullptr);
 }
 
+namespace {
+
+/** The frame moved dx pixels to the right (edge pixels repeated); a second, different view. */
+Frame shiftedRight(const Frame &src, int dx) {
+  Frame out = src;
+  for (int y = 0; y < kFrameHeight; y++) {
+    for (int x = 0; x < kFrameWidth; x++) {
+      const int sx = std::max(0, x - dx);
+      const ARUint8 *from = &src.rgba[(static_cast<size_t>(y) * kFrameWidth + sx) * 4];
+      std::copy(from, from + 4, &out.rgba[(static_cast<size_t>(y) * kFrameWidth + x) * 4]);
+    }
+  }
+  computeLuma(out);
+  return out;
+}
+
+double poseDistance(const ARdouble a[3][4], const ARdouble b[3][4]) {
+  double sum = 0.0;
+  for (int r = 0; r < 3; r++) {
+    for (int c = 0; c < 4; c++) sum += std::fabs(a[r][c] - b[r][c]);
+  }
+  return sum;
+}
+
+}  // namespace
+
+// Re-enabling filtering must restart each marker's filter (review of #106). The marker keeps
+// its filter state while filtering is off, so without a reset the first filtered pose is pulled
+// toward the sample from before it was switched off. A marker that moved while filtering was
+// off is simulated by overwriting that stale sample with a position far from the real one: a
+// reset leaves the pose on the raw one, a stale filter drags it most of the way to the sample.
+// (Two real frames cannot tell them apart: AR2's pose jitters by more than the filter moves it.)
+namespace {
+
+/** Distance from the raw translation, and from the stale sample, of the pose after re-enabling. */
+struct FilterRestart {
+  bool ok = false;
+  double fromRaw = 0.0;
+  double staleOffset = 0.0;
+};
+
+template <typename Enable>
+FilterRestart filterRestart(Enable enable) {
+  FilterRestart out;
+  const TestFrames &frames = testFrames();
+  if (frames.both.rgba.empty()) return out;
+  ARToolKitNFTCore core(singleThreadPreset());
+  if (!makeReady(core)) return out;
+  if (core.addNFTMarkers({"data/pinball"}) != std::vector<int>({0})) return out;
+  if (!feedUntil(core, frames.both, [&] { return isTracking(core, 0); })) return out;
+
+  core.setFiltering(true);
+  for (int i = 0; i < 3; i++) feed(core, frames.both);
+  core.setFiltering(false);
+  feed(core, frames.both);  // unfiltered: markerState(0)->pose is the raw pose
+  if (!isTracking(core, 0) || core.markerState(0)->ftmi == nullptr) return out;
+  const ARdouble rawX = core.markerState(0)->pose[0][3];
+
+  // Overwrite the stale sample through the public API: a reset call seeds it from the matrix.
+  ARdouble far[3][4];
+  std::copy(&core.markerState(0)->pose[0][0], &core.markerState(0)->pose[0][0] + 12, &far[0][0]);
+  const ARdouble stale = rawX + 10000.0;
+  far[0][3] = stale;
+  if (arFilterTransMat(core.markerState(0)->ftmi, far, 1) < 0) return out;
+
+  enable(core);
+  feed(core, frames.both);
+  if (!isTracking(core, 0)) return out;
+  out.ok = true;
+  out.fromRaw = std::fabs(core.markerState(0)->pose[0][3] - rawX);
+  out.staleOffset = std::fabs(stale - rawX);
+  return out;
+}
+
+template <typename Enable>
+void expectFilterRestarts(Enable enable) {
+  const FilterRestart r = filterRestart(enable);
+  ASSERT_TRUE(r.ok);
+  // Tracking jitter between two frames is a few units; the stale sample would pull ~85% of 10000.
+  EXPECT_LT(r.fromRaw, r.staleOffset * 0.05);
+}
+
+}  // namespace
+
+TEST(CoreFilterTest, SetFilteringRestartsTheFilter) {
+  expectFilterRestarts([](ARToolKitNFTCore &core) { core.setFiltering(true); });
+}
+
+TEST(CoreFilterTest, ConfigureRestartsTheFilter) {
+  expectFilterRestarts([](ARToolKitNFTCore &core) {
+    NFTRuntimeSettings s = core.getRuntimeSettings();
+    s.filtering = true;
+    ASSERT_EQ(core.configure(s), 0);
+  });
+}
+
 #ifdef WEBARKIT_NFT_THREADS
 
 namespace {
@@ -1006,28 +1102,6 @@ TEST(CoreTrackingTest, ThreadedFindsBothMarkers) {
 }
 
 namespace {
-
-/** The frame moved dx pixels to the right (edge pixels repeated); a second, different view. */
-Frame shiftedRight(const Frame &src, int dx) {
-  Frame out = src;
-  for (int y = 0; y < kFrameHeight; y++) {
-    for (int x = 0; x < kFrameWidth; x++) {
-      const int sx = std::max(0, x - dx);
-      const ARUint8 *from = &src.rgba[(static_cast<size_t>(y) * kFrameWidth + sx) * 4];
-      std::copy(from, from + 4, &out.rgba[(static_cast<size_t>(y) * kFrameWidth + x) * 4]);
-    }
-  }
-  computeLuma(out);
-  return out;
-}
-
-double poseDistance(const ARdouble a[3][4], const ARdouble b[3][4]) {
-  double sum = 0.0;
-  for (int r = 0; r < 3; r++) {
-    for (int c = 0; c < 4; c++) sum += std::fabs(a[r][c] - b[r][c]);
-  }
-  return sum;
-}
 
 /**
  * Tracks pinball on `base` until the pose settles, then feeds `moved` once and returns how far

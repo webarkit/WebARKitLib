@@ -700,7 +700,16 @@ int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
  * Detection policy *
  *******************/
 
+// A marker keeps its filter state (ftmi) while filtering is off. When filtering comes back on
+// during continuous tracking, the first filtered pose would be pulled toward that stale
+// sample. Marking every marker for a reset makes the next tracked frame re-seed the filter
+// from the raw pose. One place, used by setFiltering() and configure() (review of #106).
+void ARToolKitNFTCore::resetMarkerFilters() {
+  for (NFTMarkerState &state : this->markerStates) state.filterNeedsReset = true;
+}
+
 void ARToolKitNFTCore::setFiltering(bool enableFiltering) {
+  if (enableFiltering && !this->settings_.filtering) resetMarkerFilters();
   this->settings_.filtering = enableFiltering;
   WEBARKIT_LOGi("Filtering enabled with setFiltering: %s\n", enableFiltering ? "true" : "false");
 }
@@ -766,6 +775,8 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
       if (after.searchSize != before.searchSize) ar2SetSearchSize(this->ar2Handle, after.searchSize);
     }
   }
+
+  if (settings.filtering && !previous.filtering) resetMarkerFilters();  // off to on: see above
 
   setDetectionInterval(interval);
 

@@ -252,6 +252,8 @@ private:
      * @return 0, or -1 when the new handle cannot be created (the old one is kept)
      */
     int recreateAR2Handle();
+    /** Marks every marker's filter for a restart; see the definition for why. */
+    void resetMarkerFilters();
     /** Frees paramLT and the AR2 handle (what setCamera() recreates). */
     void deleteHandle();
     /**
