@@ -21,20 +21,24 @@ static int gCameraID = 0;
 static std::unordered_map<int, ARParam> cameraParams;
 
 ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFiltering)
-    : config(config), withFiltering(withFiltering),
+    : config(config),
       filterCutoffFrequency(60.0), filterSampleRate(120.0),
       id(0), param(), paramLT(nullptr), videoFrame(nullptr), videoFrameSize(0),
       videoLuma(nullptr), width(0), height(0),
       kpmHandle(nullptr), ar2Handle(nullptr), detector(nullptr),
-      continuousDetection(true),
-      // As setDetectionInterval(): negative values and NaN mean 0.
-      detectionIntervalMs(config.defaultDetectionIntervalMs > 0.0 ? config.defaultDetectionIntervalMs : 0.0),
       lastKpmEndMs(-std::numeric_limits<double>::infinity()),
       surfaceSetCount(0), // Running NFT marker id
       surfaceSet(), refDataSetAll(nullptr),
-      nearPlane(0.0001), farPlane(1000.0),
       cameraLens_(), pixFormat(AR_PIXEL_FORMAT_RGBA)
 {
+  // The settings start at their defaults (near 0.1: see NFTRuntimeSettings). The stored
+  // interval is always the resolved one, so it starts as the preset's; as in
+  // setDetectionInterval(), negative values and NaN mean 0.
+  this->settings_.filtering = withFiltering;
+  this->settings_.detectionIntervalMs =
+      config.defaultDetectionIntervalMs > 0.0 ? config.defaultDetectionIntervalMs : 0.0;
+  // The constructor does not touch arLogLevel / webarkitLogLevel (D9): they belong to the
+  // process (the module, in JS), so constructing a core must not reset a level set earlier.
   // A config without a clock gets the default one, so detectNFTMarker() never calls null.
   if (this->config.clock == nullptr) {
     this->config.clock = &nftDefaultClockMs;
@@ -125,8 +129,8 @@ int ARToolKitNFTCore::detectNFTMarker() {
   const double now = this->config.clock();
   const bool detectionDue =
       !anyMarkerTracked() ||
-      (this->continuousDetection &&
-       now - this->lastKpmEndMs >= this->detectionIntervalMs);
+      (this->settings_.continuousDetection &&
+       now - this->lastKpmEndMs >= this->settings_.detectionIntervalMs);
 
   if (canDetect && this->detector->idle() && this->surfaceSetCount > 0 &&
       !allMarkersTracked() && detectionDue) {
@@ -177,7 +181,7 @@ void ARToolKitNFTCore::trackMarkers() {
       }
     }
     // Without poseFilteringSupported (the threaded preset) poses are never filtered.
-    if (this->withFiltering && this->config.poseFilteringSupported) {
+    if (this->settings_.filtering && this->config.poseFilteringSupported) {
       if (!state.ftmi) {
         state.ftmi = arFilterTransMatInit(this->filterSampleRate, this->filterCutoffFrequency);
         state.filterNeedsReset = true;
@@ -405,8 +409,8 @@ int ARToolKitNFTCore::setCamera(int /*id*/, int cameraID) {
 
   ARLOGi("setCamera(): arParamLTCreated\n..%d, %d\n", (this->paramLT->param).xsize, (this->paramLT->param).ysize);
 
-  arglCameraFrustumRH(&((this->paramLT)->param), this->nearPlane,
-                      this->farPlane, this->cameraLens_);
+  arglCameraFrustumRH(&((this->paramLT)->param), this->settings_.nearPlane,
+                      this->settings_.farPlane, this->cameraLens_);
 
   return 0;
 }
@@ -414,8 +418,8 @@ int ARToolKitNFTCore::setCamera(int /*id*/, int cameraID) {
 void ARToolKitNFTCore::recalculateCameraLens() {
   // Not in the bindings: there is no lens without paramLT.
   if (this->paramLT == nullptr) return;
-  arglCameraFrustumRH(&((this->paramLT)->param), this->nearPlane,
-                      this->farPlane, this->cameraLens_);
+  arglCameraFrustumRH(&((this->paramLT)->param), this->settings_.nearPlane,
+                      this->settings_.farPlane, this->cameraLens_);
 }
 
 int ARToolKitNFTCore::loadCamera(const std::string &cparam_name) {
@@ -588,17 +592,23 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
  * Setters and getters *
  **********************/
 
+// D5: the plane setters rebuild the lens when a camera is loaded, so cameraLens() is always
+// consistent with the planes and callers need no recalculateCameraLens(). Before setCamera()
+// there is no lens yet, so the value is only stored (recalculateCameraLens() does nothing
+// without paramLT). The setters stay lenient: unlike configure() they validate nothing.
 void ARToolKitNFTCore::setProjectionNearPlane(const ARdouble projectionNearPlane) {
-  this->nearPlane = projectionNearPlane;
+  this->settings_.nearPlane = projectionNearPlane;
+  recalculateCameraLens();
 }
 
-ARdouble ARToolKitNFTCore::getProjectionNearPlane() const { return this->nearPlane; }
+ARdouble ARToolKitNFTCore::getProjectionNearPlane() const { return this->settings_.nearPlane; }
 
 void ARToolKitNFTCore::setProjectionFarPlane(const ARdouble projectionFarPlane) {
-  this->farPlane = projectionFarPlane;
+  this->settings_.farPlane = projectionFarPlane;
+  recalculateCameraLens();
 }
 
-ARdouble ARToolKitNFTCore::getProjectionFarPlane() const { return this->farPlane; }
+ARdouble ARToolKitNFTCore::getProjectionFarPlane() const { return this->settings_.farPlane; }
 
 /********
  * Setup *
@@ -646,17 +656,55 @@ int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
  *******************/
 
 void ARToolKitNFTCore::setFiltering(bool enableFiltering) {
-  this->withFiltering = enableFiltering;
+  this->settings_.filtering = enableFiltering;
   WEBARKIT_LOGi("Filtering enabled with setFiltering: %s\n", enableFiltering ? "true" : "false");
 }
 
 void ARToolKitNFTCore::setContinuousDetection(bool enabled) {
-  this->continuousDetection = enabled;
+  this->settings_.continuousDetection = enabled;
   WEBARKIT_LOGi("Continuous detection: %s\n", enabled ? "on" : "off");
 }
 
 void ARToolKitNFTCore::setDetectionInterval(double ms) {
   // Negative (or NaN) means "every frame", as 0 does.
-  this->detectionIntervalMs = ms > 0.0 ? ms : 0.0;
-  WEBARKIT_LOGi("Detection interval: %f ms\n", this->detectionIntervalMs);
+  this->settings_.detectionIntervalMs = ms > 0.0 ? ms : 0.0;
+  WEBARKIT_LOGi("Detection interval: %f ms\n", this->settings_.detectionIntervalMs);
+}
+
+/*******************
+ * Runtime settings *
+ *******************/
+
+// D7: configure() validates everything before it changes anything, so a patch that is invalid
+// in one field applies none of it. The setters above stay lenient (for example a negative
+// interval means 0) so existing callers do not break; only the new entry point rejects.
+int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
+  if (!nftRuntimeSettingsValid(settings)) {
+    WEBARKIT_LOGe("configure(): invalid settings, nothing changed.\n");
+    return -1;
+  }
+
+  const bool planesChanged = settings.nearPlane != this->settings_.nearPlane ||
+                             settings.farPlane != this->settings_.farPlane;
+
+  // The interval -1 follows the preset; stored resolved, as setDetectionInterval() does.
+  const double interval = settings.detectionIntervalMs < 0 ? this->config.defaultDetectionIntervalMs
+                                                           : settings.detectionIntervalMs;
+
+  this->settings_ = settings;
+  this->settings_.detectionIntervalMs = 0.0;  // set below through setDetectionInterval()
+  setDetectionInterval(interval);
+
+  if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
+
+  // D9: the level is process-wide (module-wide in JS), not held by the core.
+  arLogLevel = settings.logLevel;
+  webarkitLogLevel = settings.logLevel;
+  return 0;
+}
+
+NFTRuntimeSettings ARToolKitNFTCore::getRuntimeSettings() const {
+  NFTRuntimeSettings settings = this->settings_;
+  settings.logLevel = arLogLevel;
+  return settings;
 }

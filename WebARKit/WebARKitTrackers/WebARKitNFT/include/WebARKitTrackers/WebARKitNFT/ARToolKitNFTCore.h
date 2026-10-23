@@ -6,6 +6,7 @@
 #include <KPM/kpm.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTDetector.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTMarkerState.h>
+#include <WebARKitTrackers/WebARKitNFT/NFTRuntimeSettings.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
 
 #include <array>
@@ -109,8 +110,30 @@ public:
     ARdouble getProjectionNearPlane() const;
     void setProjectionFarPlane(ARdouble projectionFarPlane);
     ARdouble getProjectionFarPlane() const;
-    /** Recomputes cameraLens() from paramLT and the projection planes. */
+    /**
+     * Recomputes cameraLens() from paramLT and the projection planes. No longer needed: the
+     * plane setters and configure() rebuild the lens themselves (D5).
+     */
     void recalculateCameraLens();
+
+    // Runtime settings
+
+    /**
+     * Applies every runtime setting at once. Validates first (nftRuntimeSettingsValid()) and
+     * changes nothing on failure (D7). A new plane rebuilds the lens when a camera is loaded;
+     * before that the values are only stored. The log level is written to the process-wide
+     * arLogLevel and webarkitLogLevel (D9). detectionIntervalMs -1 resolves to the preset's.
+     * The AR2 fields are stored and validated here; applying them to the AR2 handle is not
+     * done yet.
+     * @return 0, or -1 with nothing changed
+     */
+    int configure(const NFTRuntimeSettings &settings);
+
+    /**
+     * The current settings with the effective values: the interval is the resolved one, and
+     * logLevel is read from arLogLevel (D9), not from a copy held by the core.
+     */
+    NFTRuntimeSettings getRuntimeSettings() const;
 
     // Markers
 
@@ -211,7 +234,6 @@ private:
 
     NFTTrackingConfig config;
 
-    bool withFiltering;
     // Filtering-related variables
     double filterCutoffFrequency;
     double filterSampleRate;
@@ -241,8 +263,7 @@ private:
     // detectionIntervalMs, counted from the end of the previous pass, and not at
     // all if continuousDetection is off. While every loaded marker is tracked
     // it does not run.
-    bool continuousDetection;
-    double detectionIntervalMs;
+    // continuousDetection and detectionIntervalMs (always stored resolved) live in settings_.
     // When the last pass finished; -infinity so the first pass is never throttled.
     double lastKpmEndMs;
 
@@ -254,8 +275,11 @@ private:
     KpmRefDataSet *refDataSetAll;
     std::vector<nftMarker> nftMarkers;
 
-    ARdouble nearPlane;
-    ARdouble farPlane;
+    // The runtime settings: planes, continuousDetection, detectionIntervalMs, filtering and
+    // the AR2 parameters. logLevel is not authoritative here: the level lives in the
+    // process-wide arLogLevel / webarkitLogLevel (D9), and getRuntimeSettings() reads it
+    // from there.
+    NFTRuntimeSettings settings_;
 
     ARdouble cameraLens_[16];
     AR_PIXEL_FORMAT pixFormat;

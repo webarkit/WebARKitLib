@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <AR/ar.h>
+#include <AR/paramGL.h>
 #include <AR2/imageFormat.h>
 #include <KPM/kpm.h>
 #include <WebARKitLog.h>
@@ -9,6 +10,7 @@
 #include <WebARKit/WebARKitLog.h>
 #include <WebARKitTrackers/WebARKitNFT/ARToolKitNFTCore.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTDetector.h>
+#include <WebARKitTrackers/WebARKitNFT/NFTRuntimeSettings.h>
 #include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
 #include <WebARKitTrackers/WebARKitNFT/SyncKpmDetector.h>
 #ifdef WEBARKIT_NFT_THREADS
@@ -448,7 +450,7 @@ TEST(CoreCameraTest, SetCameraTwice) {
 
 TEST(CoreCameraTest, ProjectionPlanes) {
   ARToolKitNFTCore core(singleThreadPreset());
-  EXPECT_EQ(core.getProjectionNearPlane(), 0.0001);
+  EXPECT_EQ(core.getProjectionNearPlane(), 0.1);
   EXPECT_EQ(core.getProjectionFarPlane(), 1000.0);
 
   ASSERT_TRUE(makeReady(core));
@@ -458,10 +460,11 @@ TEST(CoreCameraTest, ProjectionPlanes) {
   EXPECT_EQ(core.getProjectionNearPlane(), 1.0);
   EXPECT_EQ(core.getProjectionFarPlane(), 500.0);
 
-  // The lens follows the planes only once recalculated.
-  EXPECT_EQ(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), before);
-  core.recalculateCameraLens();
+  // The plane setters rebuild the lens (D5); recalculating again changes nothing.
   EXPECT_NE(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), before);
+  const std::vector<ARdouble> after(core.cameraLens(), core.cameraLens() + 16);
+  core.recalculateCameraLens();
+  EXPECT_EQ(std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16), after);
 }
 
 TEST(CoreMarkersTest, LoadsTwoMarkersInOneCall) {
@@ -1069,3 +1072,150 @@ TEST(CoreLifecycleTest, TeardownWhileSearching) {
 }
 
 #endif  // WEBARKIT_NFT_THREADS
+
+// Runtime settings (#720).
+
+namespace {
+
+std::vector<ARdouble> lensOf(const ARToolKitNFTCore &core) {
+  return std::vector<ARdouble>(core.cameraLens(), core.cameraLens() + 16);
+}
+
+std::vector<ARdouble> frustumFor(const ARToolKitNFTCore &core, ARdouble nearPlane, ARdouble farPlane) {
+  std::vector<ARdouble> lens(16);
+  arglCameraFrustumRH(&core.cameraParamLT()->param, nearPlane, farPlane, lens.data());
+  return lens;
+}
+
+bool sameSettings(const NFTRuntimeSettings &a, const NFTRuntimeSettings &b) {
+  return a.nearPlane == b.nearPlane && a.farPlane == b.farPlane &&
+         a.continuousDetection == b.continuousDetection &&
+         a.detectionIntervalMs == b.detectionIntervalMs && a.filtering == b.filtering &&
+         a.logLevel == b.logLevel && a.ar2.trackingThresh == b.ar2.trackingThresh &&
+         a.ar2.simThresh == b.ar2.simThresh && a.ar2.searchFeatureNum == b.ar2.searchFeatureNum &&
+         a.ar2.templateSize1 == b.ar2.templateSize1 && a.ar2.templateSize2 == b.ar2.templateSize2 &&
+         a.ar2.searchSize == b.ar2.searchSize;
+}
+
+}  // namespace
+
+TEST(NFTRuntimeSettingsTest, DefaultsMatchTheOldConstants) {
+  const NFTRuntimeSettings s;
+  EXPECT_EQ(s.nearPlane, 0.1);  // was 0.0001 (D4)
+  EXPECT_EQ(s.farPlane, 1000.0);
+  EXPECT_TRUE(s.continuousDetection);
+  EXPECT_EQ(s.detectionIntervalMs, -1);
+  EXPECT_FALSE(s.filtering);
+  EXPECT_EQ(s.logLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(s.ar2.trackingThresh, 5.0f);
+  EXPECT_EQ(s.ar2.simThresh, 0.5f);
+  EXPECT_EQ(s.ar2.searchFeatureNum, 16);
+  EXPECT_EQ(s.ar2.templateSize1, 6);
+  EXPECT_EQ(s.ar2.templateSize2, 6);
+  EXPECT_EQ(s.ar2.searchSize, 0);
+  EXPECT_TRUE(nftRuntimeSettingsValid(s));
+}
+
+TEST(NFTRuntimeSettingsTest, GetResolvesSentinels) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 300.0);
+  // configure() with the -1 sentinel resolves it to the preset's interval too.
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.detectionIntervalMs = -1;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 300.0);
+}
+
+TEST(NFTRuntimeSettingsTest, InvalidSettingsChangeNothing) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const NFTRuntimeSettings before = core.getRuntimeSettings();
+
+  std::vector<NFTRuntimeSettings> bad;
+  auto add = [&](void (*mutate)(NFTRuntimeSettings &)) {
+    NFTRuntimeSettings s = before;
+    // A valid change first, so a half-applied patch would be visible.
+    s.nearPlane = 2.0;
+    s.farPlane = 50.0;
+    s.continuousDetection = !before.continuousDetection;
+    mutate(s);
+    bad.push_back(s);
+  };
+  add([](NFTRuntimeSettings &s) { s.nearPlane = 0; });
+  add([](NFTRuntimeSettings &s) { s.farPlane = s.nearPlane; });
+  add([](NFTRuntimeSettings &s) { s.farPlane = 1.0; });
+  add([](NFTRuntimeSettings &s) { s.detectionIntervalMs = -2; });
+  add([](NFTRuntimeSettings &s) { s.logLevel = 99; });
+  add([](NFTRuntimeSettings &s) { s.ar2.searchFeatureNum = 2; });
+  add([](NFTRuntimeSettings &s) { s.ar2.searchFeatureNum = 41; });
+  add([](NFTRuntimeSettings &s) { s.ar2.simThresh = 1.5f; });
+  add([](NFTRuntimeSettings &s) { s.ar2.templateSize1 = 0; });
+  add([](NFTRuntimeSettings &s) { s.ar2.searchSize = 65; });
+
+  for (size_t i = 0; i < bad.size(); i++) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(core.configure(bad[i]), -1);
+    EXPECT_TRUE(sameSettings(core.getRuntimeSettings(), before));
+  }
+}
+
+TEST(NFTRuntimeSettingsTest, ConfigureRoundTrip) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const NFTRuntimeSettings before = core.getRuntimeSettings();
+  EXPECT_EQ(core.configure(before), 0);
+  EXPECT_TRUE(sameSettings(core.getRuntimeSettings(), before));
+
+  NFTRuntimeSettings s = before;
+  s.nearPlane = 1;
+  s.farPlane = 500;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_TRUE(sameSettings(core.getRuntimeSettings(), s));
+}
+
+TEST(NFTRuntimeSettingsTest, PlaneSetterRebuildsLensAfterSetCamera) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  // The first lens already uses the default near plane (D4).
+  EXPECT_EQ(lensOf(core), frustumFor(core, 0.1, 1000.0));
+
+  core.setProjectionNearPlane(5.0);
+  EXPECT_EQ(lensOf(core), frustumFor(core, 5.0, 1000.0));
+  core.setProjectionFarPlane(200.0);
+  EXPECT_EQ(lensOf(core), frustumFor(core, 5.0, 200.0));
+
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.nearPlane = 2.0;
+  s.farPlane = 300.0;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(lensOf(core), frustumFor(core, 2.0, 300.0));
+}
+
+TEST(NFTRuntimeSettingsTest, PlanesBeforeCameraOnlyStore) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  core.setProjectionNearPlane(5.0);  // no paramLT yet: must not crash
+  core.setProjectionFarPlane(400.0);
+  EXPECT_EQ(core.getProjectionNearPlane(), 5.0);
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(lensOf(core), frustumFor(core, 5.0, 400.0));
+}
+
+TEST(NFTRuntimeSettingsTest, LogLevelIsTheGlobal) {
+  const int savedAr = arLogLevel;
+  const int savedWebarkit = webarkitLogLevel;
+  {
+    ARToolKitNFTCore core(singleThreadPreset());
+    NFTRuntimeSettings s = core.getRuntimeSettings();
+    s.logLevel = AR_LOG_LEVEL_ERROR;
+    ASSERT_EQ(core.configure(s), 0);
+    EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);
+
+    // A second core does not reset the level (D9).
+    ARToolKitNFTCore other(singleThreadPreset());
+    EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
+    EXPECT_EQ(other.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);
+  }
+  arLogLevel = savedAr;
+  webarkitLogLevel = savedWebarkit;
+}
