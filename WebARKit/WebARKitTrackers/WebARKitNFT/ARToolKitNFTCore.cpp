@@ -315,6 +315,22 @@ int ARToolKitNFTCore::recreateAR2Handle() {
 }
 
 std::unique_ptr<NFTDetector> ARToolKitNFTCore::createDetector() {
+  // A detector supplied by the consumer (#115), in any build. It gets the camera as the core
+  // uses it (resized by setCamera()), by value, and the core's KPM handle, which the core
+  // keeps building and filling whatever the detector: a consumer may run KPM in-process over
+  // it when its own detector fails.
+  if (this->config.detector == NFTTrackingConfig::Detector::External) {
+    if (this->config.makeDetector == nullptr) {
+      WEBARKIT_LOGe("Error: config.detector is External but config.makeDetector is null.\n");
+      return nullptr;
+    }
+    std::unique_ptr<NFTDetector> external =
+        this->config.makeDetector(this->config.makeDetectorUser, this->kpmHandle.get(), this->param);
+    if (!external) {
+      WEBARKIT_LOGe("Error: config.makeDetector returned no detector.\n");
+    }
+    return external;
+  }
   if (this->config.detector == NFTTrackingConfig::Detector::Sync) {
     return std::unique_ptr<NFTDetector>(new SyncKpmDetector(this->kpmHandle.get()));
   }
@@ -518,6 +534,15 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
     if (!this->detector) {
       return {};
     }
+    // A detector created after markers were loaded (after setupAR2() or setCamera()) learns
+    // about all of them now, with the pages the core assigned; later batches follow below.
+    if (this->surfaceSetCount > 0) {
+      std::vector<int> pages;
+      for (int page = 0; page < this->surfaceSetCount; page++) pages.push_back(page);
+      this->detector->markersAdded(
+          pages, std::vector<std::string>(this->markerPaths.begin(),
+                                          this->markerPaths.begin() + this->surfaceSetCount));
+    }
   }
 
   // Markers loaded by earlier calls keep their ids, so this batch continues
@@ -610,6 +635,9 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
   // answers after it) but restarts the ids at 0, so drop the entries the new ids replace.
   // Only ever shrinks: nftMarkers has at least surfaceSetCount (= firstId) entries.
   this->nftMarkers.resize(firstId);
+  // Likewise the paths that markersAdded() reports, so a detector created later is never
+  // told about a marker from before a teardown().
+  this->markerPaths.resize(firstId);
 
   std::vector<int> markerIds;
   for (int i = 0; i < batchSize; i++) {
@@ -623,12 +651,17 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
     ARLOGi("NFT marker %d: %d x %d at %d dpi.\n", id, nft.width_NFT,
            nft.height_NFT, nft.dpi_NFT);
     this->nftMarkers.push_back(nft);
+    this->markerPaths.push_back(datasetPathnames[i]);
     this->markerStates[id] = NFTMarkerState{};
     markerIds.push_back(id);
   }
 
   this->surfaceSetCount += batchSize;
   WEBARKIT_LOGi("Loading of NFT data complete.\n");
+
+  if (batchSize > 0) {
+    this->detector->markersAdded(markerIds, datasetPathnames);
+  }
 
   return markerIds;
 }

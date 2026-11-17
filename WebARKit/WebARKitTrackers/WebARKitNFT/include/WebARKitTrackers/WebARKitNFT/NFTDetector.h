@@ -2,7 +2,10 @@
 #define NFT_DETECTOR_H
 
 #include <AR/ar.h>
+// Also defines WEBARKIT_NFT_HAS_EXTERNAL_DETECTOR, so it is seen from this header alone.
+#include <WebARKitTrackers/WebARKitNFT/NFTTrackingConfig.h>
 
+#include <string>
 #include <vector>
 
 /** One marker found by a KPM detection pass: its page (marker index) and camera pose. */
@@ -44,8 +47,25 @@ class NFTDetector {
    */
   virtual bool start(ARUint8 *luma, const int *skipPages, int skipNum) = 0;
 
-  /** Blocks until no pass is running. */
+  /**
+   * Ends the running pass, if any: waits for it (threaded) or abandons it (a detector that
+   * cannot block, such as one running KPM in a Web Worker). Either way its result is never
+   * collected: afterwards idle() is true and collect() returns false until a new pass has
+   * finished. A detector that abandons a pass must itself discard the pass's late result,
+   * for example with a generation counter. The core calls it before it replaces or frees
+   * what a pass reads (the KPM reference data, the KPM handle, the camera).
+   */
   virtual void waitIdle() = 0;
+
+  /**
+   * Tells the detector which markers the core loaded: the pages it assigned and the dataset
+   * paths they were loaded from (without extension), in the same order. Called once at
+   * creation with every marker already loaded, then after each addNFTMarkers() that loads a
+   * batch, with that batch only. Never called with empty vectors nor for a batch that
+   * failed. Pages are the ids addNFTMarkers() returns. Default: nothing.
+   */
+  virtual void markersAdded(const std::vector<int> & /*pages*/,
+                            const std::vector<std::string> & /*datasetPathnames*/) {}
 };
 
 #endif  // NFT_DETECTOR_H
