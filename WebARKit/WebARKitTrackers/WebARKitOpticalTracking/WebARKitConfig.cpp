@@ -9,6 +9,7 @@ extern const int TEBLID_MAX_FEATURES = 1000;
 extern const int N = 10;
 extern const int MIN_NUM_MATCHES = 8;
 extern const int minRequiredDetectedFeatures = 50; ///< Minimum number of detected features required to consider a target matched.
+extern const int fullResRetryInterval = 3; ///< WebARKitLib#91: with no signal on the downsampled pass, retry at full resolution on every Nth frame.
 extern const int markerTemplateWidth = 15; ///< Width in pixels of image patches used in template matching.
 extern const int maxLevel = 3; ///< Maximum number of levels in optical flow image pyramid.
 extern const cv::Size winSize(31, 31);

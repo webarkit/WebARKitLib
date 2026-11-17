@@ -210,6 +210,8 @@ class WebARKitTracker::WebARKitTrackerImpl {
 
     bool isValid() { return _valid; };
 
+    int getFullResRetryCount() const { return _fullResRetryCount; }
+
     // WebARKitLib#38: when true, the pose origin is the marker centre instead of
     // the reference image's top-left corner. Default false (ArtoolkitX parity).
     void setOriginCentered(bool centered) { _centerOrigin = centered; };
@@ -406,7 +408,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
                 return _isDetected;
             };
 
+            _lastSurvivors = 0;
             detectAndMatch(detectionFrame, detectionScaleFactor, "pyramid");
+            // WebARKitLib#91: a pass that came close is a signal that a marker is there: at
+            // least half the ratio-test survivors the homography needs (a judgement, to be tuned
+            // with real-world data). Read before the full-resolution pass overwrites it.
+            const bool pyramidSignal = _lastSurvivors >= minNumMatches / 2;
 
             // WebARKitLib#53: a small marker in a large frame may yield plenty of frame
             // keypoints after pyrDown, yet too few *on the marker* survive for the ratio
@@ -419,8 +426,21 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // detection parity with WebARKitLib-rs / jsartoolkitNFT (which never
             // downsample). The extra full-res pass only costs while NOT detected --
             // once tracking holds a lock, detection is skipped entirely (#44 part B).
-            if (!_isDetected && _featureDetectPyrLevel > 0) {
+            //
+            // WebARKitLib#91: with no marker in view that retry would run on every frame, so
+            // it runs at once when the pyramid pass had a signal (and after a detection or a
+            // signal, the next empty frame retries too: a marker just lost is looked for at
+            // once), and otherwise only on every fullResRetryInterval-th empty frame.
+            bool retryDue = true;
+            if (_isDetected || pyramidSignal) {
+                _noSignalFrames = 0;
+            } else {
+                retryDue = (_noSignalFrames % fullResRetryInterval) == 0;
+                _noSignalFrames++;
+            }
+            if (!_isDetected && _featureDetectPyrLevel > 0 && retryDue) {
                 WEBARKIT_LOGd("No detection on pyramid frame; retrying at full resolution.\n");
+                _fullResRetryCount++;
                 if (detectAndMatch(frame, cv::Vec2f(1.0f, 1.0f), "full-res retry")) {
                     WEBARKIT_LOGi("Marker detected on full-resolution retry (pyrLevel %d).\n",
                                   _featureDetectPyrLevel);
@@ -560,6 +580,7 @@ class WebARKitTracker::WebARKitTrackerImpl {
         // WebARKitLib#53: minNumMatches is the floor of ratio-test survivors required
         // before attempting a homography (previously assigned per tracker but never
         // read). Below it RANSAC is pointless and would only produce a spurious fit.
+        _lastSurvivors = maxMatches;
         if (maxMatches > 0 && maxMatches < minNumMatches) {
             WEBARKIT_LOGd("Good matches %d < minNumMatches %d; skipping homography.\n", maxMatches, minNumMatches);
         }
@@ -806,6 +827,14 @@ class WebARKitTracker::WebARKitTrackerImpl {
     int _featureDetectPyrLevel;
     cv::Vec2f _featureDetectScaleFactor;
 
+    // WebARKitLib#91: how many full-resolution retry passes ran (a diagnostic, read through
+    // WebARKitTracker::getFullResRetryCount()).
+    int _fullResRetryCount = 0;
+    // Detection frames since the last one that found a marker or a signal, for the retry cadence.
+    int _noSignalFrames = 0;
+    // Ratio-test survivors of the last MatchFeatures() that ran (0 when none did).
+    int _lastSurvivors = 0;
+
     std::vector<cv::Point2f> corners;
 
     cv::Mat m_H;
@@ -929,5 +958,7 @@ std::array<double, 16> WebARKitTracker::getCameraProjectionMatrix() {
 bool WebARKitTracker::isValid() { return _trackerImpl->isValid(); }
 
 void WebARKitTracker::setOriginCentered(bool centered) { _trackerImpl->setOriginCentered(centered); }
+
+int WebARKitTracker::getFullResRetryCount() const { return _trackerImpl->getFullResRetryCount(); }
 
 } // namespace webarkit

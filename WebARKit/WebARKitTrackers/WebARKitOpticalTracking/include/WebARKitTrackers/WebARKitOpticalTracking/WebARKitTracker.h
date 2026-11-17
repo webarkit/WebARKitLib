@@ -45,6 +45,10 @@ class WebARKitTracker {
     // WebARKitLib#38: pose origin = marker centre when true (default false).
     void setOriginCentered(bool centered);
 
+    // WebARKitLib#91 (diagnostic): how many full-resolution retry passes ran on frames the
+    // downsampled pass did not detect. Always 0 for a frame small enough not to be downsampled.
+    int getFullResRetryCount() const;
+
   private:
     class WebARKitTrackerImpl;
 

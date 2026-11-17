@@ -270,3 +270,87 @@ TEST(WebARKitTest, CheckShutDown) {
   // Check if the WebARKit went down successfully
   EXPECT_TRUE(manager.shutdown());
 }
+
+// WebARKitLib#91: a frame larger than featureImageMinSize (640x480) is detected on a pyrDown'd
+// copy, and a frame that copy did not detect is retried at full resolution (#53). With no
+// marker in view that retry used to run on every frame, doubling the cost of searching.
+namespace {
+
+// 1280x960 is downsampled once, so the full-resolution retry exists.
+constexpr int kBigW = 1280;
+constexpr int kBigH = 960;
+
+// A deterministic texture with no marker in it: it has features, but nothing that matches.
+cv::Mat noFrame() {
+  cv::RNG rng(12345);
+  cv::Mat m(kBigH, kBigW, CV_8UC1);
+  rng.fill(m, cv::RNG::UNIFORM, 0, 256);
+  cv::GaussianBlur(m, m, cv::Size(5, 5), 0);
+  return m;
+}
+
+// The pinball reference scaled by `scale` and pasted in the middle of a mid-grey frame. At 0.15
+// the downsampled pass finds 14 matches, one below the floor of 15 for AKAZE, while the
+// full-resolution pass finds 76: the small marker of #53.
+cv::Mat frameWithMarker(const cv::Mat &reference, double scale) {
+  cv::Mat frame(kBigH, kBigW, CV_8UC1, cv::Scalar(128));
+  cv::Mat small;
+  cv::resize(reference, small, cv::Size(), scale, scale, cv::INTER_AREA);
+  small.copyTo(frame(cv::Rect((kBigW - small.cols) / 2, (kBigH - small.rows) / 2, small.cols, small.rows)));
+  return frame;
+}
+
+struct BigFrameTracker {
+  webarkit::WebARKitManager manager;
+  cv::Mat reference;
+
+  BigFrameTracker() {
+    reference = cv::imread("../pinball.jpg", cv::IMREAD_GRAYSCALE);
+    manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, kBigW, kBigH);
+    if (!reference.empty()) {
+      manager.initTracker(reference, reference.cols, reference.rows, webarkit::ColorSpace::GRAY);
+    }
+  }
+
+  void feed(const cv::Mat &frame) {
+    manager.processFrameData(frame.data, frame.cols, frame.rows, webarkit::ColorSpace::GRAY,
+                             webarkit::BLUR_TYPE::NONE_BLUR);
+  }
+  int retries() { return manager.getTracker()->getFullResRetryCount(); }
+};
+
+}  // namespace
+
+TEST(WebARKitFullResRetryTest, FramesWithNoMarkerDoNotRetryEveryTime) {
+  BigFrameTracker t;
+  ASSERT_FALSE(t.reference.empty());
+  const cv::Mat frame = noFrame();
+  for (int i = 0; i < 6; i++) t.feed(frame);
+  EXPECT_FALSE(t.manager.isValid());
+  // Once at the start and then every third frame (frames 0 and 3), not on all six.
+  EXPECT_EQ(t.retries(), 2);
+}
+
+// The small marker of #53 must still be found: the pyramid pass fails, the full-resolution
+// retry detects it, and optical flow then holds it.
+TEST(WebARKitFullResRetryTest, ASmallMarkerIsStillFoundAtFullResolution) {
+  BigFrameTracker t;
+  ASSERT_FALSE(t.reference.empty());
+  const cv::Mat frame = frameWithMarker(t.reference, 0.15);
+  for (int i = 0; i < 3; i++) t.feed(frame);
+  EXPECT_TRUE(t.manager.isValid());
+  EXPECT_GE(t.retries(), 1);  // it was the full-resolution pass that found it
+}
+
+// A pyramid pass that came close (here 14 matches against a floor of 15) is a signal that a
+// marker is there: the retry runs at once, however many empty frames came before it.
+TEST(WebARKitFullResRetryTest, ASignalOnThePyramidPassRetriesAtOnce) {
+  BigFrameTracker t;
+  ASSERT_FALSE(t.reference.empty());
+  const cv::Mat empty = noFrame();
+  const cv::Mat withMarker = frameWithMarker(t.reference, 0.15);
+  t.feed(empty);       // the retry of the first empty frame; the next two are skipped
+  t.feed(withMarker);  // the pyramid pass has a signal, so the retry is not skipped
+  t.feed(withMarker);
+  EXPECT_TRUE(t.manager.isValid());
+}
