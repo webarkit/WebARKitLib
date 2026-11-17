@@ -3,6 +3,9 @@ name: WebARKitLib test
 on: push
 jobs:
     build:
+        # Pinned: GCC 15 on ubuntu-26.04 (now ubuntu-latest) rejects the implicit
+        # fopen64 / ftello64 / fseeko64 in lib/SRC/ARUtil/ioapi.c. Remove the pin once
+        # https://github.com/webarkit/WebARKitLib/issues/118 is fixed.
         runs-on: ubuntu-24.04
         steps:
         - uses: actions/checkout@v7
