@@ -109,8 +109,8 @@ bool ARToolKitNFTCore::collectDetections(int &resultNum) {
 int ARToolKitNFTCore::detectNFTMarker() {
   int resultNum = -1;
 
-  // Without a detector or a KPM handle (no addNFTMarkers() yet, or a setCamera() or
-  // setupAR2() since the last one) nothing is detected this frame, but the markers being
+  // Without a detector or a KPM handle (no markers loaded yet, a setCamera() since setupAR2(),
+  // or a setupAR2() that failed) nothing is detected this frame, but the markers being
   // tracked are still tracked.
   const bool canDetect = this->detector && this->kpmHandle;
 
@@ -265,6 +265,9 @@ int ARToolKitNFTCore::setupAR2() {
   if (this->refDataSetAll != nullptr) {
     if (kpmSetRefDataSet(this->kpmHandle.get(), this->refDataSetAll) < 0) {
       WEBARKIT_LOGe("Error: kpmSetRefDataSet for the markers already loaded.\n");
+      // A handle holding none of the markers must not be used: without it nothing is detected
+      // and addNFTMarkers() refuses until the next setupAR2().
+      this->kpmHandle.reset();
       return -1;
     }
     if (!ensureDetector()) {
@@ -330,6 +333,19 @@ int ARToolKitNFTCore::recreateAR2Handle() {
 
 bool ARToolKitNFTCore::ensureDetector() {
   if (this->detector) return true;
+  // The factory and markersAdded() must not call back into the core (NFTDetector.h). One that
+  // came back here would recurse without end, so it is refused: a clean error instead of a
+  // stack overflow, and nothing is created while a creation is under way.
+  if (this->creatingDetector) {
+    WEBARKIT_LOGe("Error: a detector is already being created; the factory or markersAdded() "
+                  "called back into the core.\n");
+    return false;
+  }
+  struct CreatingGuard {
+    explicit CreatingGuard(bool &flag) : flag_(flag) { flag_ = true; }
+    ~CreatingGuard() { flag_ = false; }
+    bool &flag_;
+  } creatingGuard(this->creatingDetector);
   this->detector = createDetector();
   if (!this->detector) return false;
   // A detector created after markers were loaded (after setupAR2() or setCamera()) learns
@@ -342,8 +358,7 @@ bool ARToolKitNFTCore::ensureDetector() {
         pages, std::vector<std::string>(this->markerPaths.begin(),
                                         this->markerPaths.begin() + this->surfaceSetCount));
     // markersAdded() must not call back into the core (NFTDetector.h). One that did and
-    // reset the detector (setCamera(), teardown()) left nothing to load into. (A callback that
-    // set the core up again has already created the detector that replaces it.)
+    // reset the detector (setupAR2(), setCamera(), teardown()) left nothing to load into.
     if (!this->detector) {
       WEBARKIT_LOGe("Error: the detector's markersAdded() called back into the core and "
                     "reset the detector.\n");

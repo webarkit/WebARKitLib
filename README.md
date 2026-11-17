@@ -115,10 +115,10 @@ shared libraries, would define its symbols twice.
   whose RGBA buffer does not fit an `int`, makes `setup()` return -1 without changing
   anything.
 - `setCamera()` frees the KPM handle and the detector with the old camera; call
-  `setupAR2()` after it. After a second `setupAR2()` the markers already loaded are
-  not detected until the next `addNFTMarkers()`, which hands the new KPM handle every
-  loaded marker; `addNFTMarkers({})` does that without adding markers and, like a
-  failure, returns an empty vector.
+  `setupAR2()` after it. A second `setupAR2()` keeps the markers already loaded
+  detectable: it hands the new KPM handle their reference data and creates the new
+  detector, which is told about every marker. It returns -1 if that cannot be done (the
+  markers stay loaded; the next `setupAR2()` or `addNFTMarkers()` tries again).
 - `teardown()` frees the handles, the markers and the frame buffers, but
   `getNFTData()` keeps returning the old markers' data until markers are loaded again.
 - Threads: drive each core from one thread (the threaded detector's worker is the

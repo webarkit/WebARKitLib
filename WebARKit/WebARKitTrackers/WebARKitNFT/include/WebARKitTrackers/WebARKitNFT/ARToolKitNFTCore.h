@@ -103,7 +103,8 @@ public:
      * @return 0, or -1 on failure (no camera, a handle cannot be created, KPM refuses the
      *         reference data of the markers already loaded, or the detector cannot be created:
      *         config.makeDetector returned null, say). The markers stay loaded after a failure
-     *         and the next setupAR2() tries again.
+     *         and the next setupAR2() or addNFTMarkers() tries again (after a failure to hand
+     *         KPM the data there is no KPM handle, so only setupAR2() can).
      */
     int setupAR2();
 
@@ -301,8 +302,12 @@ private:
 
     KpmHandlePtr kpmHandle;
     AR2HandleT *ar2Handle;
-    // Runs the KPM searches on kpmHandle; created by the first addNFTMarkers().
+    // Runs the KPM searches on kpmHandle; created by setupAR2() when markers are loaded,
+    // otherwise by the first addNFTMarkers() (ensureDetector()).
     std::unique_ptr<NFTDetector> detector;
+    // True while ensureDetector() runs the factory and markersAdded(): a call back into the
+    // core that would create a detector is refused instead of recursing.
+    bool creatingDetector = false;
 
     // One state per loadable page; index = page number = marker id.
     std::array<NFTMarkerState, PAGES_MAX> markerStates;
