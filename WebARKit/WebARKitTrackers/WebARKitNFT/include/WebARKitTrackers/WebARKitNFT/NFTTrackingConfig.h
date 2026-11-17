@@ -1,6 +1,21 @@
 #ifndef NFT_TRACKING_CONFIG_H
 #define NFT_TRACKING_CONFIG_H
 
+// ARParam is an anonymous-struct typedef and cannot be forward-declared; the factory below
+// takes one, so this header needs the AR declarations (<AR/param.h> must not come first).
+#include <AR/ar.h>
+
+#include <memory>
+
+/**
+ * Defined when NFTTrackingConfig::Detector::External and the makeDetector factory exist, so a
+ * consumer can build against versions with and without them (#115).
+ */
+#define WEBARKIT_NFT_HAS_EXTERNAL_DETECTOR 1
+
+class NFTDetector;
+typedef struct _KpmHandle KpmHandle;
+
 /** The default clock: emscripten_get_now() on Emscripten, steady_clock elsewhere. Defined in NFTClock.cpp. */
 double nftDefaultClockMs();
 
@@ -12,7 +27,11 @@ double nftDefaultClockMs();
  * value-initialised config holds the single-thread settings.
  */
 struct NFTTrackingConfig {
-  enum class Detector { Sync, Threaded };
+  /**
+   * Sync: SyncKpmDetector. Threaded: ThreadedKpmDetector (needs WEBARKIT_NFT_THREADS).
+   * External: whatever makeDetector returns, in any build.
+   */
+  enum class Detector { Sync, Threaded, External };
   enum class AR2Variant { SingleThread, Threaded };
 
   Detector detector = Detector::Sync;                 // how the KPM detection runs
@@ -21,6 +40,24 @@ struct NFTTrackingConfig {
   double defaultDetectionIntervalMs = 300.0;          // minimum time between two KPM detections
   bool poseFilteringSupported = true;                 // the pose filter can be enabled
   double (*clock)() = &nftDefaultClockMs;             // current time in milliseconds; null means nftDefaultClockMs
+
+  /**
+   * Creates the detector when detector is External; unused otherwise. The core calls it where
+   * it would create its own detector: in the first addNFTMarkers() after setupAR2(), so again
+   * after every setupAR2(), setCamera() or teardown(), which destroy the previous one. Null,
+   * or a factory returning null, makes that addNFTMarkers() fail with an error. Each call
+   * starts afresh: the new detector learns the loaded markers from markersAdded().
+   * @param user makeDetectorUser
+   * @param kpm the core's KPM handle, owned by the core and valid for the detector's
+   *        lifetime. Its reference data is set after the call, by the same addNFTMarkers()
+   *        if it succeeds, otherwise by the next one that does. A detector that runs KPM
+   *        elsewhere may ignore it, or use it to run KPM in-process as a fallback.
+   * @param camera the camera the core uses, already resized to the frame by setCamera(); a
+   *        copy can be sent to a detector that does not share memory with the core
+   */
+  std::unique_ptr<NFTDetector> (*makeDetector)(void *user, KpmHandle *kpm,
+                                               const ARParam &camera) = nullptr;
+  void *makeDetectorUser = nullptr;                   // passed to makeDetector, not owned
 };
 
 /** Settings of the single-thread binding. */

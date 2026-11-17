@@ -150,7 +150,9 @@ public:
     /**
      * Loads a batch of NFT markers (paths without extension) after the ones already loaded.
      * Needs setupAR2(); it also hands every loaded marker to the current KPM handle (see
-     * setupAR2()).
+     * setupAR2()). The first call after setupAR2() creates the detector, which is told about
+     * the markers already loaded; every call that loads a batch then tells it about the batch
+     * (NFTDetector::markersAdded()).
      * @return the ids of the new markers, or an empty vector when any of them fails to load
      *         (the earlier markers stay loaded), when there is no KPM handle, or when paths
      *         is empty
@@ -309,6 +311,9 @@ private:
     // scratch, so each call must hand it the whole set, not just the new batch.
     KpmRefDataSet *refDataSetAll;
     std::vector<nftMarker> nftMarkers;
+    // The dataset path (without extension) of each loaded marker, index = page, for
+    // NFTDetector::markersAdded() when a detector is created after markers were loaded.
+    std::vector<std::string> markerPaths;
 
     // The runtime settings: planes, continuousDetection, detectionIntervalMs, filtering and
     // the AR2 parameters. logLevel is not authoritative here (it may be -1, "leave
