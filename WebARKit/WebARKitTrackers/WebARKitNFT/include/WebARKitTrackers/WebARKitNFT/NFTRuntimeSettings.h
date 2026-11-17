@@ -47,8 +47,9 @@ struct NFTRuntimeSettings {
    * -1 leaves the current level alone (D9). The level is process-wide, not owned by the core,
    * so a caller that builds a fresh struct to change something else (the planes, say) must not
    * reset a level that was set elsewhere. It is the default for that reason. Otherwise one of
-   * the AR_LOG_LEVEL_* values, written to arLogLevel and webarkitLogLevel.
-   * getRuntimeSettings() reports the effective level, never -1.
+   * the AR_LOG_LEVEL_* values, written to both arLogLevel and webarkitLogLevel.
+   * getRuntimeSettings() reports the effective level; it reports -1 only while the two globals
+   * differ, so that passing the result back changes neither.
    */
   int logLevel = -1;
   NFTAR2Settings ar2;

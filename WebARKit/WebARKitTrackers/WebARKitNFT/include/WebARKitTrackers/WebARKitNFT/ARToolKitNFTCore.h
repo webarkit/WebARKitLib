@@ -125,10 +125,11 @@ public:
      * from getRuntimeSettings() and change what you need; a default-built struct also resets
      * the planes, the AR2 parameters and the rest to their defaults. A new plane rebuilds the
      * lens when a camera is loaded; before that the values are only stored. logLevel -1 (the
-     * default) leaves the level alone; any other value is written to the process-wide
-     * arLogLevel and webarkitLogLevel (D9), and only when it differs from arLogLevel, so a
-     * getRuntimeSettings() round trip never touches a webarkitLogLevel that was set on its
-     * own. detectionIntervalMs -1 resolves to the preset's.
+     * default) leaves the level alone; any other value is written to both process-wide
+     * globals, arLogLevel and webarkitLogLevel (D9), even when it equals one of them, so an
+     * explicit level also brings a webarkitLogLevel that was set on its own back in step. A
+     * getRuntimeSettings() round trip never touches either, because that reports -1 while the
+     * two differ. detectionIntervalMs -1 resolves to the preset's.
      * Changed AR2 fields are applied to the live AR2 handle (D6); a template-size change
      * recreates the AR2 handle instead, keeping the KPM handle, the detector and the markers
      * (D12). Without an AR2 handle they are only stored, and setupAR2() applies them.
@@ -140,8 +141,10 @@ public:
 
     /**
      * The current settings with the effective values: the interval and ar2.searchSize are the
-     * resolved ones, and logLevel is the effective level read from arLogLevel (D9), never
-     * -1, not a copy held by the core.
+     * resolved ones, and logLevel is the effective level (D9), not a copy held by the core. It
+     * is -1 only when arLogLevel and webarkitLogLevel differ, which needs one of them to have
+     * been set on its own (WebARKitManager::setLogLevel()): then there is no single level to
+     * report.
      */
     NFTRuntimeSettings getRuntimeSettings() const;
 

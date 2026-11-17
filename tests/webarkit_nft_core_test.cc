@@ -1396,6 +1396,36 @@ TEST(NFTRuntimeSettingsTest, AnExplicitLevelIsWrittenToBothGlobals) {
   EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
 }
 
+// An explicit level is honoured even when it equals arLogLevel: it used to be skipped as
+// "unchanged", leaving a divergent webarkitLogLevel as it was while configure() reported
+// success (#111).
+TEST(NFTRuntimeSettingsTest, ExplicitLevelEqualToArLogLevelSyncsADivergentWebarkitLevel) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;
+
+  NFTRuntimeSettings s;  // fresh: only the level is asked for
+  s.logLevel = AR_LOG_LEVEL_INFO;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_INFO);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_INFO);
+}
+
+// With divergent globals there is no single effective level, so getRuntimeSettings() reports
+// "leave alone" (-1): configure() given that struct changes neither global (which keeps the
+// round trip a no-op), and an explicit level is what puts them back in step.
+TEST(NFTRuntimeSettingsTest, DivergentGlobalsReportMinusOne) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;
+  EXPECT_EQ(core.getRuntimeSettings().logLevel, -1);
+
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;  // back in step: the effective level again
+  EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_INFO);
+}
+
 namespace {
 
 std::vector<std::string> gCapturedLog;
