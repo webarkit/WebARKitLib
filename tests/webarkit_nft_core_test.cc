@@ -1346,8 +1346,7 @@ std::string setCameraOutputAt(int level) {
   const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
   const int id = core.setup(kFrameWidth, kFrameHeight, cameraID);
   LogLevelGuard guard;
-  arLogLevel = level;
-  webarkitLogLevel = level;
+  arLogLevel = level;  // the table follows arLogLevel (ARLOG), not webarkitLogLevel
   testing::internal::CaptureStdout();
   const int result = core.setCamera(id, cameraID);
   const std::string out = testing::internal::GetCapturedStdout();
