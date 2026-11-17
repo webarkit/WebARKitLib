@@ -84,6 +84,8 @@ public:
      * the AR2 handle, the KPM handle and the detector (a running search is waited for and
      * dropped). Call setupAR2() after it; until then nothing is detected and markers being
      * tracked are lost on the next frame. The markers stay loaded.
+     * The camera parameter table (arParamDisp()) is printed only when arLogLevel is INFO or
+     * below, so a consumer that sets a quieter level hears nothing from this call.
      * @return 0, or -1 when the camera id is unknown (nothing changes) or paramLT cannot be
      *         created
      */

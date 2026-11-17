@@ -458,7 +458,10 @@ int ARToolKitNFTCore::setCamera(int /*id*/, int cameraID) {
   }
 
   ARLOGi("*** Camera Parameter ***\n");
-  arParamDisp(&(this->param));
+  // arParamDisp() prints with a plain printf, whatever the log level (it is vendored ARToolKit5
+  // code), so the check is made here: the table follows the level like the other start-up
+  // lines (#113).
+  if (arLogLevel <= AR_LOG_LEVEL_INFO) arParamDisp(&(this->param));
 
   deleteCamera();
 
