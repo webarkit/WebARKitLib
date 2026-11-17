@@ -35,11 +35,14 @@ button above.
 
 Two things to know about it (#92). If `master` conflicts with the commits left on the
 sync branch by an earlier sync PR that was closed without merging, it still opens a PR,
-with a warning at the top: merge `master` into `chore/sync-master-into-dev` by hand,
-resolve the conflict there and push. And it only touches PRs it opened itself (the
-`branch-sync` label plus its marker in the body); if a PR you opened from that branch is
-in the way, the workflow fails with an error instead of pushing to it, so close that PR
-or use another branch name.
+with a warning at the top (written once, so it may be out of date after you have fixed
+the branch): merge `master` into `chore/sync-master-into-dev` by hand, resolve the
+conflict there and push. And it only works with PRs it opened itself, recognised by the
+`branch-sync` label plus either its marker in the PR body or a bot author. If any other
+open PR has `chore/sync-master-into-dev` as its head (or a human removed the label from
+the workflow's own), the workflow fails with an error and does not push to that branch;
+it keeps failing on every push to `master` until that PR is closed or its branch
+renamed.
 
 ## Commit messages — Conventional Commits
 

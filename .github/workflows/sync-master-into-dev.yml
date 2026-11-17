@@ -60,20 +60,28 @@ jobs:
         id: pr
         if: steps.check.outputs.needed == 'true'
         run: |
-          # Only a PR whose head is this workflow's branch in this repository is a candidate.
-          prs=$(gh pr list --base dev --head "$BRANCH" --state open \
-                  --json number,headRepositoryOwner,labels,body,author \
+          # Every open PR whose head is this workflow's branch in this repository, whatever its
+          # base: one that is not the workflow's own blocks the run, because the workflow
+          # would push to the branch under it.
+          prs=$(gh pr list --head "$BRANCH" --state open \
+                  --json number,baseRefName,headRepositoryOwner,labels,body,author \
                   --jq "[.[] | select(.headRepositoryOwner.login == \"${GITHUB_REPOSITORY_OWNER}\")]")
-          number=$(echo "$prs" | jq -r '.[0].number // empty')
-          if [ -n "$number" ]; then
-            owned=$(echo "$prs" | jq -r --arg label "$LABEL" --arg marker "$MARKER" \
-              '.[0] | ((.labels | map(.name) | index($label)) != null) and (((.body // "") | contains($marker)) or (.author.is_bot // false))')
-            if [ "$owned" != "true" ]; then
-              echo "::error::Open PR #$number from $BRANCH to dev was not opened by this workflow (it needs the $LABEL label and either the workflow's marker or a bot author). Not touching it or $BRANCH: close it or rename its branch, then run this workflow again."
-              exit 1
-            fi
-            echo "Sync PR #$number is the workflow's own."
+          # Its own: the label, and either the marker the workflow puts in every PR body or a bot
+          # author (the second is what PRs opened before the marker existed have).
+          foreign=$(printf '%s' "$prs" | jq -r --arg label "$LABEL" --arg marker "$MARKER" '
+            [.[] | select(
+              (((.labels | map(.name) | index($label)) != null)
+               and (((.body // "") | contains($marker))
+                    or (.author.is_bot // false)
+                    or ((.author.login // "") | IN("app/github-actions", "github-actions", "github-actions[bot]"))))
+              | not)
+            | .number] | first // empty')
+          if [ -n "$foreign" ]; then
+            echo "::error::Open PR #$foreign from $BRANCH was not opened by this workflow (it needs the $LABEL label and either the workflow's marker in its body or a bot author). Not touching it or $BRANCH. This workflow fails on every push to master until that PR is closed or its branch renamed, and keeps $BRANCH out of reach meanwhile."
+            exit 1
           fi
+          number=$(printf '%s' "$prs" | jq -r '[.[] | select(.baseRefName == "dev")] | first | .number // empty')
+          [ -n "$number" ] && echo "Sync PR #$number is the workflow's own."
           echo "number=$number" >> "$GITHUB_OUTPUT"
 
       - name: Update the sync branch
@@ -150,7 +158,8 @@ jobs:
           > [!WARNING]
           > \`master\` (\`$SHA\`) **conflicts** with the commits already on \`$BRANCH\`, left there by an
           > earlier sync PR that was closed without merging. Merge \`master\` into \`$BRANCH\` by hand,
-          > resolve the conflict and push; then merge this PR.
+          > resolve the conflict and push; then merge this PR. (This note is written once; it may be
+          > out of date after you have done that.)
 
           BODY
             fi
@@ -168,6 +177,9 @@ jobs:
           BODY
           } > "$RUNNER_TEMP/sync-body.md"
 
+          title="chore: sync master into dev ($SHA)"
+          # Merging this PR as it is would not bring master into dev: say so in the title too.
+          [ "$CONFLICT" = "true" ] && title="chore: sync master into dev ($SHA, needs conflict resolution)"
           gh pr create --base dev --head "$BRANCH" --label "$LABEL" \
-            --title "chore: sync master into dev ($SHA)" \
+            --title "$title" \
             --body-file "$RUNNER_TEMP/sync-body.md"
