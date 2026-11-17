@@ -3,6 +3,7 @@
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitEnums.h>
 #include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitUtils.h>
 #include <WebARKitCamera.h>
+#include <WebARKitTrackers/WebARKitOpticalTracking/WebARKitConfig.h>
 #include <opencv2/imgcodecs.hpp>
 
 class WebARKitEnumTest : public testing::TestWithParam<std::tuple<webarkit::TRACKER_TYPE, webarkit::ColorSpace>> {};
@@ -305,6 +306,9 @@ struct BigFrameTracker {
   cv::Mat reference;
 
   BigFrameTracker() {
+    // Every detection draws from the library's global generator; start each test from the same
+    // state so that what ran before it in the process cannot change which points are tracked.
+    rng = cv::RNG(0xFFFFFFFF);
     reference = cv::imread("../pinball.jpg", cv::IMREAD_GRAYSCALE);
     manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, kBigW, kBigH);
     if (!reference.empty()) {
@@ -352,5 +356,20 @@ TEST(WebARKitFullResRetryTest, ASignalOnThePyramidPassRetriesAtOnce) {
   t.feed(empty);       // the retry of the first empty frame; the next two are skipped
   t.feed(withMarker);  // the pyramid pass has a signal, so the retry is not skipped
   t.feed(withMarker);
+  EXPECT_TRUE(t.manager.isValid());
+  // One retry for the empty frame and one for each marker frame: a cadence alone would skip
+  // the marker frames and find nothing.
+  EXPECT_EQ(t.retries(), 3);
+}
+
+// The smallest marker the full-resolution pass still finds (0.12): the downsampled pass has 3
+// matches, no signal, so only the retry detects it. Detecting it must restart the cadence, or
+// the next frame skips its retry and the marker is found two frames late. Before the cadence
+// it was valid after four frames; it must not take longer.
+TEST(WebARKitFullResRetryTest, AMarkerOnlyTheRetryFindsIsNotFoundLater) {
+  BigFrameTracker t;
+  ASSERT_FALSE(t.reference.empty());
+  const cv::Mat frame = frameWithMarker(t.reference, 0.12);
+  for (int i = 0; i < 4; i++) t.feed(frame);
   EXPECT_TRUE(t.manager.isValid());
 }

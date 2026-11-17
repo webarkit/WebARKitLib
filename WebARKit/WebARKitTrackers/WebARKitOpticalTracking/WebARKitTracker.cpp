@@ -411,9 +411,12 @@ class WebARKitTracker::WebARKitTrackerImpl {
             _lastSurvivors = 0;
             detectAndMatch(detectionFrame, detectionScaleFactor, "pyramid");
             // WebARKitLib#91: a pass that came close is a signal that a marker is there: at
-            // least half the ratio-test survivors the homography needs (a judgement, to be tuned
-            // with real-world data). Read before the full-resolution pass overwrites it.
-            const bool pyramidSignal = _lastSurvivors >= minNumMatches / 2;
+            // least half the ratio-test survivors the homography needs, and never fewer than
+            // partialSignalMinSurvivors, so a tracker with a low floor (TEBLID's is 8) does not
+            // take chance matches on a cluttered scene for one. A judgement, to be tuned with
+            // real-world data. Read before the full-resolution pass overwrites it.
+            const bool pyramidSignal =
+                _lastSurvivors >= std::max(minNumMatches / 2, partialSignalMinSurvivors);
 
             // WebARKitLib#53: a small marker in a large frame may yield plenty of frame
             // keypoints after pyrDown, yet too few *on the marker* survive for the ratio
@@ -431,17 +434,21 @@ class WebARKitTracker::WebARKitTrackerImpl {
             // it runs at once when the pyramid pass had a signal (and after a detection or a
             // signal, the next empty frame retries too: a marker just lost is looked for at
             // once), and otherwise only on every fullResRetryInterval-th empty frame.
+            // The counter is the position in the cadence: 0 means the retry is due. A marker
+            // found only by the retry restarts it too, or the next frame (not tracking yet)
+            // would skip its retry and find the marker two frames late.
             bool retryDue = true;
             if (_isDetected || pyramidSignal) {
                 _noSignalFrames = 0;
             } else {
-                retryDue = (_noSignalFrames % fullResRetryInterval) == 0;
-                _noSignalFrames++;
+                retryDue = _noSignalFrames == 0;
+                _noSignalFrames = (_noSignalFrames + 1) % fullResRetryInterval;
             }
             if (!_isDetected && _featureDetectPyrLevel > 0 && retryDue) {
                 WEBARKIT_LOGd("No detection on pyramid frame; retrying at full resolution.\n");
                 _fullResRetryCount++;
                 if (detectAndMatch(frame, cv::Vec2f(1.0f, 1.0f), "full-res retry")) {
+                    _noSignalFrames = 0;
                     WEBARKIT_LOGi("Marker detected on full-resolution retry (pyrLevel %d).\n",
                                   _featureDetectPyrLevel);
                 }
