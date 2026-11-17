@@ -94,11 +94,16 @@ public:
      * settings, see configure()) and the KPM
      * handle from paramLT. Call after setup() and after every setCamera().
      *
-     * A second call (or the first after a setCamera()) replaces the KPM handle: the markers
-     * already loaded stay loaded and tracked, but are not detected again until the next
-     * addNFTMarkers() hands the new handle the reference data. addNFTMarkers({}) does that
-     * without adding markers, and returns an empty vector, as a failure does.
-     * @return 0, or -1 on failure (no camera, or a handle cannot be created)
+     * A second call (or the first after a setCamera()) replaces the KPM handle and the
+     * detector. The markers already loaded stay loaded, tracked and detectable: the new handle
+     * is given the accumulated reference data and a new detector is created for it, which is
+     * told about every marker (NFTDetector::markersAdded(), with the pages the core assigned).
+     * With no markers loaded there is nothing to hand over and the first addNFTMarkers()
+     * creates the detector.
+     * @return 0, or -1 on failure (no camera, a handle cannot be created, KPM refuses the
+     *         reference data of the markers already loaded, or the detector cannot be created:
+     *         config.makeDetector returned null, say). The markers stay loaded after a failure
+     *         and the next setupAR2() tries again.
      */
     int setupAR2();
 
@@ -150,9 +155,9 @@ public:
     /**
      * Loads a batch of NFT markers (paths without extension) after the ones already loaded.
      * Needs setupAR2(); it also hands every loaded marker to the current KPM handle (see
-     * setupAR2()). The first call after setupAR2() creates the detector, which is told about
-     * the markers already loaded; every call that loads a batch then tells it about the batch
-     * (NFTDetector::markersAdded()).
+     * setupAR2()). The first call after a setupAR2() with no markers loaded creates the
+     * detector (setupAR2() does it when markers are loaded); every call that loads a batch
+     * then tells the detector about the batch (NFTDetector::markersAdded()).
      * @return the ids of the new markers, or an empty vector when any of them fails to load
      *         (the earlier markers stay loaded), when there is no KPM handle, or when paths
      *         is empty
@@ -237,6 +242,13 @@ private:
 
     KpmHandlePtr createKpmHandle(ARParamLT *cparamLT);
     std::unique_ptr<NFTDetector> createDetector();
+    /**
+     * Makes sure there is a detector for the current KPM handle: creates it when missing and,
+     * when markers are already loaded, tells it about all of them (markersAdded()).
+     * @return false when it could not be created, or when its markersAdded() called back into
+     *         the core and reset it
+     */
+    bool ensureDetector();
     /** Waits for a running KPM search and drops its result. */
     void dropRunningSearch();
     /** Frees the AR2 handle with the call matching the config's AR2 variant. */

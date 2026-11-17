@@ -782,10 +782,10 @@ TEST(CoreFrameTest, DetectBetweenSetCameraAndSetupAR2) {
   EXPECT_TRUE(core.addNFTMarkers({"data/kuva"}).empty());
   EXPECT_EQ(core.markerCount(), 1);
 
-  // setupAR2() creates the handles; the next addNFTMarkers() hands KPM every loaded marker.
+  // setupAR2() creates the handles and, the marker being loaded, hands KPM its reference data
+  // and creates the detector (#87): the marker is found again without an addNFTMarkers().
   ASSERT_EQ(core.setupAR2(), 0);
-  gFakeNowMs += 100.0;
-  EXPECT_EQ(feed(core, frames.both), -1);  // no detector before addNFTMarkers()
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
   EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), std::vector<int>({1}));
   EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
 }
@@ -1590,7 +1590,61 @@ TEST(NFTRuntimeSettingsAR2Test, SetupAR2TwiceReplacesTheHandleAndKeepsTracking) 
   EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
 }
 
+// A second setupAR2() creates a new KPM handle. The markers already loaded must stay detectable
+// without another addNFTMarkers(): the core hands the new handle the reference data and
+// creates the detector itself (#87). The marker is not tracked yet when setupAR2() runs again,
+// so only detection can find it.
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2TwiceKeepsMarkersDetectable) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+
+  ASSERT_EQ(core.setupAR2(), 0);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2AfterSetCameraKeepsMarkersDetectable) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  const int id = core.setup(kFrameWidth, kFrameHeight, cameraID);
+  ASSERT_EQ(core.setupAR2(), 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+
+  ASSERT_EQ(core.setCamera(id, cameraID), 0);
+  ASSERT_EQ(core.setupAR2(), 0);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
+// Nothing loaded: there is nothing to hand over and no detector to create.
+TEST(NFTRuntimeSettingsAR2Test, SetupAR2TwiceWithoutMarkersIsHarmless) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_EQ(core.markerCount(), 0);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_EQ(feed(core, frames.both), -1);  // no markers: nothing to detect
+  // The first marker after it loads as usual and is detected.
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
 #ifdef WEBARKIT_NFT_THREADS
+
+TEST(NFTRuntimeSettingsAR2Test, ThreadedSetupAR2TwiceKeepsMarkersDetectable) {
+  ARToolKitNFTCore core(threadedPreset());
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), std::vector<int>({0}));
+  ASSERT_EQ(core.setupAR2(), 0);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntilThreaded(core, frames.both, [&] { return isTracking(core, 0); }));
+}
 
 TEST(NFTRuntimeSettingsAR2Test, ThreadedSetupAR2TwiceKeepsTracking) {
   ARToolKitNFTCore core(threadedPreset());
@@ -1877,23 +1931,28 @@ TEST(ExternalDetectorTest, FailedBatchIsNotReported) {
   EXPECT_EQ(record.pages.size(), 1u);
 }
 
-TEST(ExternalDetectorTest, DetectorCreatedAfterSetupAR2ReceivesEveryLoadedMarker) {
+// A second setupAR2() with markers loaded creates the new detector itself (#87), over the new
+// KPM handle, and tells it every marker once; it does not wait for the next addNFTMarkers().
+TEST(ExternalDetectorTest, SetupAR2AgainCreatesTheDetectorWithEveryLoadedMarker) {
   ExternalRecord record;
   ARToolKitNFTCore core(externalConfig(record));
   ASSERT_TRUE(makeReady(core));
   ASSERT_EQ(core.addNFTMarkers({"data/pinball", "data/kuva"}), Pages({0, 1}));
   ASSERT_EQ(record.created, 1);
 
-  // A new KPM handle: the old detector goes, the next addNFTMarkers() creates one.
-  ASSERT_EQ(core.setupAR2(), 0);
-  EXPECT_EQ(record.live, nullptr);
   clearCalls(record);
-  EXPECT_TRUE(core.addNFTMarkers({}).empty());  // hands the new handle the markers
+  ASSERT_EQ(core.setupAR2(), 0);
   ASSERT_EQ(record.created, 2);
+  EXPECT_NE(record.live, nullptr);
   EXPECT_EQ(record.kpm, core.kpmHandleForTest());
   ASSERT_EQ(record.pages.size(), 1u);
   EXPECT_EQ(record.pages[0], Pages({0, 1}));
   EXPECT_EQ(record.paths[0], Paths({"data/pinball", "data/kuva"}));
+
+  // addNFTMarkers({}) adds nothing and tells the detector nothing more.
+  EXPECT_TRUE(core.addNFTMarkers({}).empty());
+  EXPECT_EQ(record.created, 2);
+  EXPECT_EQ(record.pages.size(), 1u);
 
   // A later batch arrives on its own.
   ASSERT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({2}));
@@ -1901,6 +1960,37 @@ TEST(ExternalDetectorTest, DetectorCreatedAfterSetupAR2ReceivesEveryLoadedMarker
   EXPECT_EQ(record.pages[1], Pages({2}));
   EXPECT_EQ(record.paths[1], Paths({"data/kuva"}));
   EXPECT_EQ(record.callCreated, Pages({2, 2}));  // both to the new detector
+}
+
+// Nothing loaded, so nothing to tell: setupAR2() again creates no detector (the first
+// addNFTMarkers() does, as ever).
+TEST(ExternalDetectorTest, SetupAR2AgainWithoutMarkersCreatesNoDetector) {
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_EQ(record.created, 0);
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), Pages({0}));
+  EXPECT_EQ(record.created, 1);
+}
+
+// The factory that returns null is the one way setupAR2() can now fail after its handles exist:
+// without a detector nothing can be found.
+TEST(ExternalDetectorTest, SetupAR2AgainFailsWhenTheFactoryReturnsNull) {
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), Pages({0}));
+
+  record.factoryReturnsNull = true;
+  EXPECT_EQ(core.setupAR2(), -1);
+  EXPECT_EQ(record.live, nullptr);
+  EXPECT_EQ(core.markerCount(), 1);  // the markers stay loaded
+
+  // The factory works again: the next setupAR2() recovers.
+  record.factoryReturnsNull = false;
+  EXPECT_EQ(core.setupAR2(), 0);
+  EXPECT_NE(record.live, nullptr);
 }
 
 TEST(ExternalDetectorTest, DetectorCreatedAfterSetCameraReceivesTheOldMarkersThenTheBatch) {
@@ -1914,8 +2004,8 @@ TEST(ExternalDetectorTest, DetectorCreatedAfterSetCameraReceivesTheOldMarkersThe
 
   ASSERT_EQ(core.setCamera(id, cameraID), 0);
   EXPECT_EQ(record.live, nullptr);
-  ASSERT_EQ(core.setupAR2(), 0);
   clearCalls(record);
+  ASSERT_EQ(core.setupAR2(), 0);  // creates the detector, which hears of the old marker
   ASSERT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
 
   ASSERT_EQ(record.created, 2);
@@ -1944,9 +2034,8 @@ TEST(ExternalDetectorTest, TeardownForgetsTheMarkers) {
   EXPECT_EQ(record.paths[0], Paths({"data/kuva"}));
 
   // A detector created now hears of kuva as page 0, not of the pinball loaded before.
-  ASSERT_EQ(core.setupAR2(), 0);
   clearCalls(record);
-  EXPECT_TRUE(core.addNFTMarkers({}).empty());
+  ASSERT_EQ(core.setupAR2(), 0);
   ASSERT_EQ(record.pages.size(), 1u);
   EXPECT_EQ(record.pages[0], Pages({0}));
   EXPECT_EQ(record.paths[0], Paths({"data/kuva"}));
@@ -1955,17 +2044,16 @@ TEST(ExternalDetectorTest, TeardownForgetsTheMarkers) {
 namespace {
 
 /**
- * Loads pinball, gets the core to create a new detector (setupAR2()), then adds kuva with a
- * markersAdded() that calls reenter(core) when the new detector is told about pinball.
- * Returns what that addNFTMarkers() returned; log receives what the core logged meanwhile.
+ * Loads pinball, then runs setupAR2() again with a markersAdded() that calls reenter(core) when
+ * the detector the core creates there is told about pinball. Returns what that setupAR2()
+ * returned; log receives what the core logged meanwhile.
  */
 template <typename Reenter>
-std::vector<int> addWhileTheBackfillReenters(ExternalRecord &record, ARToolKitNFTCore &core,
-                                             Reenter reenter, std::vector<std::string> &log) {
-  if (!makeReady(core) || core.addNFTMarkers({"data/pinball"}) != Pages({0}) ||
-      core.setupAR2() != 0) {
+int setupAR2WhileTheBackfillReenters(ExternalRecord &record, ARToolKitNFTCore &core,
+                                     Reenter reenter, std::vector<std::string> &log) {
+  if (!makeReady(core) || core.addNFTMarkers({"data/pinball"}) != Pages({0})) {
     ADD_FAILURE() << "setup failed";
-    return {};
+    return 1;
   }
   record.reenter = [&] {
     record.reenter = nullptr;  // once
@@ -1975,10 +2063,10 @@ std::vector<int> addWhileTheBackfillReenters(ExternalRecord &record, ARToolKitNF
   webarkitLogLevel = AR_LOG_LEVEL_INFO;
   gCapturedLog.clear();
   webarkitLogSetLogger(&captureLog, 0);
-  const std::vector<int> ids = core.addNFTMarkers({"data/kuva"});
+  const int result = core.setupAR2();
   webarkitLogSetLogger(nullptr, 0);
   log = gCapturedLog;
-  return ids;
+  return result;
 }
 
 bool mentions(const std::vector<std::string> &log, const char *text) {
@@ -1989,35 +2077,34 @@ bool mentions(const std::vector<std::string> &log, const char *text) {
 }  // namespace
 
 // markersAdded() must not call back into the core (NFTDetector.h). If it does and the
-// detector goes, the load fails with an error instead of using the destroyed detector.
-TEST(ExternalDetectorTest, BackfillThatResetsTheDetectorFailsTheLoad) {
+// detector goes, setupAR2() fails with an error instead of using the destroyed detector.
+// When the callback sets the core up again, the nested setupAR2() has already created the
+// detector that replaces it, so there is nothing to fail: the core ends with a working one.
+TEST(ExternalDetectorTest, BackfillThatSetsUpAgainLeavesAWorkingDetector) {
   LogLevelGuard guard;
   ExternalRecord record;
   ARToolKitNFTCore core(externalConfig(record));
   std::vector<std::string> log;
-  const std::vector<int> ids = addWhileTheBackfillReenters(
-      record, core, [](ARToolKitNFTCore &c) { c.setupAR2(); }, log);
+  EXPECT_EQ(setupAR2WhileTheBackfillReenters(
+                record, core, [](ARToolKitNFTCore &c) { c.setupAR2(); }, log),
+            0);
 
-  EXPECT_TRUE(ids.empty());
-  EXPECT_EQ(core.markerCount(), 1);  // pinball only: kuva was not loaded
-  EXPECT_TRUE(mentions(log, "markersAdded")) << "no error naming the callback";
-
-  // The core is still usable: the next call creates a detector and loads kuva.
-  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
+  EXPECT_EQ(core.markerCount(), 1);
+  EXPECT_NE(record.live, nullptr);
   const TestFrames &frames = testFrames();
   ASSERT_FALSE(frames.both.rgba.empty());
-  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
 }
 
-TEST(ExternalDetectorTest, BackfillThatTearsDownFailsTheLoad) {
+TEST(ExternalDetectorTest, BackfillThatTearsDownFailsSetupAR2) {
   LogLevelGuard guard;
   ExternalRecord record;
   ARToolKitNFTCore core(externalConfig(record));
   std::vector<std::string> log;
-  const std::vector<int> ids = addWhileTheBackfillReenters(
-      record, core, [](ARToolKitNFTCore &c) { c.teardown(); }, log);
+  EXPECT_EQ(setupAR2WhileTheBackfillReenters(
+                record, core, [](ARToolKitNFTCore &c) { c.teardown(); }, log),
+            -1);
 
-  EXPECT_TRUE(ids.empty());
   EXPECT_EQ(core.markerCount(), 0);
   EXPECT_TRUE(mentions(log, "markersAdded")) << "no error naming the callback";
 
