@@ -1469,20 +1469,22 @@ bool lensIsFinite(const ARToolKitNFTCore &core) {
 
 }  // namespace
 
+// The issue's example. It needs a double ARdouble: 1e300 does not fit a float, where the next
+// test covers the same overflow.
+#ifndef ARDOUBLE_IS_FLOAT
 TEST(NFTRuntimeSettingsTest, HugePlanesAreRejected) {
   ARToolKitNFTCore core(singleThreadPreset());
   ASSERT_TRUE(makeReady(core));
   NFTRuntimeSettings s = core.getRuntimeSettings();
   s.nearPlane = 1e200;
   s.farPlane = 1e300;  // finite and ordered, but far * near overflows a double
-  const bool representable = std::isfinite(s.nearPlane) && std::isfinite(s.farPlane);
-  if (!representable) GTEST_SKIP() << "ARdouble cannot hold 1e300 here: the next test covers it";
 
   EXPECT_EQ(core.configure(s), -1);
   EXPECT_EQ(core.getRuntimeSettings().nearPlane, 0.1);
   EXPECT_EQ(core.getRuntimeSettings().farPlane, 1000.0);
   EXPECT_TRUE(lensIsFinite(core));
 }
+#endif
 
 // Overflows 2 * far * near in double and in float builds alike (ARDOUBLE_IS_FLOAT).
 TEST(NFTRuntimeSettingsTest, PlanesOverflowingTheDepthTermsAreRejected) {

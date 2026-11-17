@@ -5,6 +5,7 @@
 #include <ARUtil/log.h>
 
 #include <cmath>
+#include <limits>
 
 /**
  * The AR2 tracking parameters. Before runtime settings they were constants in setupAR2();
@@ -69,14 +70,19 @@ inline bool nftRuntimeSettingsValid(const NFTRuntimeSettings &s) {
   if (!std::isfinite(s.nearPlane) || !std::isfinite(s.farPlane)) return false;
   if (s.nearPlane <= 0 || s.farPlane <= s.nearPlane) return false;
   // Finite and ordered is not enough: arglCameraFrustumRH() (paramGL.c) builds the depth terms
-  // from far + near and 2 * far * near, in ARdouble, which is a float on ARDOUBLE_IS_FLOAT
-  // builds. If either overflows, configure() would report success and leave inf in the lens
+  // from far + near and 2 * far * near. If either overflows ARdouble (a float on
+  // ARDOUBLE_IS_FLOAT builds), configure() would report success and leave inf in the lens
   // (#110). The third term, near - far, cannot overflow once the planes are ordered and finite,
   // and neither can the quotients while these two are finite (the difference is at least one
-  // ulp of near), so these two checks are the whole condition.
-  const ARdouble depthSum = s.farPlane + s.nearPlane;
-  const ARdouble depthProduct = (ARdouble)2.0 * s.farPlane * s.nearPlane;
-  if (!std::isfinite(depthSum) || !std::isfinite(depthProduct)) return false;
+  // ulp of near), so these two checks are sufficient. The product is formed in double, as the
+  // library does with its `2.0 *` literal, and compared with the largest ARdouble, so a float
+  // build rejects exactly what the library would overflow. The sum is implied by the product
+  // check; it is kept as a plain statement of the first term.
+  const double depthSum = (double)s.farPlane + (double)s.nearPlane;
+  const double depthProduct = 2.0 * (double)s.farPlane * (double)s.nearPlane;
+  const double largest = (double)std::numeric_limits<ARdouble>::max();
+  if (!std::isfinite(depthSum) || !std::isfinite(depthProduct) || depthSum > largest || depthProduct > largest)
+    return false;
 
   // -1 is the "follow the preset" sentinel; any other negative value is a mistake here.
   if (!std::isfinite(s.detectionIntervalMs)) return false;
