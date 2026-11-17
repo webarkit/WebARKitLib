@@ -1500,10 +1500,10 @@ TEST(NFTRuntimeSettingsTest, ConfigureIsQuietWithANaNDefaultInterval) {
   webarkitLogLevel = AR_LOG_LEVEL_INFO;
   NFTRuntimeSettings s = core.getRuntimeSettings();
   s.detectionIntervalMs = -1;  // follow the preset: resolves to the NaN default
-  ASSERT_EQ(core.configure(s), 0);  // may log once, as the stored value settles
   gCapturedLog.clear();
   webarkitLogSetLogger(&captureLog, 0);
 
+  // The constructor already stores the clamped 0, so even the first call changes nothing.
   ASSERT_EQ(core.configure(s), 0);
   ASSERT_EQ(core.configure(s), 0);
   webarkitLogSetLogger(nullptr, 0);
