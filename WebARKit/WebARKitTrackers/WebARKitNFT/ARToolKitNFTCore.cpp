@@ -832,7 +832,11 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
 
   if (settings.filtering && !previous.filtering) resetMarkerFilters();  // off to on: see above
 
-  setDetectionInterval(interval);
+  // The setter logs at INFO, and a consumer that patches one field calls configure() often, so
+  // it runs only when the interval changes (#114). The comparison is on the value the setter
+  // would store (negative and NaN mean 0): NaN never equals itself, so comparing the raw
+  // interval would log on every call under a NaN default.
+  if ((interval > 0.0 ? interval : 0.0) != previous.detectionIntervalMs) setDetectionInterval(interval);
 
   if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
   return 0;

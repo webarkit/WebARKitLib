@@ -1441,6 +1441,76 @@ TEST(NFTRuntimeSettingsTest, ConfigureAppliesTheLevelBeforeItLogs) {
   EXPECT_NE(gCapturedLog.back().find("Detection interval"), std::string::npos);
 }
 
+// configure() applies the whole struct, so a consumer that patches one field calls it often.
+// The interval line is logged at INFO only when the interval changes (#114).
+namespace {
+
+int countCapturedLines(const char *needle) {
+  int count = 0;
+  for (const std::string &line : gCapturedLog) {
+    if (line.find(needle) != std::string::npos) count++;
+  }
+  return count;
+}
+
+}  // namespace
+
+TEST(NFTRuntimeSettingsTest, ConfigureIsQuietWhenTheIntervalIsUnchanged) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+
+  ASSERT_EQ(core.configure(core.getRuntimeSettings()), 0);
+  ASSERT_EQ(core.configure(core.getRuntimeSettings()), 0);
+  webarkitLogSetLogger(nullptr, 0);
+
+  EXPECT_EQ(countCapturedLines("Detection interval"), 0);
+}
+
+TEST(NFTRuntimeSettingsTest, ConfigureLogsAChangedIntervalOnce) {
+  LogLevelGuard guard;
+  ARToolKitNFTCore core(singleThreadPreset());
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.detectionIntervalMs = 33.0;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(countCapturedLines("Detection interval: 33"), 1);
+  ASSERT_EQ(core.configure(s), 0);  // unchanged now
+  webarkitLogSetLogger(nullptr, 0);
+
+  EXPECT_EQ(countCapturedLines("Detection interval"), 1);
+  EXPECT_EQ(core.getRuntimeSettings().detectionIntervalMs, 33.0);
+}
+
+// The default interval of NaN is taken as 0 (NaNDefaultIntervalMeansEveryFrame). NaN never
+// equals itself, so a check that compares the raw values would log on every call.
+TEST(NFTRuntimeSettingsTest, ConfigureIsQuietWithANaNDefaultInterval) {
+  LogLevelGuard guard;
+  NFTTrackingConfig config = singleThreadPreset();
+  config.defaultDetectionIntervalMs = std::numeric_limits<double>::quiet_NaN();
+  ARToolKitNFTCore core(config);
+  arLogLevel = AR_LOG_LEVEL_INFO;
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.detectionIntervalMs = -1;  // follow the preset: resolves to the NaN default
+  ASSERT_EQ(core.configure(s), 0);  // may log once, as the stored value settles
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+
+  ASSERT_EQ(core.configure(s), 0);
+  ASSERT_EQ(core.configure(s), 0);
+  webarkitLogSetLogger(nullptr, 0);
+
+  EXPECT_EQ(countCapturedLines("Detection interval"), 0);
+}
+
 // A rejected configure() changes nothing, the level included. (The AR2 recreate failure that
 // the write's placement protects against cannot be provoked from here.)
 TEST(NFTRuntimeSettingsTest, FailedConfigureLeavesTheLevelAlone) {
