@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <string>
@@ -1654,6 +1655,9 @@ struct ExternalRecord {
   int collected = 0;                            // collect() calls that returned true
   int waitIdles = 0;
   FakeExternalDetector *live = nullptr;
+  // Called at the end of markersAdded(), to break the rule that it must not call back into
+  // the core. It may destroy the detector, so the fake touches nothing after calling it.
+  std::function<void()> reenter;
 };
 
 /**
@@ -1706,6 +1710,10 @@ class FakeExternalDetector final : public NFTDetector {
     record_.pages.push_back(pages);
     record_.paths.push_back(datasetPathnames);
     record_.callCreated.push_back(record_.created);
+    if (record_.reenter) {
+      const std::function<void()> reenter = record_.reenter;
+      reenter();  // may delete this: return at once
+    }
   }
 
   int generation() const { return generation_; }
@@ -1942,6 +1950,80 @@ TEST(ExternalDetectorTest, TeardownForgetsTheMarkers) {
   ASSERT_EQ(record.pages.size(), 1u);
   EXPECT_EQ(record.pages[0], Pages({0}));
   EXPECT_EQ(record.paths[0], Paths({"data/kuva"}));
+}
+
+namespace {
+
+/**
+ * Loads pinball, gets the core to create a new detector (setupAR2()), then adds kuva with a
+ * markersAdded() that calls reenter(core) when the new detector is told about pinball.
+ * Returns what that addNFTMarkers() returned; log receives what the core logged meanwhile.
+ */
+template <typename Reenter>
+std::vector<int> addWhileTheBackfillReenters(ExternalRecord &record, ARToolKitNFTCore &core,
+                                             Reenter reenter, std::vector<std::string> &log) {
+  if (!makeReady(core) || core.addNFTMarkers({"data/pinball"}) != Pages({0}) ||
+      core.setupAR2() != 0) {
+    ADD_FAILURE() << "setup failed";
+    return {};
+  }
+  record.reenter = [&] {
+    record.reenter = nullptr;  // once
+    reenter(core);
+  };
+  arLogLevel = AR_LOG_LEVEL_INFO;  // the caller's LogLevelGuard restores them
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+  const std::vector<int> ids = core.addNFTMarkers({"data/kuva"});
+  webarkitLogSetLogger(nullptr, 0);
+  log = gCapturedLog;
+  return ids;
+}
+
+bool mentions(const std::vector<std::string> &log, const char *text) {
+  return std::any_of(log.begin(), log.end(),
+                     [text](const std::string &line) { return line.find(text) != std::string::npos; });
+}
+
+}  // namespace
+
+// markersAdded() must not call back into the core (NFTDetector.h). If it does and the
+// detector goes, the load fails with an error instead of using the destroyed detector.
+TEST(ExternalDetectorTest, BackfillThatResetsTheDetectorFailsTheLoad) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  std::vector<std::string> log;
+  const std::vector<int> ids = addWhileTheBackfillReenters(
+      record, core, [](ARToolKitNFTCore &c) { c.setupAR2(); }, log);
+
+  EXPECT_TRUE(ids.empty());
+  EXPECT_EQ(core.markerCount(), 1);  // pinball only: kuva was not loaded
+  EXPECT_TRUE(mentions(log, "markersAdded")) << "no error naming the callback";
+
+  // The core is still usable: the next call creates a detector and loads kuva.
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0) && isTracking(core, 1); }));
+}
+
+TEST(ExternalDetectorTest, BackfillThatTearsDownFailsTheLoad) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  std::vector<std::string> log;
+  const std::vector<int> ids = addWhileTheBackfillReenters(
+      record, core, [](ARToolKitNFTCore &c) { c.teardown(); }, log);
+
+  EXPECT_TRUE(ids.empty());
+  EXPECT_EQ(core.markerCount(), 0);
+  EXPECT_TRUE(mentions(log, "markersAdded")) << "no error naming the callback";
+
+  // Set up again, it loads as usual.
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({0}));
 }
 
 TEST(ExternalDetectorTest, SyncExternalDetectorDrivesTheCoreToAPose) {

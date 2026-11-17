@@ -542,6 +542,13 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
       this->detector->markersAdded(
           pages, std::vector<std::string>(this->markerPaths.begin(),
                                           this->markerPaths.begin() + this->surfaceSetCount));
+      // markersAdded() must not call back into the core (NFTDetector.h). One that did and
+      // reset the detector (setupAR2(), setCamera(), teardown()) left nothing to load into.
+      if (!this->detector) {
+        WEBARKIT_LOGe("Error: the detector's markersAdded() called back into the core and "
+                      "reset the detector; the markers were not loaded.\n");
+        return {};
+      }
     }
   }
 
@@ -659,7 +666,7 @@ ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames
   this->surfaceSetCount += batchSize;
   WEBARKIT_LOGi("Loading of NFT data complete.\n");
 
-  if (batchSize > 0) {
+  if (batchSize > 0 && this->detector) {
     this->detector->markersAdded(markerIds, datasetPathnames);
   }
 

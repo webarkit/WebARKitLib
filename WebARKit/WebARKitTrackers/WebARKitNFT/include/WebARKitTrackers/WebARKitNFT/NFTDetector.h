@@ -20,6 +20,12 @@ struct NFTDetection {
  * A pass is started with start() and its result is taken with collect(). The synchronous
  * implementation finishes a pass inside start(); a threaded one finishes it on a worker, so
  * the caller never assumes the result is ready right after start().
+ *
+ * The camera: an interface method never passes it. A detector supplied through
+ * NFTTrackingConfig::makeDetector receives it, with the KPM handle, when the factory creates
+ * it. The core destroys the detector whenever the camera can change (setupAR2(), setCamera(),
+ * teardown()) and creates a new one with the next addNFTMarkers(). So that recreation is the
+ * only camera notification: no detector outlives a camera change.
  */
 class NFTDetector {
  public:
@@ -74,6 +80,12 @@ class NFTDetector {
    * Never called with empty vectors nor for a batch that failed. Pages are the ids
    * addNFTMarkers() returns. Each detector starts with no markers: what an earlier detector
    * was told does not carry over. Default: nothing.
+   *
+   * It is called from inside addNFTMarkers() and must not call back into the core: nothing
+   * that loads markers, sets the camera or tears down (addNFTMarkers(), setup(),
+   * setCamera(), setupAR2(), teardown()). Such a call can destroy this detector while it
+   * runs. If the detector is gone when the call returns, the core logs an error and that
+   * addNFTMarkers() fails.
    */
   virtual void markersAdded(const std::vector<int> & /*pages*/,
                             const std::vector<std::string> & /*datasetPathnames*/) {}
