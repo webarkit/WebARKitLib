@@ -129,7 +129,8 @@ public:
      * globals, arLogLevel and webarkitLogLevel (D9), even when it equals one of them, so an
      * explicit level also brings a webarkitLogLevel that was set on its own back in step. A
      * getRuntimeSettings() round trip never touches either, because that reports -1 while the
-     * two differ. detectionIntervalMs -1 resolves to the preset's.
+     * two differ: a snapshot taken then carries logLevel -1, so configuring it later leaves
+     * the divergence alone. detectionIntervalMs -1 resolves to the preset's.
      * Changed AR2 fields are applied to the live AR2 handle (D6); a template-size change
      * recreates the AR2 handle instead, keeping the KPM handle, the detector and the markers
      * (D12). Without an AR2 handle they are only stored, and setupAR2() applies them.

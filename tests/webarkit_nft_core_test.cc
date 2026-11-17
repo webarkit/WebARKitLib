@@ -1369,7 +1369,7 @@ TEST(NFTRuntimeSettingsTest, FreshStructChangingThePlanesLeavesTheLevelAlone) {
   EXPECT_EQ(core.getProjectionNearPlane(), 2.0);
   EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_ERROR);
   EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_ERROR);
-  EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);  // the effective level, never -1
+  EXPECT_EQ(core.getRuntimeSettings().logLevel, AR_LOG_LEVEL_ERROR);  // both globals equal: a real level
 }
 
 TEST(NFTRuntimeSettingsTest, RoundTripKeepsAnIndependentWebarkitLogLevel) {
@@ -1410,6 +1410,14 @@ TEST(NFTRuntimeSettingsTest, ExplicitLevelEqualToArLogLevelSyncsADivergentWebark
   ASSERT_EQ(core.configure(s), 0);
   EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_INFO);
   EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_INFO);
+
+  // The mirror case: the level equals webarkitLogLevel and arLogLevel is the divergent one.
+  arLogLevel = AR_LOG_LEVEL_ERROR;
+  webarkitLogLevel = AR_LOG_LEVEL_WARN;
+  s.logLevel = AR_LOG_LEVEL_WARN;
+  ASSERT_EQ(core.configure(s), 0);
+  EXPECT_EQ(arLogLevel, AR_LOG_LEVEL_WARN);
+  EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_WARN);
 }
 
 // With divergent globals there is no single effective level, so getRuntimeSettings() reports
