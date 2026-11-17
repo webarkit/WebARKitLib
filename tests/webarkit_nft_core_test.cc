@@ -2000,7 +2000,9 @@ TEST(ExternalDetectorTest, AbandonedPassLetsTheNextOneStart) {
   ASSERT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
   EXPECT_EQ(record.waitIdles, 1);
   EXPECT_TRUE(record.live->idle());
-  // Its answer, arriving late, is not taken for a current one...
+  // Its answer, arriving late, is not taken for a current one. Discarding it is the
+  // detector's job (see NFTDetector::waitIdle()): this checks that the fake honours that
+  // contract; what the core must do is checked below.
   EXPECT_FALSE(record.live->answerArrives(abandoned));
 
   // ...the core collects nothing from it, and starts the next pass at once.

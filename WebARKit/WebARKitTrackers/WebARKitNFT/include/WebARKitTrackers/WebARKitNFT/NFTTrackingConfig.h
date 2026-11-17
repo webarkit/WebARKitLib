@@ -45,12 +45,13 @@ struct NFTTrackingConfig {
    * Creates the detector when detector is External; unused otherwise. The core calls it where
    * it would create its own detector: in the first addNFTMarkers() after setupAR2(), so again
    * after every setupAR2(), setCamera() or teardown(), which destroy the previous one. Null,
-   * or a factory returning null, makes that addNFTMarkers() fail with an error.
+   * or a factory returning null, makes that addNFTMarkers() fail with an error. Each call
+   * starts afresh: the new detector learns the loaded markers from markersAdded().
    * @param user makeDetectorUser
    * @param kpm the core's KPM handle, owned by the core and valid for the detector's
-   *        lifetime. Its reference data is replaced right after the call, in the same
-   *        addNFTMarkers(). A detector that runs KPM elsewhere may ignore it, or use it to
-   *        run KPM in-process as a fallback.
+   *        lifetime. Its reference data is set after the call, by the same addNFTMarkers()
+   *        if it succeeds, otherwise by the next one that does. A detector that runs KPM
+   *        elsewhere may ignore it, or use it to run KPM in-process as a fallback.
    * @param camera the camera the core uses, already resized to the frame by setCamera(); a
    *        copy can be sent to a detector that does not share memory with the core
    */
