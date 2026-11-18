@@ -43,15 +43,23 @@ struct NFTTrackingConfig {
 
   /**
    * Creates the detector when detector is External; unused otherwise. The core calls it where
-   * it would create its own detector: in the first addNFTMarkers() after setupAR2(), so again
-   * after every setupAR2(), setCamera() or teardown(), which destroy the previous one. Null,
-   * or a factory returning null, makes that addNFTMarkers() fail with an error. Each call
-   * starts afresh: the new detector learns the loaded markers from markersAdded().
+   * it would create its own detector. That is in setupAR2() when markers are already loaded,
+   * and otherwise in the first addNFTMarkers() after it; so again after every setupAR2(),
+   * setCamera() or teardown(), which destroy the previous one. Null, or a factory returning
+   * null, makes that addNFTMarkers() or setupAR2() fail with an error (a setupAR2() with no
+   * markers loaded does not call it yet, so it succeeds and the failure shows in the first
+   * addNFTMarkers()). Each call starts afresh: the new detector learns the loaded markers
+   * from markersAdded(). The factory must not call into the core (setupAR2(), setCamera(),
+   * teardown(), addNFTMarkers() ...): such a call is refused before it changes anything, with
+   * an error, and the setupAR2() or addNFTMarkers() that runs the factory then fails and
+   * discards the detector, so a detector over a replaced KPM handle is never accepted.
    * @param user makeDetectorUser
    * @param kpm the core's KPM handle, owned by the core and valid for the detector's
-   *        lifetime. Its reference data is set after the call, by the same addNFTMarkers()
-   *        if it succeeds, otherwise by the next one that does. A detector that runs KPM
-   *        elsewhere may ignore it, or use it to run KPM in-process as a fallback.
+   *        lifetime. Whether it already holds reference data depends on the caller: from
+   *        setupAR2() it holds that of the markers already loaded; from addNFTMarkers() it is
+   *        set after the call, by the same addNFTMarkers() if it succeeds, otherwise by the
+   *        next one that does. Do not rely on either in the constructor. A detector that runs
+   *        KPM elsewhere may ignore it, or use it to run KPM in-process as a fallback.
    * @param camera the camera the core uses, already resized to the frame by setCamera(); a
    *        copy can be sent to a detector that does not share memory with the core
    */
