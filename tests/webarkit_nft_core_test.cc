@@ -1029,7 +1029,7 @@ template <typename Enable>
 void expectFilterRestarts(Enable enable) {
   const FilterRestart r = filterRestart(enable);
   ASSERT_TRUE(r.ok);
-  // Tracking jitter between two frames is a few units; the stale sample would pull ~85% of 10000.
+  // Tracking jitter between two frames is a few units; the stale sample would pull ~67% of 10000 (alpha = 1/3 with sample rate 120 and cutoff 60).
   EXPECT_LT(r.fromRaw, r.staleOffset * 0.05);
 }
 
@@ -1103,7 +1103,7 @@ TEST(NFTRuntimeSettingsTest, ThreadedPresetFilters) {
 
   feed(core, frames.both);
   ASSERT_TRUE(isTracking(core, 0));
-  // Tracking jitter is a few units; the planted sample pulls the pose by ~85% of 10000.
+  // Tracking jitter is a few units; the planted sample pulls the pose by ~67% of 10000 (alpha = 1/3 with sample rate 120 and cutoff 60).
   EXPECT_GT(core.markerState(0)->pose[0][3] - before, 1000.0);
 }
 
