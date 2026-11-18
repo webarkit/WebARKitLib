@@ -20,6 +20,11 @@ static int gARControllerID = 0;
 static int gCameraID = 0;
 static std::unordered_map<int, ARParam> cameraParams;
 
+// The one rule for a detection interval: negative values and NaN mean 0 (no limit). The
+// constructor, setDetectionInterval() and the configure() "did it change?" guard all go through
+// it, so the guard compares against exactly what the setter would store.
+static double resolveDetectionIntervalMs(double ms) { return ms > 0.0 ? ms : 0.0; }
+
 ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFiltering)
     : config(config),
       filterCutoffFrequency(60.0), filterSampleRate(120.0),
@@ -35,8 +40,7 @@ ARToolKitNFTCore::ARToolKitNFTCore(const NFTTrackingConfig &config, bool withFil
   // interval is always the resolved one, so it starts as the preset's; as in
   // setDetectionInterval(), negative values and NaN mean 0.
   this->settings_.filtering = withFiltering;
-  this->settings_.detectionIntervalMs =
-      config.defaultDetectionIntervalMs > 0.0 ? config.defaultDetectionIntervalMs : 0.0;
+  this->settings_.detectionIntervalMs = resolveDetectionIntervalMs(config.defaultDetectionIntervalMs);
   // The constructor does not touch arLogLevel / webarkitLogLevel (D9): they belong to the
   // process (the module, in JS), so constructing a core must not reset a level set earlier.
   // A config without a clock gets the default one, so detectNFTMarker() never calls null.
@@ -761,7 +765,7 @@ void ARToolKitNFTCore::setContinuousDetection(bool enabled) {
 
 void ARToolKitNFTCore::setDetectionInterval(double ms) {
   // Negative (or NaN) means "every frame", as 0 does.
-  this->settings_.detectionIntervalMs = ms > 0.0 ? ms : 0.0;
+  this->settings_.detectionIntervalMs = resolveDetectionIntervalMs(ms);
   WEBARKIT_LOGi("Detection interval: %f ms\n", this->settings_.detectionIntervalMs);
 }
 
@@ -832,7 +836,11 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
 
   if (settings.filtering && !previous.filtering) resetMarkerFilters();  // off to on: see above
 
-  setDetectionInterval(interval);
+  // The setter logs at INFO, and a consumer that patches one field calls configure() often, so
+  // it runs only when the interval changes (#114). The comparison is on the value the setter
+  // would store (negative and NaN mean 0): NaN never equals itself, so comparing the raw
+  // interval would log on every call under a NaN default.
+  if (resolveDetectionIntervalMs(interval) != previous.detectionIntervalMs) setDetectionInterval(interval);
 
   if (planesChanged) recalculateCameraLens();  // a no-op before setCamera()
   return 0;
