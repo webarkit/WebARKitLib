@@ -47,6 +47,13 @@ class WebARKitTracker {
 
     // WebARKitLib#91 (diagnostic): how many full-resolution retry passes ran on frames the
     // downsampled pass did not detect. Always 0 for a frame small enough not to be downsampled.
+    //
+    // The retry is rate-limited while nothing is in view: it runs at once when the downsampled
+    // pass had a signal (at least half the matches a homography needs, never fewer than
+    // partialSignalMinSurvivors), after a detection, and on the first empty frame; then only
+    // on every fullResRetryInterval-th empty frame (3). A small marker that only the
+    // full-resolution pass can find, appearing right after a retry, can therefore be found up
+    // to fullResRetryInterval - 1 detection frames later than when it retried on every frame.
     int getFullResRetryCount() const;
 
   private:
