@@ -828,11 +828,13 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
   // recalculateCameraLens() would otherwise log at the old level, so a call that asks for a
   // quieter one still printed its own INFO lines (review of #106).
   // D9: the level is process-wide (module-wide in JS), not held by the core. -1 leaves it
-  // alone, so a struct built to change something else does not reset it. An unchanged level
-  // is not written either: arLogLevel and webarkitLogLevel can differ (WebARKitManager::
-  // setLogLevel() sets only the latter), and a getRuntimeSettings() round trip, which reports
-  // arLogLevel, must not overwrite it.
-  if (settings.logLevel != -1 && settings.logLevel != arLogLevel) {
+  // alone, so a struct built to change something else does not reset it. Any other level is
+  // an explicit request and is written to both globals, even when it equals one of them:
+  // arLogLevel and webarkitLogLevel can differ (WebARKitManager::setLogLevel() sets only the
+  // latter), and skipping an "unchanged" level left a divergent one as it was while reporting
+  // success (#111). A getRuntimeSettings() round trip stays a no-op because that reports -1
+  // while the two differ.
+  if (settings.logLevel != -1) {
     arLogLevel = settings.logLevel;
     webarkitLogLevel = settings.logLevel;
   }
@@ -852,6 +854,9 @@ int ARToolKitNFTCore::configure(const NFTRuntimeSettings &settings) {
 NFTRuntimeSettings ARToolKitNFTCore::getRuntimeSettings() const {
   NFTRuntimeSettings settings = this->settings_;
   settings.ar2 = effectiveAR2();  // searchSize 0 resolved (D6, D7)
-  settings.logLevel = arLogLevel;
+  // The level is process-wide and has two globals. When they differ there is no single
+  // effective level to report, so say -1 ("leave alone"): configure(getRuntimeSettings()) then
+  // changes neither (#111).
+  settings.logLevel = arLogLevel == webarkitLogLevel ? arLogLevel : -1;
   return settings;
 }
