@@ -145,7 +145,10 @@ public:
      * resolved ones, and logLevel is the effective level (D9), not a copy held by the core. It
      * is -1 only when arLogLevel and webarkitLogLevel differ, which needs one of them to have
      * been set on its own (WebARKitManager::setLogLevel()): then there is no single level to
-     * report.
+     * report. A consumer must not compare logLevel with the AR_LOG_LEVEL_* values without
+     * checking for -1 first. A snapshot is also a copy: if webarkitLogLevel is changed on its
+     * own after one was taken with equal globals, configuring that snapshot writes its level
+     * to both and undoes the change.
      */
     NFTRuntimeSettings getRuntimeSettings() const;
 
