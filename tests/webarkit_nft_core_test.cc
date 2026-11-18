@@ -1340,7 +1340,35 @@ struct LogLevelGuard {
   }
 };
 
+/** What setCamera() prints to stdout at the given log level (arParamDisp() uses plain printf). */
+std::string setCameraOutputAt(int level) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  const int id = core.setup(kFrameWidth, kFrameHeight, cameraID);
+  LogLevelGuard guard;
+  arLogLevel = level;  // the table follows arLogLevel (ARLOG), not webarkitLogLevel
+  testing::internal::CaptureStdout();
+  const int result = core.setCamera(id, cameraID);
+  const std::string out = testing::internal::GetCapturedStdout();
+  EXPECT_EQ(result, 0);
+  return out;
+}
+
 }  // namespace
+
+// The camera parameter table is a debugging aid: it follows the log level like every other
+// start-up line (#113). It keeps printing at INFO, the default, and below.
+TEST(CoreCameraTest, CameraTableIsPrintedAtInfo) {
+  EXPECT_NE(setCameraOutputAt(AR_LOG_LEVEL_INFO).find("Distortion factor"), std::string::npos);
+}
+
+TEST(CoreCameraTest, CameraTableIsPrintedBelowInfo) {
+  EXPECT_NE(setCameraOutputAt(AR_LOG_LEVEL_DEBUG).find("Distortion factor"), std::string::npos);
+}
+
+TEST(CoreCameraTest, CameraTableIsSilentAtWarn) {
+  EXPECT_EQ(setCameraOutputAt(AR_LOG_LEVEL_WARN).find("Distortion factor"), std::string::npos);
+}
 
 // logLevel -1 leaves the level alone (review of #106).
 
