@@ -2176,6 +2176,39 @@ TEST(ExternalDetectorTest, BackfillThatTearsDownFailsSetupAR2) {
   EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({0}));
 }
 
+// The other caller of the backfill: addNFTMarkers() creating the detector after a setupAR2()
+// that could not. The same rule holds there: a callback that tears the core down fails the
+// call with an error, and nothing is loaded or left half done.
+TEST(ExternalDetectorTest, BackfillFromAddNFTMarkersThatTearsDownFailsTheCall) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  ASSERT_TRUE(makeReady(core));
+  ASSERT_EQ(core.addNFTMarkers({"data/pinball"}), Pages({0}));
+  record.factoryReturnsNull = true;
+  ASSERT_EQ(core.setupAR2(), -1);  // no detector now, the KPM handle holds pinball
+  record.factoryReturnsNull = false;
+
+  record.reenter = [&] {
+    record.reenter = nullptr;  // once
+    core.teardown();
+  };
+  arLogLevel = AR_LOG_LEVEL_INFO;  // LogLevelGuard restores them
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+  const std::vector<int> ids = core.addNFTMarkers({"data/kuva"});
+  webarkitLogSetLogger(nullptr, 0);
+
+  EXPECT_TRUE(ids.empty());
+  EXPECT_EQ(core.markerCount(), 0);
+  EXPECT_TRUE(mentions(gCapturedLog, "markersAdded")) << "no error naming the callback";
+
+  // Set up again, it loads as usual.
+  ASSERT_TRUE(makeReady(core));
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({0}));
+}
+
 TEST(ExternalDetectorTest, SyncExternalDetectorDrivesTheCoreToAPose) {
   ExternalRecord record;
   ARToolKitNFTCore core(externalConfig(record));

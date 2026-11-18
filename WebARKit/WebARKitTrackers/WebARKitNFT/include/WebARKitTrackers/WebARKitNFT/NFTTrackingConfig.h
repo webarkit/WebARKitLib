@@ -49,7 +49,9 @@ struct NFTTrackingConfig {
    * null, makes that addNFTMarkers() or setupAR2() fail with an error (a setupAR2() with no
    * markers loaded does not call it yet, so it succeeds and the failure shows in the first
    * addNFTMarkers()). Each call starts afresh: the new detector learns the loaded markers
-   * from markersAdded().
+   * from markersAdded(). The factory must not call into the core (setupAR2() included): the
+   * core refuses a nested creation, but a call that replaces the KPM handle would leave the
+   * factory holding the old one.
    * @param user makeDetectorUser
    * @param kpm the core's KPM handle, owned by the core and valid for the detector's
    *        lifetime. Whether it already holds reference data depends on the caller: from

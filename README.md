@@ -118,7 +118,8 @@ shared libraries, would define its symbols twice.
   `setupAR2()` after it. A second `setupAR2()` keeps the markers already loaded
   detectable: it hands the new KPM handle their reference data and creates the new
   detector, which is told about every marker. It returns -1 if that cannot be done (the
-  markers stay loaded; the next `setupAR2()` or `addNFTMarkers()` tries again).
+  markers stay loaded; the next `setupAR2()` tries again, and so does `addNFTMarkers()`
+  unless the failure was KPM refusing the reference data, which leaves no KPM handle).
 - `teardown()` frees the handles, the markers and the frame buffers, but
   `getNFTData()` keeps returning the old markers' data until markers are loaded again.
 - Threads: drive each core from one thread (the threaded detector's worker is the
