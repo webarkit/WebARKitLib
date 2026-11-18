@@ -6,7 +6,17 @@ name: Sync master into dev
 #
 # One stable branch, one PR, updated in place -- never closed or deleted by this
 # workflow -- so conflict-resolution commits a contributor pushes onto the sync
-# branch are always kept, and PRs the workflow did not create are never touched.
+# branch are always kept, and PRs the workflow did not create are never touched
+# (#92): a PR from the sync branch is the workflow's own only if it carries the
+# branch-sync label and the github-actions bot as its author (the label and the body can be
+# copied by anyone, the author cannot); for any other the workflow stops with an error
+# instead of pushing to the branch or editing it. The same for its own PR once it no longer
+# targets dev.
+#
+# A master that conflicts with the sync branch is not left silent either: with a sync
+# PR open it comments there, and with none open (an earlier sync PR was closed without
+# merging) it opens one from the existing branch, telling whoever merges it to resolve
+# the conflict there.
 on:
   push:
     branches: [master]
@@ -27,6 +37,9 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       LABEL: branch-sync
       BRANCH: chore/sync-master-into-dev
+      # Hidden in the body of every PR the workflow opens, for people reading it; not used to
+      # decide ownership (see "Find the sync PR").
+      MARKER: "<!-- sync-master-into-dev:workflow -->"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,6 +58,49 @@ jobs:
             echo "needed=true" >> "$GITHUB_OUTPUT"
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Find the sync PR
+        id: pr
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          # Every open PR whose head is this workflow's branch in this repository, whatever its
+          # base: one that is not the workflow's own blocks the run, because the workflow
+          # would push to the branch under it. All of them are needed, so a listing that may
+          # have been cut short at the limit is an error, not an answer.
+          limit=100
+          raw=$(gh pr list --head "$BRANCH" --state open --limit "$limit"                   --json number,baseRefName,headRepositoryOwner,labels,author)
+          if [ "$(printf '%s' "$raw" | jq 'length')" -ge "$limit" ]; then
+            echo "::error::$limit or more open PRs have $BRANCH as their head, so the list may be incomplete and the workflow cannot tell whether all of them are its own. Not touching $BRANCH."
+            exit 1
+          fi
+          prs=$(printf '%s' "$raw" | jq --arg owner "$GITHUB_REPOSITORY_OWNER"                   '[.[] | select(.headRepositoryOwner.login == $owner)]')
+          # Its own: the label, and an author that is the Actions bot, which is what the
+          # workflow's GITHUB_TOKEN opens PRs as. The author is the one thing a person cannot
+          # fake: anyone who can open a PR can copy the label and the marker in the body.
+          # The marker stays in the body for people reading it, but is not trusted.
+          # shellcheck disable=SC2016  # $label is a jq variable, not a shell one
+          owned='def owned:
+            ((.labels | map(.name) | index($label)) != null)
+            and ((.author.login // "") | IN("app/github-actions", "github-actions", "github-actions[bot]"));'
+          foreign=$(printf '%s' "$prs" | jq -r --arg label "$LABEL" "$owned"'
+            [.[] | select(owned | not) | .number] | first // empty')
+          if [ -n "$foreign" ]; then
+            echo "::error::Open PR #$foreign from $BRANCH was not opened by this workflow (it needs the $LABEL label and the github-actions bot as its author). Not touching it or $BRANCH. This workflow fails on every push to master until that PR is closed or its branch renamed, and keeps $BRANCH out of reach meanwhile."
+            exit 1
+          fi
+          # The workflow's own PR with another base (someone retargeted it): updating the
+          # branch under it and then opening a second PR would leave two, so stop instead.
+          elsewhere=$(printf '%s' "$prs" | jq -r --arg label "$LABEL" "$owned"'
+            [.[] | select(.baseRefName != "dev") | "#\(.number) (base \(.baseRefName))"] | first // empty')
+          if [ -n "$elsewhere" ]; then
+            echo "::error::The workflow's own sync PR $elsewhere no longer targets dev. Retarget it to dev or close it. Not touching $BRANCH meanwhile; this workflow fails on every push to master until then."
+            exit 1
+          fi
+          number=$(printf '%s' "$prs" | jq -r '[.[] | select(.baseRefName == "dev")] | first | .number // empty')
+          if [ -n "$number" ]; then
+            echo "Sync PR #$number is the workflow's own."
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
 
       - name: Update the sync branch
         id: branch
@@ -68,7 +124,7 @@ jobs:
           elif git merge-base --is-ancestor "$head" origin/master; then
             # Nothing of its own: fast-forward.
             git push origin "origin/master:refs/heads/$BRANCH"
-          elif [ -z "$(git rev-list origin/dev..$head ^origin/master)" ]; then
+          elif [ -z "$(git rev-list "origin/dev..$head" ^origin/master)" ]; then
             # Its extra commits are already in dev (a previous sync was merged):
             # nothing to keep, so restart it at master. The lease guards against a
             # push that lands between the fetch above and this one.
@@ -93,14 +149,11 @@ jobs:
         env:
           SHA: ${{ steps.check.outputs.sha }}
           CONFLICT: ${{ steps.branch.outputs.conflict }}
+          # The open sync PR, already checked to be the workflow's own (empty when there is none).
+          pr: ${{ steps.pr.outputs.number }}
         run: |
           gh label create "$LABEL" --color FBCA04 \
             --description "master -> dev branch sync; merge with a merge commit" 2>/dev/null || true
-
-          # Only ever the PR whose head is this workflow's branch in this repository.
-          pr=$(gh pr list --base dev --head "$BRANCH" --state open \
-                 --json number,headRepositoryOwner \
-                 --jq ".[] | select(.headRepositoryOwner.login == \"${GITHUB_REPOSITORY_OWNER}\") | .number" | head -n1)
 
           if [ -n "$pr" ]; then
             if [ "$CONFLICT" = "true" ]; then
@@ -112,14 +165,23 @@ jobs:
             exit 0
           fi
 
-          if [ "$CONFLICT" = "true" ]; then
-            echo "::warning::No open sync PR and $BRANCH conflicts with master; not opening one automatically."
-            exit 0
-          fi
+          # No sync PR is open. When $BRANCH conflicts with master (an earlier sync PR was
+          # closed without merging and the branch kept its commits) a PR is opened anyway:
+          # a warning in the Actions log would let dev drift behind master in silence (#92).
+          {
+            echo "$MARKER"
+            echo
+            if [ "$CONFLICT" = "true" ]; then
+              cat <<BODY
+          > [!WARNING]
+          > \`master\` (\`$SHA\`) **conflicts** with the commits already on \`$BRANCH\`, left there by an
+          > earlier sync PR that was closed without merging. Merge \`master\` into \`$BRANCH\` by hand,
+          > resolve the conflict and push; then merge this PR. (This note is written once; it may be
+          > out of date after you have done that.)
 
-          gh pr create --base dev --head "$BRANCH" --label "$LABEL" \
-            --title "chore: sync master into dev ($SHA)" \
-            --body "$(cat <<BODY
+          BODY
+            fi
+            cat <<BODY
           Automated sync of \`master\` into \`dev\` (WebARKitLib#70). This PR is updated in place
           whenever \`master\` moves again.
 
@@ -131,4 +193,13 @@ jobs:
           If there are conflicts, resolve them on \`$BRANCH\` and push; later syncs keep
           those commits and merge master on top.
           BODY
-          )"
+          } > "$RUNNER_TEMP/sync-body.md"
+
+          title="chore: sync master into dev ($SHA)"
+          # Merging this PR as it is would not bring master into dev: say so in the title too.
+          if [ "$CONFLICT" = "true" ]; then
+            title="chore: sync master into dev ($SHA, needs conflict resolution)"
+          fi
+          gh pr create --base dev --head "$BRANCH" --label "$LABEL" \
+            --title "$title" \
+            --body-file "$RUNNER_TEMP/sync-body.md"
