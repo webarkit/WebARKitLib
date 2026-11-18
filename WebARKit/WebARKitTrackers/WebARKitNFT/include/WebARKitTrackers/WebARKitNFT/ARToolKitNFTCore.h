@@ -217,7 +217,8 @@ public:
      * per-marker state and the frame buffers. markerCount() is then 0, but getNFTData() still
      * returns the data of the markers loaded before. The core can be set up again with
      * setup() and setupAR2(). Called by the destructor; a second call frees nothing.
-     * @return 0
+     * @return 0, or -1 when called from the detector factory or markersAdded(), which must not
+     *         call back into the core: nothing is freed then
      */
     int teardown();
 
@@ -246,10 +247,20 @@ private:
     /**
      * Makes sure there is a detector for the current KPM handle: creates it when missing and,
      * when markers are already loaded, tells it about all of them (markersAdded()).
-     * @return false when it could not be created, or when its markersAdded() called back into
-     *         the core and reset it
+     * @return false when it could not be created, or when the factory or its markersAdded()
+     *         called back into the core (the detector is then discarded, and what the callback
+     *         asked for was refused)
      */
     bool ensureDetector();
+    /**
+     * For the calls that replace the KPM handle, the camera or the markers (setup(),
+     * setCamera(), setupAR2(), teardown(), addNFTMarkers()): while ensureDetector() runs the
+     * factory or markersAdded(), which must not call back into the core (NFTDetector.h), such a
+     * call is refused before it changes anything. It logs the error and makes ensureDetector()
+     * fail, so the violation is never silent and no detector outlives the handle it was built
+     * over. @return true when refused: the caller returns its error at once
+     */
+    bool refuseDuringDetectorCreation(const char *call);
     /** Waits for a running KPM search and drops its result. */
     void dropRunningSearch();
     /** Frees the AR2 handle with the call matching the config's AR2 variant. */
@@ -306,8 +317,12 @@ private:
     // otherwise by the first addNFTMarkers() (ensureDetector()).
     std::unique_ptr<NFTDetector> detector;
     // True while ensureDetector() runs the factory and markersAdded(): a call back into the
-    // core that would create a detector is refused instead of recursing.
+    // core that would replace the KPM handle, the camera or the markers is refused instead of
+    // recursing or leaving the detector over a stale handle.
     bool creatingDetector = false;
+    // Set when such a call was refused (or the handles changed anyway) during that creation:
+    // ensureDetector() then discards the detector and fails.
+    bool creationReentered = false;
 
     // One state per loadable page; index = page number = marker id.
     std::array<NFTMarkerState, PAGES_MAX> markerStates;

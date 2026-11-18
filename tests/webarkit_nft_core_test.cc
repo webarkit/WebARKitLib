@@ -1693,6 +1693,8 @@ struct ExternalRecord {
   // Called at the end of markersAdded(), to break the rule that it must not call back into
   // the core. It may destroy the detector, so the fake touches nothing after calling it.
   std::function<void()> reenter;
+  // Called once inside the factory, before it returns, for the same purpose.
+  std::function<void()> inFactory;
 };
 
 /**
@@ -1772,6 +1774,11 @@ std::unique_ptr<NFTDetector> makeFakeDetector(void *user, KpmHandle *kpm, const 
   record.user = user;
   record.kpm = kpm;
   record.camera = camera;
+  if (record.inFactory) {
+    const std::function<void()> inFactory = record.inFactory;
+    record.inFactory = nullptr;  // once
+    inFactory();
+  }
   if (record.factoryReturnsNull) return nullptr;
   return std::unique_ptr<NFTDetector>(new FakeExternalDetector(record, kpm, camera));
 }
@@ -2120,7 +2127,8 @@ bool mentions(const std::vector<std::string> &log, const char *text) {
 
 // markersAdded() must not call back into the core (NFTDetector.h). If it does, setupAR2() fails
 // with an error instead of using a destroyed detector, and a callback that sets the core up
-// again cannot recurse: the nested setupAR2() is refused while a detector is being created.
+// again cannot recurse: the nested setupAR2() is refused, before it changes anything, while a
+// detector is being created.
 TEST(ExternalDetectorTest, BackfillThatSetsUpAgainFailsSetupAR2) {
   LogLevelGuard guard;
   ExternalRecord record;
@@ -2159,26 +2167,30 @@ TEST(ExternalDetectorTest, BackfillThatAlwaysSetsUpAgainDoesNotRecurse) {
   EXPECT_NE(record.live, nullptr);
 }
 
+// A teardown() from the callback is refused too: nothing is freed under the detector that is
+// being told about the markers, and setupAR2() fails with the markers still loaded.
 TEST(ExternalDetectorTest, BackfillThatTearsDownFailsSetupAR2) {
   LogLevelGuard guard;
   ExternalRecord record;
   ARToolKitNFTCore core(externalConfig(record));
   std::vector<std::string> log;
   EXPECT_EQ(setupAR2WhileTheBackfillReenters(
-                record, core, [](ARToolKitNFTCore &c) { c.teardown(); }, log),
+                record, core, [](ARToolKitNFTCore &c) { EXPECT_EQ(c.teardown(), -1); }, log),
             -1);
 
-  EXPECT_EQ(core.markerCount(), 0);
+  EXPECT_EQ(core.markerCount(), 1);
+  EXPECT_EQ(record.live, nullptr);
   EXPECT_TRUE(mentions(log, "markersAdded")) << "no error naming the callback";
 
-  // Set up again, it loads as usual.
-  ASSERT_TRUE(makeReady(core));
-  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({0}));
+  // The markers stayed loaded, and a plain setupAR2() recovers a working detector.
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_NE(record.live, nullptr);
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
 }
 
 // The other caller of the backfill: addNFTMarkers() creating the detector after a setupAR2()
-// that could not. The same rule holds there: a callback that tears the core down fails the
-// call with an error, and nothing is loaded or left half done.
+// that could not. The same rule holds there: a callback that tears the core down is refused,
+// the call fails with an error, and nothing is loaded or left half done.
 TEST(ExternalDetectorTest, BackfillFromAddNFTMarkersThatTearsDownFailsTheCall) {
   LogLevelGuard guard;
   ExternalRecord record;
@@ -2191,7 +2203,7 @@ TEST(ExternalDetectorTest, BackfillFromAddNFTMarkersThatTearsDownFailsTheCall) {
 
   record.reenter = [&] {
     record.reenter = nullptr;  // once
-    core.teardown();
+    EXPECT_EQ(core.teardown(), -1);
   };
   arLogLevel = AR_LOG_LEVEL_INFO;  // LogLevelGuard restores them
   webarkitLogLevel = AR_LOG_LEVEL_INFO;
@@ -2201,12 +2213,124 @@ TEST(ExternalDetectorTest, BackfillFromAddNFTMarkersThatTearsDownFailsTheCall) {
   webarkitLogSetLogger(nullptr, 0);
 
   EXPECT_TRUE(ids.empty());
-  EXPECT_EQ(core.markerCount(), 0);
+  EXPECT_EQ(core.markerCount(), 1);  // pinball; kuva was not loaded
   EXPECT_TRUE(mentions(gCapturedLog, "markersAdded")) << "no error naming the callback";
 
-  // Set up again, it loads as usual.
-  ASSERT_TRUE(makeReady(core));
-  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({0}));
+  // Nothing was half done: a plain call loads it as usual.
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
+}
+
+namespace {
+
+/**
+ * Loads pinball (the detector is created by addNFTMarkers()), then runs setupAR2() again with
+ * a factory that calls reenter(core) once, while the detector is being created over the new
+ * KPM handle. Returns what that setupAR2() returned; log receives what the core logged.
+ */
+template <typename Reenter>
+int setupAR2WhileTheFactoryReenters(ExternalRecord &record, ARToolKitNFTCore &core,
+                                    Reenter reenter, std::vector<std::string> &log) {
+  if (!makeReady(core) || core.addNFTMarkers({"data/pinball"}) != Pages({0})) {
+    ADD_FAILURE() << "setup failed";
+    return 1;
+  }
+  record.inFactory = [&] { reenter(core); };
+  arLogLevel = AR_LOG_LEVEL_INFO;  // the caller's LogLevelGuard restores them
+  webarkitLogLevel = AR_LOG_LEVEL_INFO;
+  gCapturedLog.clear();
+  webarkitLogSetLogger(&captureLog, 0);
+  const int result = core.setupAR2();
+  webarkitLogSetLogger(nullptr, 0);
+  log = gCapturedLog;
+  return result;
+}
+
+}  // namespace
+
+// The factory gets the core's KPM handle and must not call back into the core. One that sets
+// the core up again would replace that handle under the detector it is about to return. The
+// nested call is refused before it changes anything, and the outer one fails instead of
+// accepting a detector built over a handle that is no longer the core's.
+TEST(ExternalDetectorTest, FactoryThatSetsUpAgainFailsSetupAR2AndKeepsTheHandle) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  std::vector<std::string> log;
+  EXPECT_EQ(setupAR2WhileTheFactoryReenters(
+                record, core, [](ARToolKitNFTCore &c) { EXPECT_EQ(c.setupAR2(), -1); }, log),
+            -1);
+
+  EXPECT_EQ(core.kpmHandleForTest(), record.kpm) << "the nested call replaced the KPM handle";
+  EXPECT_EQ(record.live, nullptr) << "a detector over the refused creation was kept";
+  EXPECT_TRUE(mentions(log, "factory")) << "no error naming the callback";
+  EXPECT_EQ(core.markerCount(), 1);
+
+  // The markers stayed loaded, and a plain setupAR2() recovers a working detector.
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_NE(record.live, nullptr);
+  EXPECT_EQ(core.kpmHandleForTest(), record.kpm);
+  const TestFrames &frames = testFrames();
+  ASSERT_FALSE(frames.both.rgba.empty());
+  EXPECT_TRUE(feedUntil(core, frames.both, [&] { return isTracking(core, 0); }));
+}
+
+TEST(ExternalDetectorTest, FactoryThatTearsDownFailsSetupAR2AndKeepsTheMarkers) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  std::vector<std::string> log;
+  EXPECT_EQ(setupAR2WhileTheFactoryReenters(
+                record, core, [](ARToolKitNFTCore &c) { EXPECT_EQ(c.teardown(), -1); }, log),
+            -1);
+
+  EXPECT_EQ(core.markerCount(), 1);
+  EXPECT_EQ(core.kpmHandleForTest(), record.kpm);
+  EXPECT_EQ(record.live, nullptr);
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_NE(record.live, nullptr);
+}
+
+TEST(ExternalDetectorTest, FactoryThatChangesTheCameraFailsSetupAR2) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  const int cameraID = ARToolKitNFTCore::loadCamera("data/camera_para.dat");
+  ASSERT_GE(cameraID, 0);
+  std::vector<std::string> log;
+  EXPECT_EQ(setupAR2WhileTheFactoryReenters(
+                record, core, [cameraID](ARToolKitNFTCore &c) { EXPECT_EQ(c.setCamera(0, cameraID), -1); },
+                log),
+            -1);
+
+  EXPECT_EQ(core.kpmHandleForTest(), record.kpm);
+  EXPECT_EQ(record.live, nullptr);
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_NE(record.live, nullptr);
+}
+
+// The detector is already installed while markersAdded() runs, so ensureDetector() used to
+// return early for a call from there and addNFTMarkers() went on to load a batch in the middle
+// of the setup. It is refused, nothing is committed, and setupAR2() fails.
+TEST(ExternalDetectorTest, BackfillThatAddsMarkersFailsSetupAR2AndCommitsNothing) {
+  LogLevelGuard guard;
+  ExternalRecord record;
+  ARToolKitNFTCore core(externalConfig(record));
+  std::vector<std::string> log;
+  std::vector<int> nested{-1};
+  EXPECT_EQ(setupAR2WhileTheBackfillReenters(
+                record, core, [&nested](ARToolKitNFTCore &c) { nested = c.addNFTMarkers({"data/kuva"}); },
+                log),
+            -1);
+
+  EXPECT_TRUE(nested.empty()) << "the nested batch was loaded";
+  EXPECT_EQ(core.markerCount(), 1);
+  EXPECT_EQ(record.live, nullptr);
+  EXPECT_TRUE(mentions(log, "markersAdded")) << "no error naming the callback";
+
+  // pinball is still the only marker, and a plain setupAR2() recovers its detector.
+  ASSERT_EQ(core.setupAR2(), 0);
+  EXPECT_NE(record.live, nullptr);
+  EXPECT_EQ(core.addNFTMarkers({"data/kuva"}), Pages({1}));
 }
 
 TEST(ExternalDetectorTest, SyncExternalDetectorDrivesTheCoreToAPose) {

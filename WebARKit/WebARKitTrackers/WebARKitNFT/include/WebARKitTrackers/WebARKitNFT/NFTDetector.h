@@ -84,9 +84,10 @@ class NFTDetector {
    *
    * It is called from inside addNFTMarkers() and setupAR2() and must not call back into the
    * core: nothing that loads markers, sets the camera or tears down (addNFTMarkers(), setup(),
-   * setCamera(), setupAR2(), teardown()). Such a call can destroy this detector while it
-   * runs. If the detector is gone when the call returns, or the callback tried to create
-   * another one, the core logs an error and that addNFTMarkers() or setupAR2() fails.
+   * setCamera(), setupAR2(), teardown()). Such a call is refused before it changes anything:
+   * it returns its error (-1, or an empty list), the core logs an error naming the call, and
+   * the addNFTMarkers() or setupAR2() that called markersAdded() fails and discards this
+   * detector. The markers stay loaded, and the next setupAR2() creates a new detector.
    */
   virtual void markersAdded(const std::vector<int> & /*pages*/,
                             const std::vector<std::string> & /*datasetPathnames*/) {}

@@ -216,6 +216,7 @@ ARToolKitNFTCore::KpmHandlePtr ARToolKitNFTCore::createKpmHandle(ARParamLT *cpar
 }
 
 int ARToolKitNFTCore::setupAR2() {
+  if (refuseDuringDetectorCreation("setupAR2")) return -1;
   // Not in the bindings: without paramLT (no setup(), or a failed setCamera()) the AR2 and
   // KPM handles cannot be created, and ar2CreateHandle*() would dereference null.
   if (this->paramLT == nullptr) {
@@ -331,23 +332,46 @@ int ARToolKitNFTCore::recreateAR2Handle() {
   return 0;
 }
 
+bool ARToolKitNFTCore::refuseDuringDetectorCreation(const char *call) {
+  if (!this->creatingDetector) return false;
+  WEBARKIT_LOGe("Error: %s() was called while a detector is being created; the factory and "
+                "markersAdded() must not call back into the core.\n", call);
+  this->creationReentered = true;
+  return true;
+}
+
 bool ARToolKitNFTCore::ensureDetector() {
+  // Before the early return below: while markersAdded() runs the detector is already installed,
+  // and a call from there must not slip through as "nothing to do".
+  if (refuseDuringDetectorCreation("ensureDetector")) return false;
   if (this->detector) return true;
-  // The factory and markersAdded() must not call back into the core (NFTDetector.h). One that
-  // came back here would recurse without end, so it is refused: a clean error instead of a
-  // stack overflow, and nothing is created while a creation is under way.
-  if (this->creatingDetector) {
-    WEBARKIT_LOGe("Error: a detector is already being created; the factory or markersAdded() "
-                  "called back into the core.\n");
-    return false;
-  }
   struct CreatingGuard {
-    explicit CreatingGuard(bool &flag) : flag_(flag) { flag_ = true; }
-    ~CreatingGuard() { flag_ = false; }
-    bool &flag_;
-  } creatingGuard(this->creatingDetector);
+    CreatingGuard(bool &creating, bool &reentered) : creating_(creating) {
+      creating_ = true;
+      reentered = false;
+    }
+    ~CreatingGuard() { creating_ = false; }
+    bool &creating_;
+  } creatingGuard(this->creatingDetector, this->creationReentered);
+
+  // The detector is built over the KPM handle and the camera as they are now. The calls that
+  // replace them are refused while it is built; this is the check that they did not change
+  // anyway, so a stale detector is never accepted.
+  const KpmHandle *const kpmBefore = this->kpmHandle.get();
+  const ARParamLT *const cameraBefore = this->paramLT;
+  auto discardIfReentered = [&](const char *who) {
+    if (!this->creationReentered && this->kpmHandle.get() == kpmBefore && this->paramLT == cameraBefore) {
+      return false;
+    }
+    WEBARKIT_LOGe("Error: the detector's %s called back into the core; the detector is "
+                  "discarded.\n", who);
+    this->detector.reset();
+    return true;
+  };
+
   this->detector = createDetector();
   if (!this->detector) return false;
+  if (discardIfReentered("factory")) return false;
   // A detector created after markers were loaded (after setupAR2() or setCamera()) learns
   // about all of them now, with the pages the core assigned; later batches follow from
   // addNFTMarkers().
@@ -357,13 +381,15 @@ bool ARToolKitNFTCore::ensureDetector() {
     this->detector->markersAdded(
         pages, std::vector<std::string>(this->markerPaths.begin(),
                                         this->markerPaths.begin() + this->surfaceSetCount));
-    // markersAdded() must not call back into the core (NFTDetector.h). One that did and
-    // reset the detector (setupAR2(), setCamera(), teardown()) left nothing to load into.
+    // markersAdded() must not call back into the core (NFTDetector.h). A call that would have
+    // changed the handles or the markers was refused; one that reset the detector anyway has
+    // left nothing to load into.
     if (!this->detector) {
       WEBARKIT_LOGe("Error: the detector's markersAdded() called back into the core and "
                     "reset the detector.\n");
       return false;
     }
+    if (discardIfReentered("markersAdded()")) return false;
   }
   return true;
 }
@@ -454,6 +480,7 @@ void ARToolKitNFTCore::deleteCamera() {
 }
 
 int ARToolKitNFTCore::teardown() {
+  if (refuseDuringDetectorCreation("teardown")) return -1;
   // Stop the detector first: a threaded search uses the KPM handle (and, through it,
   // paramLT) until it ends. Its destructor waits for the search, then lets the worker exit.
   this->detector.reset();
@@ -497,6 +524,7 @@ int ARToolKitNFTCore::teardown() {
 
 // id is unused, as in the bindings: it keeps their setCamera(id, cameraID) signature.
 int ARToolKitNFTCore::setCamera(int /*id*/, int cameraID) {
+  if (refuseDuringDetectorCreation("setCamera")) return -1;
 
   if (cameraParams.find(cameraID) == cameraParams.end()) {
     return -1;
@@ -563,6 +591,7 @@ int ARToolKitNFTCore::decompressZFT(const std::string &datasetPathname, const st
 
 std::vector<int>
 ARToolKitNFTCore::addNFTMarkers(const std::vector<std::string> &datasetPathnames) {
+  if (refuseDuringDetectorCreation("addNFTMarkers")) return {};
 
   // Per-marker state lives in fixed arrays of PAGES_MAX entries (surfaceSet,
   // markerStates) indexed up to surfaceSetCount, so the running total across
@@ -736,6 +765,7 @@ ARdouble ARToolKitNFTCore::getProjectionFarPlane() const { return this->settings
  ********/
 
 int ARToolKitNFTCore::setup(int width, int height, int cameraID) {
+  if (refuseDuringDetectorCreation("setup")) return -1;
   // Not in the bindings: the frame sizes below are ints, so reject a frame they cannot hold
   // before changing anything. (max) in parentheses: on Windows <AR/config.h> includes
   // <windows.h>, whose max() macro would otherwise break this line (MSVC C2589) unless
