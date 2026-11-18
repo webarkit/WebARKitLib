@@ -38,11 +38,11 @@ sync branch by an earlier sync PR that was closed without merging, it still open
 with a warning at the top (written once, so it may be out of date after you have fixed
 the branch): merge `master` into `chore/sync-master-into-dev` by hand, resolve the
 conflict there and push. And it only works with PRs it opened itself, recognised by the
-`branch-sync` label plus either its marker in the PR body or a bot author. If any other
-open PR has `chore/sync-master-into-dev` as its head (or a human removed the label from
-the workflow's own), the workflow fails with an error and does not push to that branch;
-it keeps failing on every push to `master` until that PR is closed or its branch
-renamed.
+`branch-sync` label plus the `github-actions` bot as its author. If any other open PR
+has `chore/sync-master-into-dev` as its head (or a human removed the label from the
+workflow's own, or retargeted it away from `dev`), the workflow fails with an error and
+does not push to that branch; it keeps failing on every push to `master` until that PR
+is closed, retargeted to `dev` or its branch renamed.
 
 ## Commit messages — Conventional Commits
 
