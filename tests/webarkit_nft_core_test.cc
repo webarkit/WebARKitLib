@@ -1555,6 +1555,119 @@ TEST(NFTRuntimeSettingsTest, FailedConfigureLeavesTheLevelAlone) {
   EXPECT_EQ(webarkitLogLevel, AR_LOG_LEVEL_INFO);
 }
 
+// Finite and ordered planes are not enough: the lens divides by (near - far) and multiplies
+// far * near, which overflow for very large planes. configure() must reject what it cannot
+// honour (D7), not report success and leave inf or NaN in the projection matrix (#110).
+namespace {
+
+bool lensIsFinite(const ARToolKitNFTCore &core) {
+  const ARdouble *lens = core.cameraLens();
+  return lens != nullptr && std::all_of(lens, lens + 16, [](ARdouble v) { return std::isfinite(v); });
+}
+
+}  // namespace
+
+// Rejected planes change nothing: the settings read back as they were before the call.
+static void expectPlanesRejected(ARToolKitNFTCore &core, ARdouble nearPlane, ARdouble farPlane) {
+  const NFTRuntimeSettings before = core.getRuntimeSettings();
+  NFTRuntimeSettings s = before;
+  s.nearPlane = nearPlane;
+  s.farPlane = farPlane;
+
+  EXPECT_EQ(core.configure(s), -1);
+  EXPECT_EQ(core.getRuntimeSettings().nearPlane, before.nearPlane);
+  EXPECT_EQ(core.getRuntimeSettings().farPlane, before.farPlane);
+  EXPECT_TRUE(lensIsFinite(core));
+}
+
+// The issue's example. It needs a double ARdouble: 1e300 does not fit a float, where the
+// sum test below covers the same overflow.
+#ifndef ARDOUBLE_IS_FLOAT
+TEST(NFTRuntimeSettingsTest, HugePlanesAreRejected) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  expectPlanesRejected(core, 1e200, 1e300);  // finite and ordered, but 2 * far * near overflows
+}
+
+// 2.0 * far * near is a double expression, so it is the product itself that overflows here.
+// On a float build the same planes are fine (see the next test): the library forms the product
+// in double and the quotient is about 8.
+TEST(NFTRuntimeSettingsTest, PlanesWhoseProductOverflowAreRejected) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  expectPlanesRejected(core, 4, std::numeric_limits<ARdouble>::max() / 4);
+}
+#endif
+
+// far + near overflows ARdouble, in double and in float builds alike.
+TEST(NFTRuntimeSettingsTest, PlanesWhoseSumOverflowsAreRejected) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  const ARdouble largest = std::numeric_limits<ARdouble>::max();
+  expectPlanesRejected(core, largest / 2, largest);
+}
+
+#ifdef ARDOUBLE_IS_FLOAT
+// A float build forms the product in double, so a product above FLT_MAX is no overflow when
+// the quotient fits: near = 4, far = FLT_MAX / 4 gives a quotient of about -8 and a finite lens.
+TEST(NFTRuntimeSettingsTest, FloatPlanesWhoseProductOnlyFitsInDoubleAreAccepted) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.nearPlane = 4;
+  s.farPlane = std::numeric_limits<ARdouble>::max() / 4;
+
+  EXPECT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.getRuntimeSettings().farPlane, s.farPlane);
+  EXPECT_TRUE(lensIsFinite(core));
+}
+
+// FLT_MAX + the smallest subnormal rounds to FLT_MAX in float, so the sum is finite; the
+// unrounded double sum would exceed FLT_MAX.
+TEST(NFTRuntimeSettingsTest, FloatPlanesWhoseSumRoundsToAFiniteValueAreAccepted) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.nearPlane = std::numeric_limits<ARdouble>::denorm_min();
+  s.farPlane = std::numeric_limits<ARdouble>::max();
+
+  EXPECT_EQ(core.configure(s), 0);
+  EXPECT_TRUE(lensIsFinite(core));
+}
+
+// Planes close together make near - far tiny, so 2 * far * near / (near - far) overflows a
+// float although the sum (2e38) and the planes themselves fit.
+TEST(NFTRuntimeSettingsTest, FloatPlanesWhoseQuotientOverflowsAreRejected) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  expectPlanesRejected(core, 1e38f, 1.0001e38f);
+}
+#endif
+
+// Control: just inside the edge the planes are still honoured and the lens stays finite, so the
+// rejection above is the overflow and not a blanket limit.
+TEST(NFTRuntimeSettingsTest, PlanesJustInsideTheEdgeAreAccepted) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.nearPlane = 4;
+  s.farPlane = std::numeric_limits<ARdouble>::max() / 16;  // 2 * far * near = max / 2
+
+  EXPECT_EQ(core.configure(s), 0);
+  EXPECT_EQ(core.getRuntimeSettings().farPlane, s.farPlane);
+  EXPECT_TRUE(lensIsFinite(core));
+}
+
+TEST(NFTRuntimeSettingsTest, LargeRealisticPlanesStillPass) {
+  ARToolKitNFTCore core(singleThreadPreset());
+  ASSERT_TRUE(makeReady(core));
+  NFTRuntimeSettings s = core.getRuntimeSettings();
+  s.nearPlane = 1;
+  s.farPlane = 1e6;
+  EXPECT_EQ(core.configure(s), 0);
+  EXPECT_TRUE(lensIsFinite(core));
+}
+
 // The AR2 parameters come from the settings (D6), are applied live, and a template-size
 // change recreates only the AR2 handle (D12).
 

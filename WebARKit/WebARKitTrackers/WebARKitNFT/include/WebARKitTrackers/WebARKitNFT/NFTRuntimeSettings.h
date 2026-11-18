@@ -68,6 +68,21 @@ inline bool nftRuntimeSettingsValid(const NFTRuntimeSettings &s) {
   // degenerate. NaN and infinity are rejected by isfinite.
   if (!std::isfinite(s.nearPlane) || !std::isfinite(s.farPlane)) return false;
   if (s.nearPlane <= 0 || s.farPlane <= s.nearPlane) return false;
+  // Finite and ordered is not enough: arglCameraFrustumRH() (paramGL.c) builds the lens from
+  //   q22 = (far + near) / (near - far)            all ARdouble
+  //   q23 = 2.0 * far * near / (near - far)        2.0 is a double, so this is a double
+  //                                                expression, narrowed to ARdouble on store
+  // and configure() would report success and leave inf in the lens if either result overflows
+  // ARdouble (#110). Each is modelled here in the same precision and order, and the planes are
+  // rejected when the result is not finite, so a float build (ARDOUBLE_IS_FLOAT) rejects what
+  // its library would overflow and accepts what it would not: a float sum that rounds to a
+  // finite value, or a product that only fits in double, is fine. The third term,
+  // near - far, cannot overflow once the planes are ordered and finite.
+  const ARdouble depthDiff = s.nearPlane - s.farPlane;
+  const ARdouble depthSum = s.farPlane + s.nearPlane;
+  const ARdouble depthQ22 = depthSum / depthDiff;
+  const ARdouble depthQ23 = 2.0 * s.farPlane * s.nearPlane / depthDiff;
+  if (!std::isfinite(depthSum) || !std::isfinite(depthQ22) || !std::isfinite(depthQ23)) return false;
 
   // -1 is the "follow the preset" sentinel; any other negative value is a mistake here.
   if (!std::isfinite(s.detectionIntervalMs)) return false;
