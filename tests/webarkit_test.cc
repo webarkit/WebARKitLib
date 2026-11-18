@@ -373,3 +373,18 @@ TEST(WebARKitFullResRetryTest, AMarkerOnlyTheRetryFindsIsNotFoundLater) {
   for (int i = 0; i < 4; i++) t.feed(frame);
   EXPECT_TRUE(t.manager.isValid());
 }
+
+// The cadence belongs to a target: a new reference image restarts it. Two empty frames leave the
+// counter at 2 (the next retry would be a frame away), and loading a target must not inherit that.
+TEST(WebARKitFullResRetryTest, ANewTargetRestartsTheCadence) {
+  BigFrameTracker t;
+  ASSERT_FALSE(t.reference.empty());
+  const cv::Mat empty = noFrame();
+  t.feed(empty);  // retries, the counter moves on
+  t.feed(empty);  // skipped
+  ASSERT_EQ(t.retries(), 1);
+
+  t.manager.initTracker(t.reference, t.reference.cols, t.reference.rows, webarkit::ColorSpace::GRAY);
+  t.feed(frameWithMarker(t.reference, 0.12));  // no pyramid signal: only the cadence decides
+  EXPECT_EQ(t.retries(), 2);  // retried at once; without the reset it would still be 1
+}

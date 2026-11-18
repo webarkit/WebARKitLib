@@ -114,6 +114,11 @@ class WebARKitTracker::WebARKitTrackerImpl {
     template <typename T> void initTracker(T refData, size_t refCols, size_t refRows, ColorSpace colorSpace) {
         WEBARKIT_LOGi("Init Tracker!\n");
 
+        // WebARKitLib#91: a new reference image starts the retry cadence over, so a tracker that
+        // is given another target after some empty frames retries at once on the new target's
+        // first unsuccessful pyramid pass instead of waiting out the old one's position.
+        _noSignalFrames = 0;
+
         cv::Mat refGray = convert2Grayscale(refData, refCols, refRows, colorSpace);
         refGray.copyTo(_image);
 
