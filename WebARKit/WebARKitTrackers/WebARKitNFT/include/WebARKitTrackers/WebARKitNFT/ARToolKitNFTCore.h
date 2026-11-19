@@ -84,6 +84,8 @@ public:
      * the AR2 handle, the KPM handle and the detector (a running search is waited for and
      * dropped). Call setupAR2() after it; until then nothing is detected and markers being
      * tracked are lost on the next frame. The markers stay loaded.
+     * The camera parameter table (arParamDisp()) is printed only when arLogLevel is INFO or
+     * below.
      * @return 0, or -1 when the camera id is unknown (nothing changes) or paramLT cannot be
      *         created
      */
@@ -94,11 +96,17 @@ public:
      * settings, see configure()) and the KPM
      * handle from paramLT. Call after setup() and after every setCamera().
      *
-     * A second call (or the first after a setCamera()) replaces the KPM handle: the markers
-     * already loaded stay loaded and tracked, but are not detected again until the next
-     * addNFTMarkers() hands the new handle the reference data. addNFTMarkers({}) does that
-     * without adding markers, and returns an empty vector, as a failure does.
-     * @return 0, or -1 on failure (no camera, or a handle cannot be created)
+     * A second call (or the first after a setCamera()) replaces the KPM handle and the
+     * detector. The markers already loaded stay loaded, tracked and detectable: the new handle
+     * is given the accumulated reference data and a new detector is created for it, which is
+     * told about every marker (NFTDetector::markersAdded(), with the pages the core assigned).
+     * With no markers loaded there is nothing to hand over and the first addNFTMarkers()
+     * creates the detector.
+     * @return 0, or -1 on failure (no camera, a handle cannot be created, KPM refuses the
+     *         reference data of the markers already loaded, or the detector cannot be created:
+     *         config.makeDetector returned null, say). The markers stay loaded after a failure
+     *         and the next setupAR2() or addNFTMarkers() tries again (after a failure to hand
+     *         KPM the data there is no KPM handle, so only setupAR2() can).
      */
     int setupAR2();
 
@@ -125,10 +133,12 @@ public:
      * from getRuntimeSettings() and change what you need; a default-built struct also resets
      * the planes, the AR2 parameters and the rest to their defaults. A new plane rebuilds the
      * lens when a camera is loaded; before that the values are only stored. logLevel -1 (the
-     * default) leaves the level alone; any other value is written to the process-wide
-     * arLogLevel and webarkitLogLevel (D9), and only when it differs from arLogLevel, so a
-     * getRuntimeSettings() round trip never touches a webarkitLogLevel that was set on its
-     * own. detectionIntervalMs -1 resolves to the preset's.
+     * default) leaves the level alone; any other value is written to both process-wide
+     * globals, arLogLevel and webarkitLogLevel (D9), even when it equals one of them, so an
+     * explicit level also brings a webarkitLogLevel that was set on its own back in step. A
+     * getRuntimeSettings() round trip never touches either, because that reports -1 while the
+     * two differ: a snapshot taken then carries logLevel -1, so configuring it later leaves
+     * the divergence alone. detectionIntervalMs -1 resolves to the preset's.
      * Changed AR2 fields are applied to the live AR2 handle (D6); a template-size change
      * recreates the AR2 handle instead, keeping the KPM handle, the detector and the markers
      * (D12). Without an AR2 handle they are only stored, and setupAR2() applies them.
@@ -140,8 +150,13 @@ public:
 
     /**
      * The current settings with the effective values: the interval and ar2.searchSize are the
-     * resolved ones, and logLevel is the effective level read from arLogLevel (D9), never
-     * -1, not a copy held by the core.
+     * resolved ones, and logLevel is the effective level (D9), not a copy held by the core. It
+     * is -1 only when arLogLevel and webarkitLogLevel differ, which needs one of them to have
+     * been set on its own (WebARKitManager::setLogLevel()): then there is no single level to
+     * report. A consumer must not compare logLevel with the AR_LOG_LEVEL_* values without
+     * checking for -1 first. A snapshot is also a copy: if webarkitLogLevel is changed on its
+     * own after one was taken with equal globals, configuring that snapshot writes its level
+     * to both and undoes the change.
      */
     NFTRuntimeSettings getRuntimeSettings() const;
 
@@ -150,7 +165,9 @@ public:
     /**
      * Loads a batch of NFT markers (paths without extension) after the ones already loaded.
      * Needs setupAR2(); it also hands every loaded marker to the current KPM handle (see
-     * setupAR2()).
+     * setupAR2()). The first call after a setupAR2() with no markers loaded creates the
+     * detector (setupAR2() does it when markers are loaded); every call that loads a batch
+     * then tells the detector about the batch (NFTDetector::markersAdded()).
      * @return the ids of the new markers, or an empty vector when any of them fails to load
      *         (the earlier markers stay loaded), when there is no KPM handle, or when paths
      *         is empty
@@ -209,7 +226,8 @@ public:
      * per-marker state and the frame buffers. markerCount() is then 0, but getNFTData() still
      * returns the data of the markers loaded before. The core can be set up again with
      * setup() and setupAR2(). Called by the destructor; a second call frees nothing.
-     * @return 0
+     * @return 0, or -1 when called from the detector factory or markersAdded(), which must not
+     *         call back into the core: nothing is freed then
      */
     int teardown();
 
@@ -235,6 +253,23 @@ private:
 
     KpmHandlePtr createKpmHandle(ARParamLT *cparamLT);
     std::unique_ptr<NFTDetector> createDetector();
+    /**
+     * Makes sure there is a detector for the current KPM handle: creates it when missing and,
+     * when markers are already loaded, tells it about all of them (markersAdded()).
+     * @return false when it could not be created, or when the factory or its markersAdded()
+     *         called back into the core (the detector is then discarded, and what the callback
+     *         asked for was refused)
+     */
+    bool ensureDetector();
+    /**
+     * For the calls that replace the KPM handle, the camera or the markers (setup(),
+     * setCamera(), setupAR2(), teardown(), addNFTMarkers()): while ensureDetector() runs the
+     * factory or markersAdded(), which must not call back into the core (NFTDetector.h), such a
+     * call is refused before it changes anything. It logs the error and makes ensureDetector()
+     * fail, so the violation is never silent and no detector outlives the handle it was built
+     * over. @return true when refused: the caller returns its error at once
+     */
+    bool refuseDuringDetectorCreation(const char *call);
     /** Waits for a running KPM search and drops its result. */
     void dropRunningSearch();
     /** Frees the AR2 handle with the call matching the config's AR2 variant. */
@@ -287,8 +322,16 @@ private:
 
     KpmHandlePtr kpmHandle;
     AR2HandleT *ar2Handle;
-    // Runs the KPM searches on kpmHandle; created by the first addNFTMarkers().
+    // Runs the KPM searches on kpmHandle; created by setupAR2() when markers are loaded,
+    // otherwise by the first addNFTMarkers() (ensureDetector()).
     std::unique_ptr<NFTDetector> detector;
+    // True while ensureDetector() runs the factory and markersAdded(): a call back into the
+    // core that would replace the KPM handle, the camera or the markers is refused instead of
+    // recursing or leaving the detector over a stale handle.
+    bool creatingDetector = false;
+    // Set when such a call was refused (or the handles changed anyway) during that creation:
+    // ensureDetector() then discards the detector and fails.
+    bool creationReentered = false;
 
     // One state per loadable page; index = page number = marker id.
     std::array<NFTMarkerState, PAGES_MAX> markerStates;
@@ -309,6 +352,9 @@ private:
     // scratch, so each call must hand it the whole set, not just the new batch.
     KpmRefDataSet *refDataSetAll;
     std::vector<nftMarker> nftMarkers;
+    // The dataset path (without extension) of each loaded marker, index = page, for
+    // NFTDetector::markersAdded() when a detector is created after markers were loaded.
+    std::vector<std::string> markerPaths;
 
     // The runtime settings: planes, continuousDetection, detectionIntervalMs, filtering and
     // the AR2 parameters. logLevel is not authoritative here (it may be -1, "leave
