@@ -80,7 +80,7 @@ TEST(WebARKitConfigTest, TestConfigValues) {
   EXPECT_EQ(maxLevel, 3);
   EXPECT_EQ(featureDetectPyramidLevel, 1.05f);
   EXPECT_EQ(featureBorder, 8);
-  EXPECT_EQ(WEBARKIT_HEADER_VERSION_STRING, "0.12.0");
+  EXPECT_EQ(WEBARKIT_HEADER_VERSION_STRING, "0.13.0");
 }
 
 TEST(WebARKitConfigTest, TestWinSize) {
@@ -178,7 +178,7 @@ TEST(WebARKitTest, CheckWebARKitVersion) {
   // Init the manager with the Akaze tracker
   manager.initialiseBase(webarkit::TRACKER_TYPE::AKAZE_TRACKER, 640, 480);
   // Check if the WebARKit version is correct
-  EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "0.12.0");
+  EXPECT_STREQ(manager.getWebARKitVersion().c_str(), "0.13.0");
 }
 
 // Check cameraProjectionMatrix from manager

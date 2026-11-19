@@ -25,7 +25,7 @@ extern const cv::Size blurSize(3, 3);
 extern const double ransac_thresh = 2.5f; 
 extern cv::RNG rng( 0xFFFFFFFF );
 extern const double m_pi = 3.14159265358979323846;
-extern const std::string WEBARKIT_HEADER_VERSION_STRING = "0.12.0";
+extern const std::string WEBARKIT_HEADER_VERSION_STRING = "0.13.0";
 /*@
     The MAJOR version number defines non-backwards compatible
     changes in the ARToolKit API. Range: [0-99].
@@ -37,7 +37,7 @@ extern const int WEBARKIT_HEADER_VERSION_MAJOR = 0;
     API, or (occsasionally) other significant backwards-compatible
     changes in runtime functionality. Range: [0-99].
  */
-extern const int WEBARKIT_HEADER_VERSION_MINOR = 12;
+extern const int WEBARKIT_HEADER_VERSION_MINOR = 13;
 
 /*@
     The TINY version number defines bug-fixes to existing
